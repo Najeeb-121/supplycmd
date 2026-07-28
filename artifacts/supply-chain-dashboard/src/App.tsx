@@ -11,6 +11,7 @@ import ProductionPage from './pages/production';
 import DemandPage from './pages/demand';
 import LogisticsPage from './pages/logistics';
 import EquationsPage from './pages/equations';
+import ImportPage from './pages/import';
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ function Router() {
         <Route path="/demand" component={DemandPage} />
         <Route path="/logistics" component={LogisticsPage} />
         <Route path="/equations" component={EquationsPage} />
+        <Route path="/import" component={ImportPage} />
         <Route component={NotFound} />
       </Switch>
     </AppShell>

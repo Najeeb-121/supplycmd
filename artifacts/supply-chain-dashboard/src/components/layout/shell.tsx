@@ -6,7 +6,8 @@ import {
   Boxes, 
   Calculator, 
   LayoutDashboard, 
-  Truck
+  Truck,
+  Upload
 } from "lucide-react";
 
 const navItems = [
@@ -16,6 +17,7 @@ const navItems = [
   { path: "/demand", label: "Demand Planning", icon: BarChart3 },
   { path: "/logistics", label: "Logistics", icon: Truck },
   { path: "/equations", label: "Equations Reference", icon: Calculator },
+  { path: "/import", label: "ERP Import", icon: Upload },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
