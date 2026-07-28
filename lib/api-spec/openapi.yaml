@@ -3,20 +3,31 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Supply Chain & Manufacturing Dashboard API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: inventory
+    description: Inventory management
+  - name: suppliers
+    description: Supplier management
+  - name: production
+    description: Production runs and metrics
+  - name: demand
+    description: Demand planning and forecasting
+  - name: orders
+    description: Purchase orders
+  - name: dashboard
+    description: Dashboard KPI aggregates
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +35,400 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # --- Inventory ---
+  /inventory:
+    get:
+      operationId: listInventory
+      tags: [inventory]
+      summary: List all inventory items
+      responses:
+        "200":
+          description: List of inventory items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+    post:
+      operationId: createInventoryItem
+      tags: [inventory]
+      summary: Create inventory item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryItemInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+
+  /inventory/reorder-alerts:
+    get:
+      operationId: getReorderAlerts
+      tags: [inventory]
+      summary: Items at or below reorder point
+      responses:
+        "200":
+          description: Reorder alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReorderAlert"
+
+  /inventory/{id}:
+    get:
+      operationId: getInventoryItem
+      tags: [inventory]
+      summary: Get inventory item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateInventoryItem
+      tags: [inventory]
+      summary: Update inventory item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryItemUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+    delete:
+      operationId: deleteInventoryItem
+      tags: [inventory]
+      summary: Delete inventory item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted
+
+  # --- Suppliers ---
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      tags: [suppliers]
+      summary: List all suppliers
+      responses:
+        "200":
+          description: List of suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supplier"
+    post:
+      operationId: createSupplier
+      tags: [suppliers]
+      summary: Create supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+
+  /suppliers/{id}:
+    patch:
+      operationId: updateSupplier
+      tags: [suppliers]
+      summary: Update supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+    delete:
+      operationId: deleteSupplier
+      tags: [suppliers]
+      summary: Delete supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted
+
+  # --- Production ---
+  /production:
+    get:
+      operationId: listProductionRuns
+      tags: [production]
+      summary: List production runs
+      responses:
+        "200":
+          description: List of production runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductionRun"
+    post:
+      operationId: createProductionRun
+      tags: [production]
+      summary: Create production run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductionRunInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionRun"
+
+  /production/{id}:
+    patch:
+      operationId: updateProductionRun
+      tags: [production]
+      summary: Update production run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductionRunUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionRun"
+
+  /production/metrics/oee:
+    get:
+      operationId: getOeeMetrics
+      tags: [production]
+      summary: OEE and production KPIs aggregated
+      responses:
+        "200":
+          description: OEE metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OeeMetrics"
+
+  # --- Demand ---
+  /demand:
+    get:
+      operationId: listDemandRecords
+      tags: [demand]
+      summary: List demand records
+      responses:
+        "200":
+          description: List of demand records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DemandRecord"
+    post:
+      operationId: createDemandRecord
+      tags: [demand]
+      summary: Create demand record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DemandRecordInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemandRecord"
+
+  /demand/forecast:
+    get:
+      operationId: getDemandForecast
+      tags: [demand]
+      summary: Demand forecast with MAPE and MAD metrics per product
+      responses:
+        "200":
+          description: Forecast results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ForecastResult"
+
+  # --- Orders ---
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List purchase orders
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create purchase order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}:
+    patch:
+      operationId: updateOrder
+      tags: [orders]
+      summary: Update order status or details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  # --- Dashboard ---
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Top-level KPI summary across all domains
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/inventory-health:
+    get:
+      operationId: getInventoryHealth
+      tags: [dashboard]
+      summary: Inventory health breakdown with turnover, DOS, and stock status counts
+      responses:
+        "200":
+          description: Inventory health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryHealth"
+
+  /dashboard/logistics-kpis:
+    get:
+      operationId: getLogisticsKpis
+      tags: [dashboard]
+      summary: Logistics KPIs including fill rate and OTIF
+      responses:
+        "200":
+          description: Logistics KPIs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogisticsKpis"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +436,264 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    # --- Inventory ---
+    InventoryItem:
+      type: object
+      required: [id, name, sku, category, currentStock, reorderPoint, safetyStock, eoq, leadTimeDays, unitCost, annualDemand, holdingCostRate, orderingCost, createdAt]
+      properties:
+        id:              { type: number }
+        name:            { type: string }
+        sku:             { type: string }
+        category:        { type: string }
+        currentStock:    { type: number }
+        reorderPoint:    { type: number }
+        safetyStock:     { type: number }
+        eoq:             { type: number }
+        leadTimeDays:    { type: number }
+        unitCost:        { type: number }
+        annualDemand:    { type: number }
+        holdingCostRate: { type: number }
+        orderingCost:    { type: number }
+        createdAt:       { type: string }
+
+    InventoryItemInput:
+      type: object
+      required: [name, sku, category, currentStock, unitCost, annualDemand, holdingCostRate, orderingCost, leadTimeDays]
+      properties:
+        name:            { type: string }
+        sku:             { type: string }
+        category:        { type: string }
+        currentStock:    { type: number }
+        leadTimeDays:    { type: number }
+        unitCost:        { type: number }
+        annualDemand:    { type: number }
+        holdingCostRate: { type: number }
+        orderingCost:    { type: number }
+
+    InventoryItemUpdate:
+      type: object
+      properties:
+        name:            { type: string }
+        category:        { type: string }
+        currentStock:    { type: number }
+        leadTimeDays:    { type: number }
+        unitCost:        { type: number }
+        annualDemand:    { type: number }
+        holdingCostRate: { type: number }
+        orderingCost:    { type: number }
+
+    ReorderAlert:
+      type: object
+      required: [id, name, sku, currentStock, reorderPoint, safetyStock, eoq, urgency]
+      properties:
+        id:           { type: number }
+        name:         { type: string }
+        sku:          { type: string }
+        currentStock: { type: number }
+        reorderPoint: { type: number }
+        safetyStock:  { type: number }
+        eoq:          { type: number }
+        urgency:      { type: string, enum: [critical, warning, low] }
+
+    # --- Suppliers ---
+    Supplier:
+      type: object
+      required: [id, name, country, leadTimeDays, onTimeDeliveryRate, qualityScore, fillRate, createdAt]
+      properties:
+        id:                  { type: number }
+        name:                { type: string }
+        country:             { type: string }
+        leadTimeDays:        { type: number }
+        onTimeDeliveryRate:  { type: number }
+        qualityScore:        { type: number }
+        fillRate:            { type: number }
+        createdAt:           { type: string }
+
+    SupplierInput:
+      type: object
+      required: [name, country, leadTimeDays, onTimeDeliveryRate, qualityScore, fillRate]
+      properties:
+        name:                { type: string }
+        country:             { type: string }
+        leadTimeDays:        { type: number }
+        onTimeDeliveryRate:  { type: number }
+        qualityScore:        { type: number }
+        fillRate:            { type: number }
+
+    SupplierUpdate:
+      type: object
+      properties:
+        name:                { type: string }
+        country:             { type: string }
+        leadTimeDays:        { type: number }
+        onTimeDeliveryRate:  { type: number }
+        qualityScore:        { type: number }
+        fillRate:            { type: number }
+
+    # --- Production ---
+    ProductionRun:
+      type: object
+      required: [id, productName, plannedUnits, actualUnits, plannedTimeMin, actualTimeMin, defects, downtimeMin, runDate, createdAt]
+      properties:
+        id:             { type: number }
+        productName:    { type: string }
+        plannedUnits:   { type: number }
+        actualUnits:    { type: number }
+        plannedTimeMin: { type: number }
+        actualTimeMin:  { type: number }
+        defects:        { type: number }
+        downtimeMin:    { type: number }
+        runDate:        { type: string }
+        createdAt:      { type: string }
+
+    ProductionRunInput:
+      type: object
+      required: [productName, plannedUnits, actualUnits, plannedTimeMin, actualTimeMin, defects, downtimeMin, runDate]
+      properties:
+        productName:    { type: string }
+        plannedUnits:   { type: number }
+        actualUnits:    { type: number }
+        plannedTimeMin: { type: number }
+        actualTimeMin:  { type: number }
+        defects:        { type: number }
+        downtimeMin:    { type: number }
+        runDate:        { type: string }
+
+    ProductionRunUpdate:
+      type: object
+      properties:
+        actualUnits:    { type: number }
+        actualTimeMin:  { type: number }
+        defects:        { type: number }
+        downtimeMin:    { type: number }
+
+    OeeMetrics:
+      type: object
+      required: [oeePercent, availabilityPercent, performancePercent, qualityPercent, avgTaktTimeSec, avgCycleTimeSec, throughputPerHour, totalRuns]
+      properties:
+        oeePercent:           { type: number }
+        availabilityPercent:  { type: number }
+        performancePercent:   { type: number }
+        qualityPercent:       { type: number }
+        avgTaktTimeSec:       { type: number }
+        avgCycleTimeSec:      { type: number }
+        throughputPerHour:    { type: number }
+        totalRuns:            { type: number }
+
+    # --- Demand ---
+    DemandRecord:
+      type: object
+      required: [id, productName, period, actualDemand, forecastedDemand, createdAt]
+      properties:
+        id:                { type: number }
+        productName:       { type: string }
+        period:            { type: string }
+        actualDemand:      { type: number }
+        forecastedDemand:  { type: number }
+        createdAt:         { type: string }
+
+    DemandRecordInput:
+      type: object
+      required: [productName, period, actualDemand, forecastedDemand]
+      properties:
+        productName:       { type: string }
+        period:            { type: string }
+        actualDemand:      { type: number }
+        forecastedDemand:  { type: number }
+
+    ForecastResult:
+      type: object
+      required: [productName, mape, mad, forecastAccuracy, nextPeriodForecast, trend]
+      properties:
+        productName:        { type: string }
+        mape:               { type: number }
+        mad:                { type: number }
+        forecastAccuracy:   { type: number }
+        nextPeriodForecast: { type: number }
+        trend:              { type: string, enum: [up, down, stable] }
+
+    # --- Orders ---
+    Order:
+      type: object
+      required: [id, supplierId, supplierName, totalValue, status, orderDate, expectedDelivery, itemCount, createdAt]
+      properties:
+        id:               { type: number }
+        supplierId:       { type: number }
+        supplierName:     { type: string }
+        totalValue:       { type: number }
+        status:           { type: string, enum: [pending, confirmed, shipped, delivered, cancelled] }
+        orderDate:        { type: string }
+        expectedDelivery: { type: string }
+        actualDelivery:   { type: ["string", "null"] }
+        itemCount:        { type: number }
+        createdAt:        { type: string }
+
+    OrderInput:
+      type: object
+      required: [supplierId, totalValue, orderDate, expectedDelivery, itemCount]
+      properties:
+        supplierId:       { type: number }
+        totalValue:       { type: number }
+        orderDate:        { type: string }
+        expectedDelivery: { type: string }
+        itemCount:        { type: number }
+
+    OrderUpdate:
+      type: object
+      properties:
+        status:         { type: string, enum: [pending, confirmed, shipped, delivered, cancelled] }
+        actualDelivery: { type: string }
+        totalValue:     { type: number }
+
+    # --- Dashboard ---
+    DashboardSummary:
+      type: object
+      required: [totalSkus, totalInventoryValue, reorderAlertCount, activeSuppliers, openOrders, pendingOrderValue, oeePercent, forecastAccuracy, fillRate, otifPercent]
+      properties:
+        totalSkus:           { type: number }
+        totalInventoryValue: { type: number }
+        reorderAlertCount:   { type: number }
+        activeSuppliers:     { type: number }
+        openOrders:          { type: number }
+        pendingOrderValue:   { type: number }
+        oeePercent:          { type: number }
+        forecastAccuracy:    { type: number }
+        fillRate:            { type: number }
+        otifPercent:         { type: number }
+
+    InventoryHealth:
+      type: object
+      required: [avgTurnoverRate, avgDaysOfSupply, overstockCount, stockoutCount, healthyCount, categoryBreakdown]
+      properties:
+        avgTurnoverRate: { type: number }
+        avgDaysOfSupply: { type: number }
+        overstockCount:  { type: number }
+        stockoutCount:   { type: number }
+        healthyCount:    { type: number }
+        categoryBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryBreakdown"
+
+    CategoryBreakdown:
+      type: object
+      required: [category, count, value, avgTurnover]
+      properties:
+        category:    { type: string }
+        count:       { type: number }
+        value:       { type: number }
+        avgTurnover: { type: number }
+
+    LogisticsKpis:
+      type: object
+      required: [fillRate, otifPercent, avgLeadTimeDays, avgSupplierScore, ordersDeliveredOnTime, ordersFulfilled, totalOrders]
+      properties:
+        fillRate:               { type: number }
+        otifPercent:            { type: number }
+        avgLeadTimeDays:        { type: number }
+        avgSupplierScore:       { type: number }
+        ordersDeliveredOnTime:  { type: number }
+        ordersFulfilled:        { type: number }
+        totalOrders:            { type: number }
