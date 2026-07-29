@@ -42,6 +42,25 @@ paths:
       operationId: listInventory
       tags: [inventory]
       summary: List all inventory items
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: warehouse
+          in: query
+          schema: { type: string }
+        - name: supplier
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: archived
+          in: query
+          schema: { type: string }
       responses:
         "200":
           description: List of inventory items
@@ -83,6 +102,56 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ReorderAlert"
+
+  /inventory/reorder-suggestions:
+    get:
+      operationId: getReorderSuggestions
+      tags: [inventory]
+      summary: Reorder suggestions with recommended order quantities
+      responses:
+        "200":
+          description: Reorder suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReorderSuggestion"
+
+  /inventory/kpis:
+    get:
+      operationId: getInventoryKpis
+      tags: [inventory]
+      summary: Inventory KPI summary (value, counts, turnover)
+      responses:
+        "200":
+          description: Inventory KPIs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryKpis"
+
+  /inventory/movements:
+    get:
+      operationId: listStockMovements
+      tags: [inventory]
+      summary: List all stock movements
+      parameters:
+        - name: inventoryItemId
+          in: query
+          schema: { type: number }
+        - name: movementType
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of stock movements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockMovement"
 
   /inventory/{id}:
     get:
@@ -140,6 +209,31 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /inventory/{id}/movements:
+    post:
+      operationId: createStockMovement
+      tags: [inventory]
+      summary: Record a stock movement for an inventory item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StockMovementInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockMovement"
 
   # --- Suppliers ---
   /suppliers:
@@ -441,48 +535,86 @@ components:
     # --- Inventory ---
     InventoryItem:
       type: object
-      required: [id, name, sku, category, currentStock, reorderPoint, safetyStock, eoq, leadTimeDays, unitCost, annualDemand, holdingCostRate, orderingCost, createdAt]
+      required: [id, name, sku, category, unitOfMeasure, currentStock, reservedQuantity, minStock, reorderPoint, safetyStock, eoq, leadTimeDays, unitCost, annualDemand, holdingCostRate, orderingCost, archived, createdAt]
       properties:
-        id:              { type: number }
-        name:            { type: string }
-        sku:             { type: string }
-        category:        { type: string }
-        currentStock:    { type: number }
-        reorderPoint:    { type: number }
-        safetyStock:     { type: number }
-        eoq:             { type: number }
-        leadTimeDays:    { type: number }
-        unitCost:        { type: number }
-        annualDemand:    { type: number }
-        holdingCostRate: { type: number }
-        orderingCost:    { type: number }
-        createdAt:       { type: string }
+        id:               { type: number }
+        name:             { type: string }
+        sku:              { type: string }
+        barcode:          { type: string }
+        description:      { type: string }
+        category:         { type: string }
+        subcategory:      { type: string }
+        brand:            { type: string }
+        unitOfMeasure:    { type: string }
+        warehouse:        { type: string }
+        binLocation:      { type: string }
+        supplierName:     { type: string }
+        unitCost:         { type: number }
+        sellingPrice:     { type: number }
+        currentStock:     { type: number }
+        reservedQuantity: { type: number }
+        minStock:         { type: number }
+        maxStock:         { type: number }
+        annualDemand:     { type: number }
+        holdingCostRate:  { type: number }
+        orderingCost:     { type: number }
+        leadTimeDays:     { type: number }
+        reorderPoint:     { type: number }
+        safetyStock:      { type: number }
+        eoq:              { type: number }
+        archived:         { type: boolean }
+        createdAt:        { type: string }
 
     InventoryItemInput:
       type: object
       required: [name, sku, category, currentStock, unitCost, annualDemand, holdingCostRate, orderingCost, leadTimeDays]
       properties:
-        name:            { type: string }
-        sku:             { type: string }
-        category:        { type: string }
-        currentStock:    { type: number }
-        leadTimeDays:    { type: number }
-        unitCost:        { type: number }
-        annualDemand:    { type: number }
-        holdingCostRate: { type: number }
-        orderingCost:    { type: number }
+        name:             { type: string }
+        sku:              { type: string }
+        barcode:          { type: string }
+        description:      { type: string }
+        category:         { type: string }
+        subcategory:      { type: string }
+        brand:            { type: string }
+        unitOfMeasure:    { type: string }
+        warehouse:        { type: string }
+        binLocation:      { type: string }
+        supplierName:     { type: string }
+        currentStock:     { type: number }
+        reservedQuantity: { type: number }
+        minStock:         { type: number }
+        maxStock:         { type: number }
+        leadTimeDays:     { type: number }
+        unitCost:         { type: number }
+        sellingPrice:     { type: number }
+        annualDemand:     { type: number }
+        holdingCostRate:  { type: number }
+        orderingCost:     { type: number }
 
     InventoryItemUpdate:
       type: object
       properties:
-        name:            { type: string }
-        category:        { type: string }
-        currentStock:    { type: number }
-        leadTimeDays:    { type: number }
-        unitCost:        { type: number }
-        annualDemand:    { type: number }
-        holdingCostRate: { type: number }
-        orderingCost:    { type: number }
+        name:             { type: string }
+        barcode:          { type: string }
+        description:      { type: string }
+        category:         { type: string }
+        subcategory:      { type: string }
+        brand:            { type: string }
+        unitOfMeasure:    { type: string }
+        warehouse:        { type: string }
+        binLocation:      { type: string }
+        supplierName:     { type: string }
+        currentStock:     { type: number }
+        reservedQuantity: { type: number }
+        minStock:         { type: number }
+        maxStock:         { type: number }
+        leadTimeDays:     { type: number }
+        unitCost:         { type: number }
+        sellingPrice:     { type: number }
+        annualDemand:     { type: number }
+        holdingCostRate:  { type: number }
+        orderingCost:     { type: number }
+        archived:         { type: boolean }
 
     ReorderAlert:
       type: object
@@ -496,6 +628,64 @@ components:
         safetyStock:  { type: number }
         eoq:          { type: number }
         urgency:      { type: string, enum: [critical, warning, low] }
+
+    ReorderSuggestion:
+      type: object
+      required: [id, name, sku, currentStock, safetyStock, reorderPoint, eoq, recommendedOrderQty, priority, warehouse, supplierName]
+      properties:
+        id:                  { type: number }
+        name:                { type: string }
+        sku:                 { type: string }
+        currentStock:        { type: number }
+        safetyStock:         { type: number }
+        reorderPoint:        { type: number }
+        eoq:                 { type: number }
+        recommendedOrderQty: { type: number }
+        priority:            { type: string, enum: [high, medium, low] }
+        warehouse:           { type: string }
+        supplierName:        { type: string }
+
+    InventoryKpis:
+      type: object
+      required: [totalValue, totalSkus, lowStockCount, criticalCount, outOfStockCount, overstockCount, avgTurnoverRate, avgDaysOnHand]
+      properties:
+        totalValue:       { type: number }
+        totalSkus:        { type: number }
+        lowStockCount:    { type: number }
+        criticalCount:    { type: number }
+        outOfStockCount:  { type: number }
+        overstockCount:   { type: number }
+        avgTurnoverRate:  { type: number }
+        avgDaysOnHand:    { type: number }
+
+    StockMovement:
+      type: object
+      required: [id, inventoryItemId, movedAt, user, movementType, action, quantityBefore, quantityChanged, quantityAfter]
+      properties:
+        id:               { type: number }
+        inventoryItemId:  { type: number }
+        movedAt:          { type: string }
+        user:             { type: string }
+        movementType:     { type: string }
+        action:           { type: string }
+        referenceNumber:  { type: string }
+        reason:           { type: string }
+        warehouse:        { type: string }
+        quantityBefore:   { type: number }
+        quantityChanged:  { type: number }
+        quantityAfter:    { type: number }
+
+    StockMovementInput:
+      type: object
+      required: [movementType, action, quantityChanged, user]
+      properties:
+        movementType:    { type: string }
+        action:          { type: string }
+        referenceNumber: { type: string }
+        reason:          { type: string }
+        warehouse:       { type: string }
+        quantityChanged: { type: number }
+        user:            { type: string }
 
     # --- Suppliers ---
     Supplier:

@@ -13,26 +13,51 @@ export interface InventoryItem {
   id: number;
   name: string;
   sku: string;
+  barcode?: string;
+  description?: string;
   category: string;
-  currentStock: number;
-  reorderPoint: number;
-  safetyStock: number;
-  eoq: number;
-  leadTimeDays: number;
+  subcategory?: string;
+  brand?: string;
+  unitOfMeasure: string;
+  warehouse?: string;
+  binLocation?: string;
+  supplierName?: string;
   unitCost: number;
+  sellingPrice?: number;
+  currentStock: number;
+  reservedQuantity: number;
+  minStock: number;
+  maxStock?: number;
   annualDemand: number;
   holdingCostRate: number;
   orderingCost: number;
+  leadTimeDays: number;
+  reorderPoint: number;
+  safetyStock: number;
+  eoq: number;
+  archived: boolean;
   createdAt: string;
 }
 
 export interface InventoryItemInput {
   name: string;
   sku: string;
+  barcode?: string;
+  description?: string;
   category: string;
+  subcategory?: string;
+  brand?: string;
+  unitOfMeasure?: string;
+  warehouse?: string;
+  binLocation?: string;
+  supplierName?: string;
   currentStock: number;
+  reservedQuantity?: number;
+  minStock?: number;
+  maxStock?: number;
   leadTimeDays: number;
   unitCost: number;
+  sellingPrice?: number;
   annualDemand: number;
   holdingCostRate: number;
   orderingCost: number;
@@ -40,13 +65,26 @@ export interface InventoryItemInput {
 
 export interface InventoryItemUpdate {
   name?: string;
+  barcode?: string;
+  description?: string;
   category?: string;
+  subcategory?: string;
+  brand?: string;
+  unitOfMeasure?: string;
+  warehouse?: string;
+  binLocation?: string;
+  supplierName?: string;
   currentStock?: number;
+  reservedQuantity?: number;
+  minStock?: number;
+  maxStock?: number;
   leadTimeDays?: number;
   unitCost?: number;
+  sellingPrice?: number;
   annualDemand?: number;
   holdingCostRate?: number;
   orderingCost?: number;
+  archived?: boolean;
 }
 
 export type ReorderAlertUrgency = typeof ReorderAlertUrgency[keyof typeof ReorderAlertUrgency];
@@ -67,6 +105,65 @@ export interface ReorderAlert {
   safetyStock: number;
   eoq: number;
   urgency: ReorderAlertUrgency;
+}
+
+export type ReorderSuggestionPriority = typeof ReorderSuggestionPriority[keyof typeof ReorderSuggestionPriority];
+
+
+export const ReorderSuggestionPriority = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface ReorderSuggestion {
+  id: number;
+  name: string;
+  sku: string;
+  currentStock: number;
+  safetyStock: number;
+  reorderPoint: number;
+  eoq: number;
+  recommendedOrderQty: number;
+  priority: ReorderSuggestionPriority;
+  warehouse: string;
+  supplierName: string;
+}
+
+export interface InventoryKpis {
+  totalValue: number;
+  totalSkus: number;
+  lowStockCount: number;
+  criticalCount: number;
+  outOfStockCount: number;
+  overstockCount: number;
+  avgTurnoverRate: number;
+  avgDaysOnHand: number;
+}
+
+export interface StockMovement {
+  id: number;
+  inventoryItemId: number;
+  movedAt: string;
+  user: string;
+  movementType: string;
+  action: string;
+  referenceNumber?: string;
+  reason?: string;
+  warehouse?: string;
+  quantityBefore: number;
+  quantityChanged: number;
+  quantityAfter: number;
+}
+
+export interface StockMovementInput {
+  movementType: string;
+  action: string;
+  referenceNumber?: string;
+  reason?: string;
+  warehouse?: string;
+  quantityChanged: number;
+  user: string;
 }
 
 export interface Supplier {
@@ -262,4 +359,18 @@ export interface LogisticsKpis {
   ordersFulfilled: number;
   totalOrders: number;
 }
+
+export type ListInventoryParams = {
+search?: string;
+category?: string;
+warehouse?: string;
+supplier?: string;
+status?: string;
+archived?: string;
+};
+
+export type ListStockMovementsParams = {
+inventoryItemId?: number;
+movementType?: string;
+};
 

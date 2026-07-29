@@ -1,0 +1,249 @@
+You are a senior full-stack software architect building an enterprise SaaS application called SupplyCmd.
+
+Upgrade the Inventory module into a professional supply chain inventory management system suitable for manufacturing, logistics, and distribution companies.
+
+Technology:
+- Keep the existing project architecture.
+- Use the existing design system and styling.
+- Maintain responsive UI.
+- Do not break existing features.
+
+Build the following:
+
+=========================
+INVENTORY DASHBOARD
+=========================
+
+Create KPI cards:
+
+- Total Inventory Value
+- Total SKUs
+- Low Stock Items
+- Overstock Items
+- Out of Stock
+- Inventory Turnover
+- Average Days on Hand
+
+=========================
+PRODUCT MASTER
+=========================
+
+Each inventory item must contain:
+
+SKU
+Barcode
+Product Name
+Description
+Category
+Subcategory
+Brand
+Unit of Measure
+Warehouse
+Bin Location
+Supplier
+Cost Price
+Selling Price
+Minimum Stock
+Maximum Stock
+Safety Stock
+Reorder Point
+Lead Time
+Current Quantity
+Reserved Quantity
+Available Quantity
+Status
+
+Status should automatically display:
+
+Healthy
+Low Stock
+Critical
+Out of Stock
+Overstock
+
+=========================
+CRUD
+=========================
+
+Implement full CRUD:
+
+Create Product
+
+Edit Product
+
+Delete Product
+
+Archive Product
+
+Bulk Import
+
+Bulk Export
+
+=========================
+SEARCH
+=========================
+
+Search by:
+
+SKU
+
+Product Name
+
+Supplier
+
+Category
+
+Warehouse
+
+Status
+
+Barcode
+
+=========================
+FILTERS
+=========================
+
+Category
+
+Warehouse
+
+Supplier
+
+Stock Status
+
+Date Added
+
+Inventory Value
+
+=========================
+STOCK MOVEMENTS
+=========================
+
+Create a stock movement history.
+
+Every movement records:
+
+Date
+
+Time
+
+User
+
+Action
+
+Reference Number
+
+Reason
+
+Warehouse
+
+Quantity Before
+
+Quantity Changed
+
+Quantity After
+
+Movement Type
+
+Movement types:
+
+Goods Receipt
+
+Goods Issue
+
+Transfer
+
+Adjustment
+
+Return
+
+Production Consumption
+
+Production Output
+
+=========================
+REORDER LOGIC
+=========================
+
+Automatically detect:
+
+Low Stock
+
+Critical Stock
+
+Overstock
+
+Generate reorder suggestions.
+
+Example:
+
+Current Stock:
+45
+
+Safety Stock:
+100
+
+Recommendation:
+
+Order 250 units
+
+Priority:
+High
+
+=========================
+WAREHOUSE VIEW
+=========================
+
+Display inventory grouped by warehouse.
+
+Allow transfers between warehouses.
+
+=========================
+REPORTS
+=========================
+
+Generate:
+
+Inventory Valuation
+
+Low Stock Report
+
+Dead Stock Report
+
+Fast Moving Items
+
+Slow Moving Items
+
+Stock Movement Report
+
+Export:
+
+Excel
+
+CSV
+
+PDF
+
+=========================
+UI
+=========================
+
+Modern enterprise appearance.
+
+Professional tables.
+
+Pagination.
+
+Sorting.
+
+Sticky headers.
+
+Charts where appropriate.
+
+Status badges.
+
+Progress indicators.
+
+No mock data unless real data is unavailable.
+
+Prepare the module so future ERP integrations can update inventory automatically.

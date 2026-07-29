@@ -19,20 +19,42 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary List all inventory items
  */
+export const ListInventoryQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "category": zod.coerce.string().optional(),
+  "warehouse": zod.coerce.string().optional(),
+  "supplier": zod.coerce.string().optional(),
+  "status": zod.coerce.string().optional(),
+  "archived": zod.coerce.string().optional()
+})
+
 export const ListInventoryResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "sku": zod.string(),
+  "barcode": zod.string().optional(),
+  "description": zod.string().optional(),
   "category": zod.string(),
-  "currentStock": zod.number(),
-  "reorderPoint": zod.number(),
-  "safetyStock": zod.number(),
-  "eoq": zod.number(),
-  "leadTimeDays": zod.number(),
+  "subcategory": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "unitOfMeasure": zod.string(),
+  "warehouse": zod.string().optional(),
+  "binLocation": zod.string().optional(),
+  "supplierName": zod.string().optional(),
   "unitCost": zod.number(),
+  "sellingPrice": zod.number().optional(),
+  "currentStock": zod.number(),
+  "reservedQuantity": zod.number(),
+  "minStock": zod.number(),
+  "maxStock": zod.number().optional(),
   "annualDemand": zod.number(),
   "holdingCostRate": zod.number(),
   "orderingCost": zod.number(),
+  "leadTimeDays": zod.number(),
+  "reorderPoint": zod.number(),
+  "safetyStock": zod.number(),
+  "eoq": zod.number(),
+  "archived": zod.boolean(),
   "createdAt": zod.string()
 })
 export const ListInventoryResponse = zod.array(ListInventoryResponseItem)
@@ -44,10 +66,22 @@ export const ListInventoryResponse = zod.array(ListInventoryResponseItem)
 export const CreateInventoryItemBody = zod.object({
   "name": zod.string(),
   "sku": zod.string(),
+  "barcode": zod.string().optional(),
+  "description": zod.string().optional(),
   "category": zod.string(),
+  "subcategory": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "unitOfMeasure": zod.string().optional(),
+  "warehouse": zod.string().optional(),
+  "binLocation": zod.string().optional(),
+  "supplierName": zod.string().optional(),
   "currentStock": zod.number(),
+  "reservedQuantity": zod.number().optional(),
+  "minStock": zod.number().optional(),
+  "maxStock": zod.number().optional(),
   "leadTimeDays": zod.number(),
   "unitCost": zod.number(),
+  "sellingPrice": zod.number().optional(),
   "annualDemand": zod.number(),
   "holdingCostRate": zod.number(),
   "orderingCost": zod.number()
@@ -57,16 +91,29 @@ export const CreateInventoryItemResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "sku": zod.string(),
+  "barcode": zod.string().optional(),
+  "description": zod.string().optional(),
   "category": zod.string(),
-  "currentStock": zod.number(),
-  "reorderPoint": zod.number(),
-  "safetyStock": zod.number(),
-  "eoq": zod.number(),
-  "leadTimeDays": zod.number(),
+  "subcategory": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "unitOfMeasure": zod.string(),
+  "warehouse": zod.string().optional(),
+  "binLocation": zod.string().optional(),
+  "supplierName": zod.string().optional(),
   "unitCost": zod.number(),
+  "sellingPrice": zod.number().optional(),
+  "currentStock": zod.number(),
+  "reservedQuantity": zod.number(),
+  "minStock": zod.number(),
+  "maxStock": zod.number().optional(),
   "annualDemand": zod.number(),
   "holdingCostRate": zod.number(),
   "orderingCost": zod.number(),
+  "leadTimeDays": zod.number(),
+  "reorderPoint": zod.number(),
+  "safetyStock": zod.number(),
+  "eoq": zod.number(),
+  "archived": zod.boolean(),
   "createdAt": zod.string()
 })
 
@@ -88,6 +135,65 @@ export const GetReorderAlertsResponse = zod.array(GetReorderAlertsResponseItem)
 
 
 /**
+ * @summary Reorder suggestions with recommended order quantities
+ */
+export const GetReorderSuggestionsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string(),
+  "currentStock": zod.number(),
+  "safetyStock": zod.number(),
+  "reorderPoint": zod.number(),
+  "eoq": zod.number(),
+  "recommendedOrderQty": zod.number(),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "warehouse": zod.string(),
+  "supplierName": zod.string()
+})
+export const GetReorderSuggestionsResponse = zod.array(GetReorderSuggestionsResponseItem)
+
+
+/**
+ * @summary Inventory KPI summary (value, counts, turnover)
+ */
+export const GetInventoryKpisResponse = zod.object({
+  "totalValue": zod.number(),
+  "totalSkus": zod.number(),
+  "lowStockCount": zod.number(),
+  "criticalCount": zod.number(),
+  "outOfStockCount": zod.number(),
+  "overstockCount": zod.number(),
+  "avgTurnoverRate": zod.number(),
+  "avgDaysOnHand": zod.number()
+})
+
+
+/**
+ * @summary List all stock movements
+ */
+export const ListStockMovementsQueryParams = zod.object({
+  "inventoryItemId": zod.coerce.number().optional(),
+  "movementType": zod.coerce.string().optional()
+})
+
+export const ListStockMovementsResponseItem = zod.object({
+  "id": zod.number(),
+  "inventoryItemId": zod.number(),
+  "movedAt": zod.string(),
+  "user": zod.string(),
+  "movementType": zod.string(),
+  "action": zod.string(),
+  "referenceNumber": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "warehouse": zod.string().optional(),
+  "quantityBefore": zod.number(),
+  "quantityChanged": zod.number(),
+  "quantityAfter": zod.number()
+})
+export const ListStockMovementsResponse = zod.array(ListStockMovementsResponseItem)
+
+
+/**
  * @summary Get inventory item
  */
 export const GetInventoryItemParams = zod.object({
@@ -98,16 +204,29 @@ export const GetInventoryItemResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "sku": zod.string(),
+  "barcode": zod.string().optional(),
+  "description": zod.string().optional(),
   "category": zod.string(),
-  "currentStock": zod.number(),
-  "reorderPoint": zod.number(),
-  "safetyStock": zod.number(),
-  "eoq": zod.number(),
-  "leadTimeDays": zod.number(),
+  "subcategory": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "unitOfMeasure": zod.string(),
+  "warehouse": zod.string().optional(),
+  "binLocation": zod.string().optional(),
+  "supplierName": zod.string().optional(),
   "unitCost": zod.number(),
+  "sellingPrice": zod.number().optional(),
+  "currentStock": zod.number(),
+  "reservedQuantity": zod.number(),
+  "minStock": zod.number(),
+  "maxStock": zod.number().optional(),
   "annualDemand": zod.number(),
   "holdingCostRate": zod.number(),
   "orderingCost": zod.number(),
+  "leadTimeDays": zod.number(),
+  "reorderPoint": zod.number(),
+  "safetyStock": zod.number(),
+  "eoq": zod.number(),
+  "archived": zod.boolean(),
   "createdAt": zod.string()
 })
 
@@ -121,29 +240,55 @@ export const UpdateInventoryItemParams = zod.object({
 
 export const UpdateInventoryItemBody = zod.object({
   "name": zod.string().optional(),
+  "barcode": zod.string().optional(),
+  "description": zod.string().optional(),
   "category": zod.string().optional(),
+  "subcategory": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "unitOfMeasure": zod.string().optional(),
+  "warehouse": zod.string().optional(),
+  "binLocation": zod.string().optional(),
+  "supplierName": zod.string().optional(),
   "currentStock": zod.number().optional(),
+  "reservedQuantity": zod.number().optional(),
+  "minStock": zod.number().optional(),
+  "maxStock": zod.number().optional(),
   "leadTimeDays": zod.number().optional(),
   "unitCost": zod.number().optional(),
+  "sellingPrice": zod.number().optional(),
   "annualDemand": zod.number().optional(),
   "holdingCostRate": zod.number().optional(),
-  "orderingCost": zod.number().optional()
+  "orderingCost": zod.number().optional(),
+  "archived": zod.boolean().optional()
 })
 
 export const UpdateInventoryItemResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "sku": zod.string(),
+  "barcode": zod.string().optional(),
+  "description": zod.string().optional(),
   "category": zod.string(),
-  "currentStock": zod.number(),
-  "reorderPoint": zod.number(),
-  "safetyStock": zod.number(),
-  "eoq": zod.number(),
-  "leadTimeDays": zod.number(),
+  "subcategory": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "unitOfMeasure": zod.string(),
+  "warehouse": zod.string().optional(),
+  "binLocation": zod.string().optional(),
+  "supplierName": zod.string().optional(),
   "unitCost": zod.number(),
+  "sellingPrice": zod.number().optional(),
+  "currentStock": zod.number(),
+  "reservedQuantity": zod.number(),
+  "minStock": zod.number(),
+  "maxStock": zod.number().optional(),
   "annualDemand": zod.number(),
   "holdingCostRate": zod.number(),
   "orderingCost": zod.number(),
+  "leadTimeDays": zod.number(),
+  "reorderPoint": zod.number(),
+  "safetyStock": zod.number(),
+  "eoq": zod.number(),
+  "archived": zod.boolean(),
   "createdAt": zod.string()
 })
 
@@ -156,6 +301,39 @@ export const DeleteInventoryItemParams = zod.object({
 })
 
 export const DeleteInventoryItemResponse = zod.void()
+
+
+/**
+ * @summary Record a stock movement for an inventory item
+ */
+export const CreateStockMovementParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreateStockMovementBody = zod.object({
+  "movementType": zod.string(),
+  "action": zod.string(),
+  "referenceNumber": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "warehouse": zod.string().optional(),
+  "quantityChanged": zod.number(),
+  "user": zod.string()
+})
+
+export const CreateStockMovementResponse = zod.object({
+  "id": zod.number(),
+  "inventoryItemId": zod.number(),
+  "movedAt": zod.string(),
+  "user": zod.string(),
+  "movementType": zod.string(),
+  "action": zod.string(),
+  "referenceNumber": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "warehouse": zod.string().optional(),
+  "quantityBefore": zod.number(),
+  "quantityChanged": zod.number(),
+  "quantityAfter": zod.number()
+})
 
 
 /**

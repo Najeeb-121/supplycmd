@@ -8,11 +8,24 @@
 
 export interface InventoryItemUpdate {
   name?: string;
+  barcode?: string;
+  description?: string;
   category?: string;
+  subcategory?: string;
+  brand?: string;
+  unitOfMeasure?: string;
+  warehouse?: string;
+  binLocation?: string;
+  supplierName?: string;
   currentStock?: number;
+  reservedQuantity?: number;
+  minStock?: number;
+  maxStock?: number;
   leadTimeDays?: number;
   unitCost?: number;
+  sellingPrice?: number;
   annualDemand?: number;
   holdingCostRate?: number;
   orderingCost?: number;
+  archived?: boolean;
 }

@@ -43,7 +43,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { OrderStatus } from "@workspace/api-client-react/src/generated/api.schemas";
+type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
 
 const orderSchema = z.object({
   supplierId: z.coerce.number().min(1, "Please select a supplier"),
@@ -189,7 +189,7 @@ export default function LogisticsPage() {
           <CardContent>
             {kpisLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
               <div className="text-3xl font-mono font-bold text-accent">
-                {kpis?.totalOrders - kpis?.ordersFulfilled}
+                {(kpis?.totalOrders ?? 0) - (kpis?.ordersFulfilled ?? 0)}
               </div>
             )}
             <p className="text-xs text-muted-foreground mt-1">Purchase orders in transit</p>
