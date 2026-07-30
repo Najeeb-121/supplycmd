@@ -1,0 +1,402 @@
+You are a Principal Software Architect continuing the development of an existing enterprise SaaS application called SupplyCmd.
+
+IMPORTANT
+
+This is NOT a new project.
+
+Do NOT redesign or replace the existing application.
+
+The following modules already exist and must remain untouched unless integration is required:
+
+• Executive Dashboard
+• Inventory Management (fully developed)
+• Existing UI/UX
+• Existing navigation
+• Existing database
+• Existing authentication
+• Existing styling and design system
+
+Your task is to CONTINUE the project by developing the remaining operational Supply Chain modules and integrating them with the existing Inventory module.
+
+==========================================================
+OBJECTIVE
+==========================================================
+
+Transform SupplyCmd into a complete operational Supply Chain Management platform.
+
+Every new module must integrate with the existing Inventory Management module.
+
+Do not create duplicate inventory functionality.
+
+Inventory should become the central data source used by the other operational modules.
+
+==========================================================
+1. PROCUREMENT MANAGEMENT
+==========================================================
+
+Build a complete Procurement Management module.
+
+Include:
+
+• Procurement Dashboard
+• Purchase Requisitions
+• Purchase Orders
+• RFQs (Request for Quotation)
+• Supplier Quotations
+• Purchase Approval Workflow
+• Goods Receipt
+• Invoice Matching
+• Procurement Analytics
+• Procurement Reports
+
+Purchase Orders should automatically update Inventory after Goods Receipt.
+
+Inventory quantities must increase automatically when goods are received.
+
+Support approval statuses:
+
+Draft
+
+Submitted
+
+Approved
+
+Rejected
+
+Closed
+
+Cancelled
+
+KPIs:
+
+• Open Purchase Orders
+• Procurement Spend
+• Average Lead Time
+• Cost Savings
+• Supplier Performance
+
+==========================================================
+2. SUPPLIER MANAGEMENT
+==========================================================
+
+Build Supplier Management integrated with Procurement.
+
+Supplier Profile
+
+Supplier Contacts
+
+Supplier Addresses
+
+Contracts
+
+Certificates
+
+Documents
+
+Payment Terms
+
+Supplier Categories
+
+Preferred Suppliers
+
+Supplier Performance Dashboard
+
+Score each supplier based on:
+
+On-Time Delivery
+
+Lead Time
+
+Quality
+
+Order Accuracy
+
+Reliability
+
+Purchase History
+
+Risk Level
+
+Create supplier scorecards.
+
+==========================================================
+3. PRODUCTION PLANNING
+==========================================================
+
+Build Production Planning.
+
+Include:
+
+Production Orders
+
+Bill of Materials (BOM)
+
+Material Requirements
+
+Production Schedule
+
+Work Centres
+
+Production Lines
+
+Capacity Planning
+
+Machine Utilisation
+
+Production Status
+
+Production Calendar
+
+Production Reports
+
+Production Orders must consume Inventory automatically.
+
+Finished Goods must automatically increase Inventory after production completion.
+
+Track:
+
+Raw Materials
+
+Work In Progress
+
+Finished Goods
+
+KPIs:
+
+OEE
+
+Yield
+
+Scrap
+
+Production Efficiency
+
+Capacity Utilisation
+
+==========================================================
+4. DEMAND PLANNING
+==========================================================
+
+Build Demand Planning.
+
+Historical Demand
+
+Sales Trends
+
+Forecast Models
+
+Forecast Accuracy
+
+MAPE
+
+Bias
+
+Seasonality
+
+Trend Analysis
+
+Demand Dashboard
+
+Demand Reports
+
+Allow planners to create monthly demand forecasts.
+
+Show forecast vs actual demand.
+
+Generate demand alerts.
+
+==========================================================
+5. LOGISTICS MANAGEMENT
+==========================================================
+
+Build Logistics Management.
+
+Shipment Dashboard
+
+Shipment Orders
+
+Delivery Tracking
+
+Carrier Management
+
+Vehicle Management
+
+Drivers
+
+Delivery Status
+
+Freight Costs
+
+Route Management
+
+Estimated Arrival Time
+
+Late Deliveries
+
+Customer Deliveries
+
+Delivery Reports
+
+When shipments are completed, Inventory must decrease automatically.
+
+==========================================================
+6. MODULE INTEGRATION
+==========================================================
+
+All modules must communicate.
+
+Procurement
+
+↓
+
+Inventory
+
+↓
+
+Production
+
+↓
+
+Inventory
+
+↓
+
+Logistics
+
+↓
+
+Inventory
+
+↓
+
+Demand Planning
+
+Examples:
+
+Receiving goods automatically increases Inventory.
+
+Production consumes raw materials.
+
+Finished production increases finished goods inventory.
+
+Shipments reduce inventory.
+
+Demand Planning analyses Inventory trends.
+
+==========================================================
+7. DASHBOARD INTEGRATION
+==========================================================
+
+Update the existing Executive Dashboard.
+
+Do NOT redesign it.
+
+Add widgets from the new modules.
+
+Examples:
+
+Procurement KPIs
+
+Supplier Performance
+
+Production Efficiency
+
+Demand Forecast Accuracy
+
+Logistics Performance
+
+Executive Alerts
+
+==========================================================
+8. REPORTING
+==========================================================
+
+Generate reports for every module.
+
+Export:
+
+Excel
+
+CSV
+
+PDF
+
+==========================================================
+9. SEARCH & FILTERS
+==========================================================
+
+Every module must support:
+
+Global Search
+
+Advanced Filters
+
+Sorting
+
+Pagination
+
+Export
+
+==========================================================
+10. AUDIT LOGS
+==========================================================
+
+Every transaction must be logged.
+
+Create
+
+Update
+
+Delete
+
+Approval
+
+Inventory Movement
+
+Production Completion
+
+Shipment Completion
+
+==========================================================
+11. DATABASE
+==========================================================
+
+Extend the existing database.
+
+Do NOT replace existing Inventory tables.
+
+Create only the additional tables required for:
+
+Procurement
+
+Suppliers
+
+Production
+
+Demand Planning
+
+Logistics
+
+Maintain proper foreign key relationships with the existing Inventory module.
+
+==========================================================
+12. DESIGN REQUIREMENTS
+==========================================================
+
+Maintain the current SupplyCmd design language.
+
+Reuse existing UI components.
+
+Do not redesign the dashboard.
+
+Keep responsive behaviour.
+
+Maintain consistent colours, typography and spacing.
+
+==========================================================
+FINAL GOAL
+==========================================================
+
+By the end of this development, SupplyCmd should become a complete operational Supply Chain Management platform where Procurement, Suppliers, Production, Demand Planning and Logistics are fully integrated with the already completed Inventory module.
+
+Do not begin ERP integration, AI features or Automation Centre in this development. Those will be implemented in later phases.
