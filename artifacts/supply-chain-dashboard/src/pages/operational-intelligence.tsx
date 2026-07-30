@@ -147,7 +147,6 @@ function parseSections(text: string): ParsedSection[] {
     const emoji = SECTION_EMOJIS.find((e) => line.trimStart().startsWith(e));
     if (emoji) {
       if (current) sections.push(current);
-      // Strip the section number + emoji heading line, keep only content after
       current = { emoji, content: "" };
     } else if (current) {
       current.content += line + "\n";
@@ -157,58 +156,135 @@ function parseSections(text: string): ParsedSection[] {
   return sections;
 }
 
-function CopilotLine({ line }: { line: string }) {
-  const trimmed = line.trim();
-  if (!trimmed) return <div className="h-1" />;
+// ─── Block types ──────────────────────────────────────────────────────────────
 
-  // Bullet point
-  if (trimmed.startsWith("- ") || trimmed.startsWith("• ")) {
-    const text = trimmed.replace(/^[-•]\s*/, "");
-    return (
-      <div className="flex items-start gap-2 text-sm text-foreground">
-        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current shrink-0 opacity-50" />
-        <span dangerouslySetInnerHTML={{ __html: boldMarkdown(text) }} />
-      </div>
-    );
+type TextBlock     = { kind: "text";     text: string };
+type BulletBlock   = { kind: "bullet";   text: string };
+type ArrowBlock    = { kind: "arrow";    parts: string[] };
+type NumberedBlock = { kind: "numbered"; num: string; title: string; rows: string[] };
+type Block = TextBlock | BulletBlock | ArrowBlock | NumberedBlock;
+
+function parseBlocks(content: string): Block[] {
+  const lines = content.trim().split("\n");
+  const blocks: Block[] = [];
+  let cur: NumberedBlock | null = null;
+
+  const flush = () => { if (cur) { blocks.push(cur); cur = null; } };
+
+  for (const raw of lines) {
+    const t = raw.trim();
+    if (!t) { flush(); continue; }
+
+    // Numbered item: "1. Title"
+    const numMatch = t.match(/^(\d+)\.\s+(.+)/);
+    if (numMatch) { flush(); cur = { kind: "numbered", num: numMatch[1], title: numMatch[2], rows: [] }; continue; }
+
+    // Sub-bullet inside a numbered block
+    if (cur && (t.startsWith("- ") || t.startsWith("• "))) {
+      cur.rows.push(t.replace(/^[-•]\s*/, ""));
+      continue;
+    }
+
+    flush();
+
+    if (t.includes("→")) { blocks.push({ kind: "arrow", parts: t.split("→").map((p) => p.trim()) }); continue; }
+    if (t.startsWith("- ") || t.startsWith("• ")) { blocks.push({ kind: "bullet", text: t.replace(/^[-•]\s*/, "") }); continue; }
+    blocks.push({ kind: "text", text: t });
   }
 
-  // Sub-numbering like "1." "2." "3."
-  if (/^\d+\.\s/.test(trimmed)) {
-    const text = trimmed.replace(/^\d+\.\s*/, "");
+  flush();
+  return blocks;
+}
+
+// ─── Inline helpers ───────────────────────────────────────────────────────────
+
+function applyMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`(.+?)`/g, "<code class='bg-muted px-1 rounded text-xs font-mono'>$1</code>");
+}
+
+/** Splits "Label: value" into a bold label + plain value; renders plain text otherwise */
+function LabelValue({ text, className }: { text: string; className?: string }) {
+  const colon = text.indexOf(": ");
+  if (colon > 0 && colon < 44) {
+    const label = text.slice(0, colon);
+    const value = text.slice(colon + 2);
     return (
-      <p className="text-sm font-semibold text-foreground mt-2"
-         dangerouslySetInnerHTML={{ __html: boldMarkdown(text) }} />
+      <span className={className}>
+        <span className="font-semibold text-foreground">{label}:</span>{" "}
+        <span dangerouslySetInnerHTML={{ __html: applyMarkdown(value) }} />
+      </span>
     );
   }
+  return <span className={className} dangerouslySetInnerHTML={{ __html: applyMarkdown(text) }} />;
+}
 
-  // Arrow relationships
-  if (trimmed.includes("→")) {
-    return (
-      <div className="flex items-center gap-1.5 text-sm font-mono bg-background/70 border border-border/60 rounded px-2.5 py-1.5 my-1">
-        {trimmed.split("→").map((part, i, arr) => (
-          <span key={i} className="flex items-center gap-1.5">
-            <span className="text-foreground">{part.trim()}</span>
-            {i < arr.length - 1 && <span className="text-primary font-bold">→</span>}
-          </span>
-        ))}
-      </div>
-    );
-  }
+// ─── Block renderers ──────────────────────────────────────────────────────────
 
+function ArrowChain({ parts }: { parts: string[] }) {
   return (
-    <p className="text-sm text-foreground leading-relaxed"
-       dangerouslySetInnerHTML={{ __html: boldMarkdown(trimmed) }} />
+    <div className="flex flex-wrap items-center gap-1.5 my-1 py-2 px-3 rounded-lg bg-background/60 border border-border/50">
+      {parts.map((p, i) => (
+        <span key={i} className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-foreground">{p}</span>
+          {i < parts.length - 1 && <span className="text-primary font-bold text-sm leading-none">→</span>}
+        </span>
+      ))}
+    </div>
   );
 }
 
-function boldMarkdown(text: string): string {
-  return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+function BulletRow({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2.5 text-sm text-foreground leading-snug">
+      <span className="mt-[6px] w-[5px] h-[5px] rounded-full bg-foreground/25 shrink-0" />
+      <LabelValue text={text} />
+    </div>
+  );
+}
+
+function NumberedCard({ block }: { block: NumberedBlock }) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg bg-background/80 border border-border/60 px-3 py-3">
+      <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
+        {block.num}
+      </span>
+      <div className="flex-1 space-y-1.5 min-w-0">
+        <p className="text-sm font-semibold text-foreground leading-snug"
+           dangerouslySetInnerHTML={{ __html: applyMarkdown(block.title) }} />
+        {block.rows.length > 0 && (
+          <div className="space-y-1 border-t border-border/40 pt-1.5 mt-1.5">
+            {block.rows.map((r, i) => (
+              <LabelValue key={i} text={r} className="block text-xs text-muted-foreground leading-snug" />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SectionBlocks({ content }: { content: string }) {
+  const blocks = parseBlocks(content);
+  return (
+    <div className="space-y-2">
+      {blocks.map((b, i) => {
+        if (b.kind === "numbered") return <NumberedCard key={i} block={b} />;
+        if (b.kind === "arrow")   return <ArrowChain   key={i} parts={b.parts} />;
+        if (b.kind === "bullet")  return <BulletRow    key={i} text={b.text} />;
+        return (
+          <p key={i} className="text-sm text-foreground leading-relaxed"
+             dangerouslySetInnerHTML={{ __html: applyMarkdown(b.text) }} />
+        );
+      })}
+    </div>
+  );
 }
 
 function CopilotSection({ emoji, content }: ParsedSection) {
   const meta = SECTION_META[emoji];
   if (!meta) return null;
-  const lines = content.trim().split("\n");
   return (
     <Card className={cn("border", meta.border, meta.bg)}>
       <CardHeader className="pb-2 pt-4 px-4">
@@ -217,8 +293,8 @@ function CopilotSection({ emoji, content }: ParsedSection) {
           {meta.label}
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-4 space-y-1">
-        {lines.map((line, i) => <CopilotLine key={i} line={line} />)}
+      <CardContent className="px-4 pb-4">
+        <SectionBlocks content={content} />
       </CardContent>
     </Card>
   );
