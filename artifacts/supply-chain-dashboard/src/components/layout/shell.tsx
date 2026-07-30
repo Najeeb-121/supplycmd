@@ -20,12 +20,12 @@ const navItems = [
   { path: "/production", label: "Production", icon: Activity },
   { path: "/demand", label: "Demand Planning", icon: BarChart3 },
   { path: "/logistics", label: "Logistics", icon: Truck },
-  { path: "/equations", label: "Equations Reference", icon: Calculator },
-  { path: "/import", label: "ERP Import", icon: Upload },
   { path: "/erp-integration", label: "ERP Integration", icon: Plug },
   { path: "/operational-intelligence", label: "Ops Intelligence", icon: Brain },
   { path: "/ai-decision-engine", label: "AI Decision Engine", icon: Cpu },
   { path: "/executive-intelligence", label: "Executive Intelligence", icon: LineChart },
+  { path: "/import", label: "ERP Import", icon: Upload },
+  { path: "/equations", label: "Equations Reference", icon: Calculator },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
