@@ -7,7 +7,6 @@ import {
   getGetOeeMetricsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Activity, Clock, Zap, Target } from "lucide-react";
@@ -44,21 +43,7 @@ import {
 } from "@/components/ui/form";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
-const formSchema = z.object({
-  productName: z.string().min(2, "Product name is required."),
-  plannedUnits: z.coerce.number().int().min(0),
-  actualUnits: z.coerce.number().int().min(0),
-  plannedTimeMin: z.coerce.number().int().min(1),
-  actualTimeMin: z.coerce.number().int().min(0),
-  defects: z.coerce.number().int().min(0),
-  downtimeMin: z.coerce.number().int().min(0),
-  runDate: z.string().min(10, "Date is required"),
-}).refine(
-  (d) => d.defects <= d.actualUnits,
-  { message: "Defects cannot exceed Actual Units Produced", path: ["defects"] },
-);
-
-type FormValues = z.infer<typeof formSchema>;
+import { productionSchema as formSchema, type ProductionFormValues as FormValues } from "@/schemas/production";
 
 function OeeGauge({ value }: { value: number }) {
   const data = [

@@ -1,0 +1,152 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
+import request from "supertest";
+
+// ── DB mock (hoisted so it runs before any import) ────────────────────────────
+const mocks = vi.hoisted(() => {
+  const mockReturning = vi.fn();
+  const mockValues = vi.fn(() => ({ returning: mockReturning }));
+  const mockInsert = vi.fn(() => ({ values: mockValues }));
+
+  const mockWhere2 = vi.fn(); // second .where()
+  const mockWhere = vi.fn(() => ({ returning: mockWhere2 }));
+  const mockSet = vi.fn(() => ({ where: mockWhere }));
+  const mockUpdate = vi.fn(() => ({ set: mockSet }));
+
+  const mockOrderBy = vi.fn(() => Promise.resolve([]));
+  const mockFrom = vi.fn(() => ({ where: vi.fn(() => Promise.resolve([])), orderBy: mockOrderBy }));
+  const mockSelect = vi.fn(() => ({ from: mockFrom }));
+
+  const mockDeleteWhere = vi.fn(() => Promise.resolve([]));
+  const mockDeleteFrom = vi.fn(() => ({ where: mockDeleteWhere }));
+  const mockDelete = vi.fn(() => ({ from: mockDeleteFrom }));
+
+  return { mockReturning, mockValues, mockInsert, mockSelect, mockFrom, mockOrderBy, mockUpdate, mockDelete };
+});
+
+vi.mock("@workspace/db", () => ({
+  db: {
+    insert: mocks.mockInsert,
+    select: mocks.mockSelect,
+    update: mocks.mockUpdate,
+    delete: mocks.mockDelete,
+  },
+  inventoryItemsTable: {},
+  stockMovementsTable: {},
+  ordersTable: {},
+  suppliersTable: {},
+  demandRecordsTable: {},
+  productionRunsTable: {},
+}));
+
+import app from "../app.js";
+
+// ── Minimal valid inventory body ──────────────────────────────────────────────
+const validBody = {
+  name: "Steel Bearing 10mm",
+  sku: "SKU-001",
+  category: "Bearings",
+  unitOfMeasure: "units",
+  unitCost: 2.5,
+  currentStock: 100,
+  reservedQuantity: 0,
+  minStock: 10,
+  maxStock: 500,
+  annualDemand: 1200,
+  leadTimeDays: 7,
+  orderingCost: 50,
+  holdingCostRate: 0.2,
+};
+
+const fakeItem = { id: 1, ...validBody, eoq: 245, safetyStock: 8, reorderPoint: 31 };
+
+describe("POST /api/inventory", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // ── Happy path ────────────────────────────────────────────────────────────
+  it("201 – creates item with a valid body", async () => {
+    mocks.mockReturning.mockResolvedValueOnce([fakeItem]);
+
+    const res = await request(app).post("/api/inventory").send(validBody);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ id: 1, name: "Steel Bearing 10mm" });
+  });
+
+  // ── Required field validation ─────────────────────────────────────────────
+  it("400 – rejects when name is missing", async () => {
+    const { name: _name, ...body } = validBody;
+    const res = await request(app).post("/api/inventory").send(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("errors");
+    expect(res.body.errors).toHaveProperty("name");
+  });
+
+  it("400 – rejects when sku is missing", async () => {
+    const { sku: _sku, ...body } = validBody;
+    const res = await request(app).post("/api/inventory").send(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toHaveProperty("sku");
+  });
+
+  it("400 – rejects when currentStock is negative", async () => {
+    const res = await request(app)
+      .post("/api/inventory")
+      .send({ ...validBody, currentStock: -1 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toHaveProperty("currentStock");
+  });
+
+  it("400 – rejects when holdingCostRate exceeds 1", async () => {
+    const res = await request(app)
+      .post("/api/inventory")
+      .send({ ...validBody, holdingCostRate: 1.5 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toHaveProperty("holdingCostRate");
+  });
+
+  it("400 – rejects when leadTimeDays is negative", async () => {
+    const res = await request(app)
+      .post("/api/inventory")
+      .send({ ...validBody, leadTimeDays: -1 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toHaveProperty("leadTimeDays");
+  });
+
+  // ── Cross-field constraint ─────────────────────────────────────────────────
+  it("400 – rejects when maxStock < minStock", async () => {
+    const res = await request(app)
+      .post("/api/inventory")
+      .send({ ...validBody, minStock: 100, maxStock: 50 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("errors");
+    expect(res.body.errors).toHaveProperty("maxStock");
+    expect(res.body.errors.maxStock).toMatch(/Max Stock must be ≥ Min Stock/);
+  });
+
+  it("200 – accepts when maxStock equals minStock (boundary)", async () => {
+    mocks.mockReturning.mockResolvedValueOnce([fakeItem]);
+
+    const res = await request(app)
+      .post("/api/inventory")
+      .send({ ...validBody, minStock: 50, maxStock: 50 });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("200 – accepts when maxStock is omitted (no constraint applies)", async () => {
+    mocks.mockReturning.mockResolvedValueOnce([fakeItem]);
+    const { maxStock: _max, ...body } = validBody;
+
+    const res = await request(app).post("/api/inventory").send(body);
+
+    expect(res.status).toBe(201);
+  });
+});

@@ -8,7 +8,6 @@ import {
   getListOrdersQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Truck, PackageCheck, Clock, CheckCircle2, XCircle } from "lucide-react";
@@ -45,18 +44,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
 
-const orderSchema = z.object({
-  supplierId: z.coerce.number().min(1, "Please select a supplier"),
-  totalValue: z.coerce.number().min(0, "Order value must be ≥ 0"),
-  orderDate: z.string().min(10, "Order date is required"),
-  expectedDelivery: z.string().min(10, "Expected delivery is required"),
-  itemCount: z.coerce.number().int().min(1, "Item count must be at least 1"),
-}).refine(
-  (d) => d.expectedDelivery >= d.orderDate,
-  { message: "Delivery date must be on or after the order date", path: ["expectedDelivery"] },
-);
-
-type OrderFormValues = z.infer<typeof orderSchema>;
+import { orderSchema, type OrderFormValues } from "@/schemas/orders";
 
 export default function LogisticsPage() {
   const [isOrderFormOpen, setIsOrderFormOpen] = useState(false);

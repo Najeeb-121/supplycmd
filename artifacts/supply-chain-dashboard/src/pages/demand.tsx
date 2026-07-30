@@ -7,7 +7,6 @@ import {
   getGetDemandForecastQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -41,14 +40,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-const formSchema = z.object({
-  productName: z.string().min(2, "Product name is required."),
-  period: z.string().regex(/^\d{4}-\d{2}$/, "Must match YYYY-MM (e.g. 2026-07)"),
-  actualDemand: z.coerce.number().min(0),
-  forecastedDemand: z.coerce.number().min(0),
-});
-
-type FormValues = z.infer<typeof formSchema>;
+import { demandSchema as formSchema, type DemandFormValues as FormValues } from "@/schemas/demand";
 
 export default function DemandPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
