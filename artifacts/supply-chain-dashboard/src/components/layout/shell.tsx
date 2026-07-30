@@ -10,7 +10,8 @@ import {
   Upload,
   Plug,
   Brain,
-  Cpu
+  Cpu,
+  LineChart
 } from "lucide-react";
 
 const navItems = [
@@ -24,6 +25,7 @@ const navItems = [
   { path: "/erp-integration", label: "ERP Integration", icon: Plug },
   { path: "/operational-intelligence", label: "Ops Intelligence", icon: Brain },
   { path: "/ai-decision-engine", label: "AI Decision Engine", icon: Cpu },
+  { path: "/executive-intelligence", label: "Executive Intelligence", icon: LineChart },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

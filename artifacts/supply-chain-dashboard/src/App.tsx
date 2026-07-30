@@ -15,6 +15,7 @@ import ImportPage from './pages/import';
 import ErpIntegrationPage from './pages/erp-integration';
 import OperationalIntelligencePage from './pages/operational-intelligence';
 import AiDecisionEnginePage from './pages/ai-decision-engine';
+import ExecutiveIntelligencePage from './pages/executive-intelligence';
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ function Router() {
         <Route path="/erp-integration" component={ErpIntegrationPage} />
         <Route path="/operational-intelligence" component={OperationalIntelligencePage} />
         <Route path="/ai-decision-engine" component={AiDecisionEnginePage} />
+        <Route path="/executive-intelligence" component={ExecutiveIntelligencePage} />
         <Route component={NotFound} />
       </Switch>
     </AppShell>
