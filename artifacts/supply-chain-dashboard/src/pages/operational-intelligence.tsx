@@ -30,9 +30,13 @@ import {
   XCircle,
   Brain,
   Wifi,
+  Sparkles,
+  RotateCw,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { cn } from "@/lib/utils";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 
@@ -106,35 +110,316 @@ function StatusCount({ ops }: { ops: OpsIntelState }) {
 
 // ─── Sync status pill ─────────────────────────────────────────────────────────
 
-function SyncPill({
-  erp,
-  countdown,
-}: {
-  erp: ErpConnectionState;
-  countdown: number;
-}) {
+function SyncPill({ erp, countdown }: { erp: ErpConnectionState; countdown: number }) {
   const isSyncing = erp.status === "syncing";
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border bg-card text-xs text-muted-foreground">
       <span className="relative flex h-2 w-2">
-        <span
-          className={cn(
-            "absolute inline-flex h-full w-full rounded-full opacity-60",
-            isSyncing ? "animate-ping bg-amber-500" : "bg-emerald-500"
-          )}
-        />
-        <span
-          className={cn(
-            "relative inline-flex h-2 w-2 rounded-full",
-            isSyncing ? "bg-amber-500" : "bg-emerald-500"
-          )}
-        />
+        <span className={cn("absolute inline-flex h-full w-full rounded-full opacity-60", isSyncing ? "animate-ping bg-amber-500" : "bg-emerald-500")} />
+        <span className={cn("relative inline-flex h-2 w-2 rounded-full", isSyncing ? "bg-amber-500" : "bg-emerald-500")} />
       </span>
       <Wifi className="w-3 h-3" />
-      <span className="font-medium">
-        {isSyncing ? "Syncing ERP…" : `Next sync ${countdown}s`}
-      </span>
+      <span className="font-medium">{isSyncing ? "Syncing ERP…" : `Next sync ${countdown}s`}</span>
     </div>
+  );
+}
+
+// ─── AI Copilot panel ─────────────────────────────────────────────────────────
+
+// Section config: emoji → label, border, bg, text colour
+const SECTION_META: Record<string, { label: string; border: string; bg: string; heading: string }> = {
+  "🧠": { label: "Overall Operations Summary", border: "border-blue-200 dark:border-blue-800", bg: "bg-blue-50/60 dark:bg-blue-950/20",  heading: "text-blue-700 dark:text-blue-400" },
+  "🚨": { label: "Top Risks",                   border: "border-red-200 dark:border-red-800",   bg: "bg-red-50/60 dark:bg-red-950/20",    heading: "text-red-700 dark:text-red-400"   },
+  "🔗": { label: "KPI Relationships",            border: "border-purple-200 dark:border-purple-800", bg: "bg-purple-50/60 dark:bg-purple-950/20", heading: "text-purple-700 dark:text-purple-400" },
+  "🎯": { label: "Priority Action Plan",         border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50/60 dark:bg-emerald-950/20", heading: "text-emerald-700 dark:text-emerald-400" },
+};
+
+const SECTION_EMOJIS = ["🧠", "🚨", "🔗", "🎯"];
+
+interface ParsedSection { emoji: string; content: string }
+
+function parseSections(text: string): ParsedSection[] {
+  const lines = text.split("\n");
+  const sections: ParsedSection[] = [];
+  let current: ParsedSection | null = null;
+
+  for (const line of lines) {
+    const emoji = SECTION_EMOJIS.find((e) => line.trimStart().startsWith(e));
+    if (emoji) {
+      if (current) sections.push(current);
+      // Strip the section number + emoji heading line, keep only content after
+      current = { emoji, content: "" };
+    } else if (current) {
+      current.content += line + "\n";
+    }
+  }
+  if (current) sections.push(current);
+  return sections;
+}
+
+function CopilotLine({ line }: { line: string }) {
+  const trimmed = line.trim();
+  if (!trimmed) return <div className="h-1" />;
+
+  // Bullet point
+  if (trimmed.startsWith("- ") || trimmed.startsWith("• ")) {
+    const text = trimmed.replace(/^[-•]\s*/, "");
+    return (
+      <div className="flex items-start gap-2 text-sm text-foreground">
+        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current shrink-0 opacity-50" />
+        <span dangerouslySetInnerHTML={{ __html: boldMarkdown(text) }} />
+      </div>
+    );
+  }
+
+  // Sub-numbering like "1." "2." "3."
+  if (/^\d+\.\s/.test(trimmed)) {
+    const text = trimmed.replace(/^\d+\.\s*/, "");
+    return (
+      <p className="text-sm font-semibold text-foreground mt-2"
+         dangerouslySetInnerHTML={{ __html: boldMarkdown(text) }} />
+    );
+  }
+
+  // Arrow relationships
+  if (trimmed.includes("→")) {
+    return (
+      <div className="flex items-center gap-1.5 text-sm font-mono bg-background/70 border border-border/60 rounded px-2.5 py-1.5 my-1">
+        {trimmed.split("→").map((part, i, arr) => (
+          <span key={i} className="flex items-center gap-1.5">
+            <span className="text-foreground">{part.trim()}</span>
+            {i < arr.length - 1 && <span className="text-primary font-bold">→</span>}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-sm text-foreground leading-relaxed"
+       dangerouslySetInnerHTML={{ __html: boldMarkdown(trimmed) }} />
+  );
+}
+
+function boldMarkdown(text: string): string {
+  return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
+function CopilotSection({ emoji, content }: ParsedSection) {
+  const meta = SECTION_META[emoji];
+  if (!meta) return null;
+  const lines = content.trim().split("\n");
+  return (
+    <Card className={cn("border", meta.border, meta.bg)}>
+      <CardHeader className="pb-2 pt-4 px-4">
+        <CardTitle className={cn("text-sm font-bold flex items-center gap-2", meta.heading)}>
+          <span className="text-base">{emoji}</span>
+          {meta.label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 pb-4 space-y-1">
+        {lines.map((line, i) => <CopilotLine key={i} line={line} />)}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
+  const [status, setStatus]           = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [rawText, setRawText]         = useState("");
+  const [errorMsg, setErrorMsg]       = useState("");
+  const [analyzedAt, setAnalyzedAt]   = useState<Date | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const runAnalysis = useCallback(async () => {
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+
+    setStatus("loading");
+    setRawText("");
+    setErrorMsg("");
+
+    const payload = {
+      healthScore: ops.healthScore,
+      kpis: ops.kpis.map((k) => ({
+        label: k.label,
+        value: k.value,
+        unit: k.unit,
+        target: k.target,
+        trend: k.trend,
+        status: k.status,
+        description: k.description,
+      })),
+    };
+
+    try {
+      const res = await fetch(`${BASE}/api/ai/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: abortRef.current.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Server error ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+
+        for (const part of parts) {
+          const line = part.replace(/^data:\s*/, "");
+          if (!line) continue;
+          try {
+            const msg = JSON.parse(line);
+            if (msg.error) { setErrorMsg(msg.error); setStatus("error"); return; }
+            if (msg.done)  { setStatus("done"); setAnalyzedAt(new Date()); return; }
+            if (msg.content) setRawText((prev) => prev + msg.content);
+          } catch { /* non-JSON line */ }
+        }
+      }
+
+      setStatus("done");
+      setAnalyzedAt(new Date());
+    } catch (err: any) {
+      if (err.name === "AbortError") return;
+      setErrorMsg(err.message ?? "Request failed");
+      setStatus("error");
+    }
+  }, [ops]);
+
+  const sections = parseSections(rawText);
+
+  return (
+    <Card className="border-primary/20 shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Brain className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                AI Ops Copilot
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono">
+                  GPT-5.6
+                </Badge>
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Analyzes all 8 KPIs collectively and surfaces risks, relationships, and top 3 actions
+                {analyzedAt && (
+                  <span className="ml-2 text-muted-foreground/70">
+                    · last run {formatDistanceToNow(analyzedAt, { addSuffix: true })}
+                  </span>
+                )}
+              </CardDescription>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {status === "done" && (
+              <Button variant="outline" size="sm" onClick={runAnalysis} className="gap-1.5 text-xs">
+                <RotateCw className="w-3.5 h-3.5" />
+                Re-analyze
+              </Button>
+            )}
+            {status === "idle" || status === "error" ? (
+              <Button size="sm" onClick={runAnalysis} className="gap-1.5 font-semibold">
+                <Sparkles className="w-4 h-4" />
+                Run Analysis
+              </Button>
+            ) : status === "loading" ? (
+              <Button size="sm" disabled className="gap-1.5">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Analyzing…
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="px-5 pb-5">
+        {/* Idle state */}
+        {status === "idle" && (
+          <div className="flex flex-col items-center justify-center py-10 text-center gap-3 border border-dashed border-border rounded-lg bg-muted/20">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Brain className="w-6 h-6 text-primary opacity-60" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">No analysis yet</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                Click <strong>Run Analysis</strong> to get a senior operations manager assessment of your current KPI state
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Loading / streaming */}
+        {status === "loading" && (
+          <div className="space-y-3">
+            {rawText === "" ? (
+              // Before first token
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 animate-pulse">
+                    <div className="h-4 w-1/3 bg-muted rounded" />
+                    <div className="h-3 w-full bg-muted rounded" />
+                    <div className="h-3 w-5/6 bg-muted rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // Streaming in
+              <div className="space-y-3">
+                {sections.length > 0
+                  ? sections.map((s) => <CopilotSection key={s.emoji} {...s} />)
+                  : (
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap font-mono bg-muted/20 rounded-lg p-4 border border-border">
+                      {rawText}
+                      <span className="inline-block w-2 h-4 bg-primary ml-0.5 animate-pulse" />
+                    </div>
+                  )
+                }
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Done */}
+        {status === "done" && sections.length > 0 && (
+          <div className="space-y-3">
+            {sections.map((s) => <CopilotSection key={s.emoji} {...s} />)}
+          </div>
+        )}
+
+        {/* Fallback: done but no sections parsed */}
+        {status === "done" && sections.length === 0 && rawText && (
+          <div className="text-sm text-foreground whitespace-pre-wrap bg-muted/20 rounded-lg p-4 border border-border leading-relaxed">
+            {rawText}
+          </div>
+        )}
+
+        {/* Error */}
+        {status === "error" && (
+          <div className="flex items-start gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
+            <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-destructive">Analysis failed</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{errorMsg}</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -143,7 +428,6 @@ function SyncPill({
 const SYNC_INTERVAL_MS = 30_000;
 
 export default function OperationalIntelligencePage() {
-  // Two parallel state trees — ERP connection mirrors the integration page
   const [erp, setErp]         = useState<ErpConnectionState>(() => buildInitialConnectionState());
   const [ops, setOps]         = useState<OpsIntelState>(() => buildInitialOpsState(buildInitialConnectionState()));
   const [isSyncing, setIs]    = useState(false);
@@ -153,7 +437,6 @@ export default function OperationalIntelligencePage() {
   const syncRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Flash all KPI card IDs briefly after an update
   const flashAll = useCallback(() => {
     const all = new Set<KpiId>([
       "inventory_accuracy","production_utilization","supplier_performance",
@@ -167,14 +450,10 @@ export default function OperationalIntelligencePage() {
   const runCycle = useCallback((currentErp: ErpConnectionState) => {
     setIs(true);
     setErp(buildSyncingState(currentErp));
-
     setTimeout(() => {
       setErp((prevErp) => {
         const nextErp = simulateSyncCycle(prevErp);
-        setOps((prevOps) => {
-          const nextOps = tickOpsState(prevOps, nextErp);
-          return nextOps;
-        });
+        setOps((prevOps) => tickOpsState(prevOps, nextErp));
         flashAll();
         return nextErp;
       });
@@ -183,7 +462,6 @@ export default function OperationalIntelligencePage() {
     }, 1500);
   }, [flashAll]);
 
-  // Start auto-poll on mount
   useEffect(() => {
     countdownRef.current = setInterval(() => setCD((c) => (c > 0 ? c - 1 : 0)), 1000);
     syncRef.current = setInterval(() => {
@@ -242,8 +520,6 @@ export default function OperationalIntelligencePage() {
       <Card className="border-border shadow-sm">
         <CardContent className="py-4 px-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-
-            {/* Ring + score */}
             <div className="relative shrink-0">
               <HealthRing score={ops.healthScore} />
               <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -256,30 +532,20 @@ export default function OperationalIntelligencePage() {
 
             <div className="flex-1 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-foreground">
-                  Overall Operations Health
-                </span>
+                <span className="text-sm font-semibold text-foreground">Overall Operations Health</span>
                 <StatusCount ops={ops} />
               </div>
               <Progress value={ops.healthScore} className="h-2" />
               <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                <span>
-                  <span className="text-emerald-600 font-semibold">{good}</span> KPIs on target
-                </span>
-                <span>
-                  <span className="text-amber-500 font-semibold">{warning}</span> need attention
-                </span>
-                <span>
-                  <span className="text-destructive font-semibold">{critical}</span> critical
-                </span>
+                <span><span className="text-emerald-600 font-semibold">{good}</span> KPIs on target</span>
+                <span><span className="text-amber-500 font-semibold">{warning}</span> need attention</span>
+                <span><span className="text-destructive font-semibold">{critical}</span> critical</span>
                 <span className="ml-auto">
-                  Updated {formatDistanceToNow(ops.lastUpdatedAt, { addSuffix: true })} ·{" "}
-                  Cycle #{ops.syncCycleCount}
+                  Updated {formatDistanceToNow(ops.lastUpdatedAt, { addSuffix: true })} · Cycle #{ops.syncCycleCount}
                 </span>
               </div>
             </div>
 
-            {/* ERP source tag */}
             <div className="hidden lg:flex flex-col items-end gap-1 shrink-0">
               <Badge variant="outline" className="text-xs font-mono">
                 {erp.system.name}
@@ -304,7 +570,7 @@ export default function OperationalIntelligencePage() {
         ))}
       </div>
 
-      {/* ── Alert strip (only shown when there are critical KPIs) ── */}
+      {/* ── Alert strips ── */}
       {critical > 0 && (
         <Card className="border-destructive/30 bg-destructive/5 shadow-sm">
           <CardHeader className="pb-2 pt-4">
@@ -312,33 +578,21 @@ export default function OperationalIntelligencePage() {
               <AlertTriangle className="w-4 h-4" />
               {critical} Critical KPI{critical > 1 ? "s" : ""} Require Attention
             </CardTitle>
-            <CardDescription>
-              The following metrics are below safe operating thresholds.
-            </CardDescription>
+            <CardDescription>The following metrics are below safe operating thresholds.</CardDescription>
           </CardHeader>
           <CardContent className="pb-4">
             <div className="flex flex-wrap gap-2">
-              {ops.kpis
-                .filter((k) => k.status === "critical")
-                .map((k) => (
-                  <Badge
-                    key={k.id}
-                    variant="destructive"
-                    className="gap-1.5 font-normal"
-                  >
-                    {KPI_ICONS[k.id]}
-                    {k.label} —{" "}
-                    <span className="font-mono">
-                      {k.value.toFixed(k.format === "integer" ? 0 : 1)}{k.unit}
-                    </span>
-                  </Badge>
-                ))}
+              {ops.kpis.filter((k) => k.status === "critical").map((k) => (
+                <Badge key={k.id} variant="destructive" className="gap-1.5 font-normal">
+                  {KPI_ICONS[k.id]}
+                  {k.label} — <span className="font-mono">{k.value.toFixed(k.format === "integer" ? 0 : 1)}{k.unit}</span>
+                </Badge>
+              ))}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* ── Warning strip ── */}
       {warning > 0 && (
         <Card className="border-amber-400/30 bg-amber-400/5 shadow-sm">
           <CardHeader className="pb-2 pt-4">
@@ -346,31 +600,23 @@ export default function OperationalIntelligencePage() {
               <AlertTriangle className="w-4 h-4" />
               {warning} KPI{warning > 1 ? "s" : ""} Need Monitoring
             </CardTitle>
-            <CardDescription>
-              These metrics are within acceptable range but trending toward warning thresholds.
-            </CardDescription>
+            <CardDescription>These metrics are within acceptable range but trending toward warning thresholds.</CardDescription>
           </CardHeader>
           <CardContent className="pb-4">
             <div className="flex flex-wrap gap-2">
-              {ops.kpis
-                .filter((k) => k.status === "warning")
-                .map((k) => (
-                  <Badge
-                    key={k.id}
-                    variant="secondary"
-                    className="gap-1.5 font-normal bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                  >
-                    {KPI_ICONS[k.id]}
-                    {k.label} —{" "}
-                    <span className="font-mono">
-                      {k.value.toFixed(k.format === "integer" ? 0 : 1)}{k.unit}
-                    </span>
-                  </Badge>
-                ))}
+              {ops.kpis.filter((k) => k.status === "warning").map((k) => (
+                <Badge key={k.id} variant="secondary" className="gap-1.5 font-normal bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                  {KPI_ICONS[k.id]}
+                  {k.label} — <span className="font-mono">{k.value.toFixed(k.format === "integer" ? 0 : 1)}{k.unit}</span>
+                </Badge>
+              ))}
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* ── AI Copilot ── */}
+      <AICopilotPanel ops={ops} />
     </div>
   );
 }
