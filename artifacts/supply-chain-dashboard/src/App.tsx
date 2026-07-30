@@ -13,6 +13,7 @@ import LogisticsPage from './pages/logistics';
 import EquationsPage from './pages/equations';
 import ImportPage from './pages/import';
 import ErpIntegrationPage from './pages/erp-integration';
+import OperationalIntelligencePage from './pages/operational-intelligence';
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ function Router() {
         <Route path="/equations" component={EquationsPage} />
         <Route path="/import" component={ImportPage} />
         <Route path="/erp-integration" component={ErpIntegrationPage} />
+        <Route path="/operational-intelligence" component={OperationalIntelligencePage} />
         <Route component={NotFound} />
       </Switch>
     </AppShell>

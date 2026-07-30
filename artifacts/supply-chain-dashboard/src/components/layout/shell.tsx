@@ -8,7 +8,8 @@ import {
   LayoutDashboard, 
   Truck,
   Upload,
-  Plug
+  Plug,
+  Brain
 } from "lucide-react";
 
 const navItems = [
@@ -20,6 +21,7 @@ const navItems = [
   { path: "/equations", label: "Equations Reference", icon: Calculator },
   { path: "/import", label: "ERP Import", icon: Upload },
   { path: "/erp-integration", label: "ERP Integration", icon: Plug },
+  { path: "/operational-intelligence", label: "Ops Intelligence", icon: Brain },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
