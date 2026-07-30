@@ -134,7 +134,7 @@ const SECTION_META: Record<string, { label: string; border: string; bg: string; 
   "4": { label: "Priority Action Plan",       icon: "◆", border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50/60 dark:bg-emerald-950/20", heading: "text-emerald-700 dark:text-emerald-400" },
 };
 
-interface ParsedSection { key: string; content: string }
+interface ParsedSection { id: string; content: string }
 
 // Matches "## 1. Overall Operations Summary" style headers
 const SECTION_HEADER_RE = /^##\s+(\d+)\.\s+/;
@@ -148,7 +148,7 @@ function parseSections(text: string): ParsedSection[] {
     const m = line.match(SECTION_HEADER_RE);
     if (m) {
       if (current) sections.push(current);
-      current = { key: m[1], content: "" };
+      current = { id: m[1], content: "" };
     } else if (current) {
       current.content += line + "\n";
     }
@@ -290,19 +290,19 @@ function SectionBlocks({ content }: { content: string }) {
   );
 }
 
-function CopilotSection({ key: _k, ...s }: ParsedSection) {
-  const meta = SECTION_META[s.key];
+function CopilotSection({ id, content }: ParsedSection) {
+  const meta = SECTION_META[id];
   if (!meta) return null;
   return (
     <Card className={cn("border", meta.border, meta.bg)}>
       <CardHeader className="pb-2 pt-4 px-4">
         <CardTitle className={cn("text-sm font-bold flex items-center gap-2", meta.heading)}>
-          <span className="text-sm font-mono opacity-60">{s.key}.</span>
+          <span className="text-sm font-mono opacity-60">{id}.</span>
           {meta.label}
         </CardTitle>
       </CardHeader>
       <CardContent className="px-4 pb-4">
-        <SectionBlocks content={s.content} />
+        <SectionBlocks content={content} />
       </CardContent>
     </Card>
   );
@@ -465,7 +465,7 @@ function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
               // Streaming in
               <div className="space-y-3">
                 {sections.length > 0
-                  ? sections.map((s) => <CopilotSection key={s.key} {...s} />)
+                  ? sections.map((s) => <CopilotSection key={s.id} id={s.id} content={s.content} />)
                   : (
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap font-mono bg-muted/20 rounded-lg p-4 border border-border">
                       {rawText}
@@ -481,7 +481,7 @@ function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
         {/* Done */}
         {status === "done" && sections.length > 0 && (
           <div className="space-y-3">
-            {sections.map((s) => <CopilotSection key={s.key} {...s} />)}
+            {sections.map((s) => <CopilotSection key={s.id} id={s.id} content={s.content} />)}
           </div>
         )}
 
