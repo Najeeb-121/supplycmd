@@ -43,7 +43,7 @@ import {
 
 const formSchema = z.object({
   productName: z.string().min(2, "Product name is required."),
-  period: z.string().min(2, "Period is required (e.g. 2023-Q1 or Jan-2023)."),
+  period: z.string().regex(/^\d{4}-\d{2}$/, "Must match YYYY-MM (e.g. 2026-07)"),
   actualDemand: z.coerce.number().min(0),
   forecastedDemand: z.coerce.number().min(0),
 });
@@ -71,6 +71,7 @@ export default function DemandPage() {
       actualDemand: 0,
       forecastedDemand: 0,
     },
+    mode: "onChange",
   });
 
   const onSubmit = (values: FormValues) => {
@@ -80,7 +81,17 @@ export default function DemandPage() {
         queryClient.invalidateQueries({ queryKey: getGetDemandForecastQueryKey() });
         setIsFormOpen(false);
         toast({ title: "Demand Logged", description: "Demand record has been added." });
-      }
+      },
+      onError: (e: any) => {
+        const apiErrors = e?.response?.data?.errors ?? e?.data?.errors;
+        if (apiErrors && typeof apiErrors === "object") {
+          Object.entries(apiErrors).forEach(([field, message]) => {
+            form.setError(field as any, { message: String(message) });
+          });
+        } else {
+          toast({ title: "Error", description: String(e), variant: "destructive" });
+        }
+      },
     });
   };
 
@@ -249,7 +260,7 @@ export default function DemandPage() {
                   <FormItem>
                     <FormLabel>Period ID</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. 2024-M01" {...field} />
+                      <Input placeholder="YYYY-MM" pattern="\d{4}-\d{2}" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -263,7 +274,7 @@ export default function DemandPage() {
                     <FormItem>
                       <FormLabel>Forecasted</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input type="number" min="0" step="0.01" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -276,7 +287,7 @@ export default function DemandPage() {
                     <FormItem>
                       <FormLabel>Actual</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input type="number" min="0" step="0.01" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -286,7 +297,7 @@ export default function DemandPage() {
               
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={createMutation.isPending}>
+                <Button type="submit" disabled={createMutation.isPending || !form.formState.isValid}>
                   Log Record
                 </Button>
               </div>

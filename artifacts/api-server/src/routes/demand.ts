@@ -1,6 +1,15 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { db, demandRecordsTable } from "@workspace/db";
 import { CreateDemandRecordBody } from "@workspace/api-zod";
+import { validateBody } from "../lib/validate.js";
+
+// ── Stricter demand schema ─────────────────────────────────────────────────────
+const StrictDemandBody = CreateDemandRecordBody.extend({
+  period:           z.string().regex(/^\d{4}-\d{2}$/, "Period must match YYYY-MM format (e.g. 2026-07)"),
+  actualDemand:     z.number().min(0),
+  forecastedDemand: z.number().min(0),
+});
 
 const router: IRouter = Router();
 
@@ -64,10 +73,10 @@ router.get("/demand/forecast", async (_req, res): Promise<void> => {
 });
 
 router.post("/demand", async (req, res): Promise<void> => {
-  const parsed = CreateDemandRecordBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const result = validateBody(StrictDemandBody, req, res);
+  if (!result.ok) return;
 
-  const [record] = await db.insert(demandRecordsTable).values(parsed.data).returning();
+  const [record] = await db.insert(demandRecordsTable).values(result.data).returning();
   res.status(201).json(record);
 });
 

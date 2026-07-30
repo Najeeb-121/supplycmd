@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, ordersTable, suppliersTable } from "@workspace/db";
 import {
@@ -6,6 +7,18 @@ import {
   UpdateOrderBody,
   UpdateOrderParams,
 } from "@workspace/api-zod";
+import { validateBody } from "../lib/validate.js";
+
+// ── Stricter order schema with cross-field date rule ──────────────────────────
+const StrictOrderBody = CreateOrderBody
+  .extend({
+    totalValue: z.number().min(0),
+    itemCount:  z.number().int().min(1),
+  })
+  .refine(
+    (d) => d.expectedDelivery >= d.orderDate,
+    { message: "Delivery date must be on or after the order date", path: ["expectedDelivery"] },
+  );
 
 const router: IRouter = Router();
 
@@ -15,16 +28,20 @@ router.get("/orders", async (_req, res): Promise<void> => {
 });
 
 router.post("/orders", async (req, res): Promise<void> => {
-  const parsed = CreateOrderBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const result = validateBody(StrictOrderBody, req, res);
+  if (!result.ok) return;
 
   // Lookup supplier name
-  const [supplier] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, parsed.data.supplierId));
-  const supplierName = supplier?.name ?? "Unknown Supplier";
+  const [supplier] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, result.data.supplierId));
+  if (!supplier) {
+    res.status(400).json({ errors: { supplierId: "Supplier not found" } });
+    return;
+  }
+  const supplierName = supplier.name;
 
   const [order] = await db
     .insert(ordersTable)
-    .values({ ...parsed.data, supplierName })
+    .values({ ...result.data, supplierName })
     .returning();
   res.status(201).json(order);
 });

@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, lte, and, sql } from "drizzle-orm";
+import { z } from "zod";
 import { db, inventoryItemsTable, stockMovementsTable } from "@workspace/db";
 import {
   CreateInventoryItemBody,
@@ -10,6 +11,41 @@ import {
   CreateStockMovementBody,
   CreateStockMovementParams,
 } from "@workspace/api-zod";
+import { validateBody } from "../lib/validate.js";
+
+// ── Stricter inventory schema with cross-field rules ───────────────────────────
+const StrictInventoryBody = CreateInventoryItemBody
+  .extend({
+    currentStock:     z.number().int().min(0),
+    reservedQuantity: z.number().int().min(0).optional(),
+    minStock:         z.number().int().min(0).optional(),
+    maxStock:         z.number().int().min(0).optional(),
+    leadTimeDays:     z.number().int().min(0),
+    sellingPrice:     z.number().min(0).optional(),
+    holdingCostRate:  z.number().min(0).max(1),
+  })
+  .refine(
+    (d) => d.maxStock == null || d.maxStock >= (d.minStock ?? 0),
+    { message: "Max Stock must be ≥ Min Stock", path: ["maxStock"] },
+  );
+
+const StrictInventoryPatch = UpdateInventoryItemBody
+  .extend({
+    currentStock:     z.number().int().min(0).optional(),
+    reservedQuantity: z.number().int().min(0).optional(),
+    minStock:         z.number().int().min(0).optional(),
+    maxStock:         z.number().int().min(0).optional(),
+    leadTimeDays:     z.number().int().min(0).optional(),
+    sellingPrice:     z.number().min(0).optional(),
+    holdingCostRate:  z.number().min(0).max(1).optional(),
+  })
+  .refine(
+    (d) => {
+      if (d.maxStock == null || d.minStock == null) return true;
+      return d.maxStock >= d.minStock;
+    },
+    { message: "Max Stock must be ≥ Min Stock", path: ["maxStock"] },
+  );
 
 const router: IRouter = Router();
 
@@ -214,8 +250,9 @@ router.get("/inventory/:id", async (req: Request, res: Response): Promise<void> 
 
 // ── POST /inventory ───────────────────────────────────────────────────────────
 router.post("/inventory", async (req: Request, res: Response): Promise<void> => {
-  const parsed = CreateInventoryItemBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const result = validateBody(StrictInventoryBody, req, res);
+  if (!result.ok) return;
+  const parsed = result;
   const { annualDemand, orderingCost, unitCost, holdingCostRate, leadTimeDays } = parsed.data;
   const { eoq, safetyStock, reorderPoint } = computeMetrics({ annualDemand, orderingCost, unitCost, holdingCostRate, leadTimeDays });
   const [item] = await db.insert(inventoryItemsTable).values({ ...parsed.data, eoq, safetyStock, reorderPoint }).returning();
@@ -226,8 +263,9 @@ router.post("/inventory", async (req: Request, res: Response): Promise<void> => 
 router.patch("/inventory/:id", async (req: Request, res: Response): Promise<void> => {
   const params = UpdateInventoryItemParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const parsed = UpdateInventoryItemBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const result = validateBody(StrictInventoryPatch, req, res);
+  if (!result.ok) return;
+  const parsed = result;
   const [existing] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Inventory item not found" }); return; }
   const merged = { ...existing, ...parsed.data };

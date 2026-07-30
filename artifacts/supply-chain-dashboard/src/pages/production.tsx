@@ -46,14 +46,17 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
 const formSchema = z.object({
   productName: z.string().min(2, "Product name is required."),
-  plannedUnits: z.coerce.number().min(1),
-  actualUnits: z.coerce.number().min(0),
-  plannedTimeMin: z.coerce.number().min(1),
-  actualTimeMin: z.coerce.number().min(0),
-  defects: z.coerce.number().min(0),
-  downtimeMin: z.coerce.number().min(0),
+  plannedUnits: z.coerce.number().int().min(0),
+  actualUnits: z.coerce.number().int().min(0),
+  plannedTimeMin: z.coerce.number().int().min(1),
+  actualTimeMin: z.coerce.number().int().min(0),
+  defects: z.coerce.number().int().min(0),
+  downtimeMin: z.coerce.number().int().min(0),
   runDate: z.string().min(10, "Date is required"),
-});
+}).refine(
+  (d) => d.defects <= d.actualUnits,
+  { message: "Defects cannot exceed Actual Units Produced", path: ["defects"] },
+);
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -118,6 +121,7 @@ export default function ProductionPage() {
       downtimeMin: 0,
       runDate: new Date().toISOString().split('T')[0],
     },
+    mode: "onChange",
   });
 
   const onSubmit = (values: FormValues) => {
@@ -133,7 +137,17 @@ export default function ProductionPage() {
         queryClient.invalidateQueries({ queryKey: getGetOeeMetricsQueryKey() });
         setIsFormOpen(false);
         toast({ title: "Run Logged", description: "Production run has been recorded and metrics updated." });
-      }
+      },
+      onError: (e: any) => {
+        const apiErrors = e?.response?.data?.errors ?? e?.data?.errors;
+        if (apiErrors && typeof apiErrors === "object") {
+          Object.entries(apiErrors).forEach(([field, message]) => {
+            form.setError(field as any, { message: String(message) });
+          });
+        } else {
+          toast({ title: "Error", description: String(e), variant: "destructive" });
+        }
+      },
     });
   };
 
@@ -356,7 +370,7 @@ export default function ProductionPage() {
                     <FormItem>
                       <FormLabel>Planned Units</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input type="number" min="0" step="1" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -369,7 +383,7 @@ export default function ProductionPage() {
                     <FormItem>
                       <FormLabel>Actual Units Produced</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input type="number" min="0" step="1" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -382,7 +396,7 @@ export default function ProductionPage() {
                     <FormItem>
                       <FormLabel>Planned Time (mins)</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input type="number" min="0" step="1" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -395,7 +409,7 @@ export default function ProductionPage() {
                     <FormItem>
                       <FormLabel>Actual Time Spent (mins)</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input type="number" min="0" step="1" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -408,7 +422,7 @@ export default function ProductionPage() {
                     <FormItem>
                       <FormLabel className="text-destructive">Defects Found</FormLabel>
                       <FormControl>
-                        <Input type="number" className="border-destructive/50" {...field} />
+                        <Input type="number" min="0" step="1" className="border-destructive/50" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -421,7 +435,7 @@ export default function ProductionPage() {
                     <FormItem>
                       <FormLabel className="text-destructive">Unplanned Downtime (mins)</FormLabel>
                       <FormControl>
-                        <Input type="number" className="border-destructive/50" {...field} />
+                        <Input type="number" min="0" step="1" className="border-destructive/50" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -431,7 +445,7 @@ export default function ProductionPage() {
               
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
-                <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={createMutation.isPending}>
+                <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={createMutation.isPending || !form.formState.isValid}>
                   Log Run Metrics
                 </Button>
               </div>

@@ -96,16 +96,19 @@ const itemSchema = z.object({
   binLocation:      z.string().optional(),
   supplierName:     z.string().optional(),
   unitCost:         z.coerce.number().min(0),
-  sellingPrice:     z.coerce.number().optional(),
-  currentStock:     z.coerce.number().min(0),
-  reservedQuantity: z.coerce.number().min(0).default(0),
-  minStock:         z.coerce.number().min(0).default(0),
-  maxStock:         z.coerce.number().optional(),
+  sellingPrice:     z.coerce.number().min(0).optional(),
+  currentStock:     z.coerce.number().int().min(0),
+  reservedQuantity: z.coerce.number().int().min(0).default(0),
+  minStock:         z.coerce.number().int().min(0).default(0),
+  maxStock:         z.coerce.number().int().min(0).optional(),
   annualDemand:     z.coerce.number().min(0),
-  leadTimeDays:     z.coerce.number().min(0),
+  leadTimeDays:     z.coerce.number().int().min(0),
   orderingCost:     z.coerce.number().min(0),
   holdingCostRate:  z.coerce.number().min(0).max(1),
-});
+}).refine(
+  (d) => d.maxStock == null || d.maxStock >= d.minStock,
+  { message: "Max Stock must be ≥ Min Stock", path: ["maxStock"] },
+);
 type ItemForm = z.infer<typeof itemSchema>;
 
 const movementSchema = z.object({
@@ -199,6 +202,7 @@ export default function InventoryPage() {
   const itemForm = useForm<ItemForm>({
     resolver: zodResolver(itemSchema),
     defaultValues: { name: "", sku: "", category: "", unitOfMeasure: "units", currentStock: 0, reservedQuantity: 0, minStock: 0, unitCost: 0, annualDemand: 0, leadTimeDays: 7, orderingCost: 0, holdingCostRate: 0.25 },
+    mode: "onChange",
   });
   const movForm = useForm<MovementForm>({
     resolver: zodResolver(movementSchema),
@@ -277,15 +281,25 @@ export default function InventoryPage() {
   };
 
   const onItemSubmit = (vals: ItemForm) => {
+    const handleError = (e: any) => {
+      const apiErrors = e?.response?.data?.errors ?? e?.data?.errors;
+      if (apiErrors && typeof apiErrors === "object") {
+        Object.entries(apiErrors).forEach(([field, message]) => {
+          itemForm.setError(field as any, { message: String(message) });
+        });
+      } else {
+        toast({ title: "Error", description: String(e), variant: "destructive" });
+      }
+    };
     if (itemDialog.item) {
       updateMut.mutate({ id: itemDialog.item.id, data: vals }, {
         onSuccess: () => { invalidate(); setItemDialog({ open: false, item: null }); toast({ title: "Item updated" }); },
-        onError: (e) => toast({ title: "Error", description: String(e), variant: "destructive" }),
+        onError: handleError,
       });
     } else {
       createMut.mutate({ data: vals }, {
         onSuccess: () => { invalidate(); setItemDialog({ open: false, item: null }); toast({ title: "Item created" }); },
-        onError: (e) => toast({ title: "Error", description: String(e), variant: "destructive" }),
+        onError: handleError,
       });
     }
   };
@@ -970,10 +984,10 @@ export default function InventoryPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Pricing</p>
                 <div className="grid grid-cols-2 gap-3">
                   <FormField control={itemForm.control} name="unitCost" render={({ field }) => (
-                    <FormItem><FormLabel>Cost Price ($) *</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Cost Price ($) *</FormLabel><FormControl><Input type="number" min="0" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="sellingPrice" render={({ field }) => (
-                    <FormItem><FormLabel>Selling Price ($)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Selling Price ($)</FormLabel><FormControl><Input type="number" min="0" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
               </div>
@@ -983,16 +997,16 @@ export default function InventoryPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Stock Levels</p>
                 <div className="grid grid-cols-2 gap-3">
                   <FormField control={itemForm.control} name="currentStock" render={({ field }) => (
-                    <FormItem><FormLabel>Current Quantity *</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Current Quantity *</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="reservedQuantity" render={({ field }) => (
-                    <FormItem><FormLabel>Reserved Quantity</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Reserved Quantity</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="minStock" render={({ field }) => (
-                    <FormItem><FormLabel>Minimum Stock</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Minimum Stock</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="maxStock" render={({ field }) => (
-                    <FormItem><FormLabel>Maximum Stock</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Maximum Stock</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
               </div>
@@ -1002,22 +1016,22 @@ export default function InventoryPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Demand &amp; Ordering (for EOQ / ROP calculation)</p>
                 <div className="grid grid-cols-2 gap-3">
                   <FormField control={itemForm.control} name="annualDemand" render={({ field }) => (
-                    <FormItem><FormLabel>Annual Demand (units)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Annual Demand (units)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="leadTimeDays" render={({ field }) => (
-                    <FormItem><FormLabel>Lead Time (Days)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Lead Time (Days)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="orderingCost" render={({ field }) => (
-                    <FormItem><FormLabel>Cost per Order ($)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Cost per Order ($)</FormLabel><FormControl><Input type="number" min="0" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="holdingCostRate" render={({ field }) => (
-                    <FormItem><FormLabel>Holding Cost Rate (0–1)</FormLabel><FormControl><Input type="number" step="0.01" max="1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Holding Cost Rate (0–1)</FormLabel><FormControl><Input type="number" min="0" step="0.01" max="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-2 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setItemDialog({ open: false, item: null })}>Cancel</Button>
-                <Button type="submit" disabled={createMut.isPending || updateMut.isPending}>
+                <Button type="submit" disabled={createMut.isPending || updateMut.isPending || !itemForm.formState.isValid}>
                   {itemDialog.item ? "Save Changes" : "Create Item"}
                 </Button>
               </div>

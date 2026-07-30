@@ -47,11 +47,14 @@ type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelle
 
 const orderSchema = z.object({
   supplierId: z.coerce.number().min(1, "Please select a supplier"),
-  totalValue: z.coerce.number().min(1, "Order value must be greater than 0"),
+  totalValue: z.coerce.number().min(0, "Order value must be ≥ 0"),
   orderDate: z.string().min(10, "Order date is required"),
   expectedDelivery: z.string().min(10, "Expected delivery is required"),
-  itemCount: z.coerce.number().min(1, "Item count must be at least 1"),
-});
+  itemCount: z.coerce.number().int().min(1, "Item count must be at least 1"),
+}).refine(
+  (d) => d.expectedDelivery >= d.orderDate,
+  { message: "Delivery date must be on or after the order date", path: ["expectedDelivery"] },
+);
 
 type OrderFormValues = z.infer<typeof orderSchema>;
 
@@ -82,6 +85,7 @@ export default function LogisticsPage() {
       expectedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       itemCount: 1,
     },
+    mode: "onChange",
   });
 
   const onSubmitOrder = (values: OrderFormValues) => {
@@ -96,7 +100,17 @@ export default function LogisticsPage() {
         queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() });
         setIsOrderFormOpen(false);
         toast({ title: "Purchase Order Created", description: "The order has been sent to the supplier." });
-      }
+      },
+      onError: (e: any) => {
+        const apiErrors = e?.response?.data?.errors ?? e?.data?.errors;
+        if (apiErrors && typeof apiErrors === "object") {
+          Object.entries(apiErrors).forEach(([field, message]) => {
+            form.setError(field as any, { message: String(message) });
+          });
+        } else {
+          toast({ title: "Error", description: String(e), variant: "destructive" });
+        }
+      },
     });
   };
 
@@ -413,7 +427,7 @@ export default function LogisticsPage() {
                     <FormItem>
                       <FormLabel>Total Items</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input type="number" min="1" step="1" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -426,7 +440,7 @@ export default function LogisticsPage() {
                     <FormItem>
                       <FormLabel>Total Value ($)</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" {...field} />
+                        <Input type="number" min="0" step="0.01" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -436,7 +450,7 @@ export default function LogisticsPage() {
               
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setIsOrderFormOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={createOrderMutation.isPending}>
+                <Button type="submit" disabled={createOrderMutation.isPending || !form.formState.isValid}>
                   Issue PO
                 </Button>
               </div>

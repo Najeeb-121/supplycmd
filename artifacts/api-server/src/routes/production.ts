@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { eq, avg, sum } from "drizzle-orm";
 import { db, productionRunsTable } from "@workspace/db";
 import {
@@ -6,6 +7,22 @@ import {
   UpdateProductionRunBody,
   UpdateProductionRunParams,
 } from "@workspace/api-zod";
+import { validateBody } from "../lib/validate.js";
+
+// ── Stricter production schema with cross-field rule ──────────────────────────
+const StrictProductionBody = CreateProductionRunBody
+  .extend({
+    plannedUnits:   z.number().int().min(0),
+    actualUnits:    z.number().int().min(0),
+    plannedTimeMin: z.number().int().min(0),
+    actualTimeMin:  z.number().int().min(0),
+    defects:        z.number().int().min(0),
+    downtimeMin:    z.number().int().min(0),
+  })
+  .refine(
+    (d) => d.defects <= d.actualUnits,
+    { message: "Defects cannot exceed Actual Units Produced", path: ["defects"] },
+  );
 
 const router: IRouter = Router();
 
@@ -87,10 +104,10 @@ router.get("/production/metrics/oee", async (_req, res): Promise<void> => {
 });
 
 router.post("/production", async (req, res): Promise<void> => {
-  const parsed = CreateProductionRunBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const result = validateBody(StrictProductionBody, req, res);
+  if (!result.ok) return;
 
-  const [run] = await db.insert(productionRunsTable).values(parsed.data).returning();
+  const [run] = await db.insert(productionRunsTable).values(result.data).returning();
   res.status(201).json(run);
 });
 
