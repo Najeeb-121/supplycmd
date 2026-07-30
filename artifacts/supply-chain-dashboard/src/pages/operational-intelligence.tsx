@@ -126,17 +126,18 @@ function SyncPill({ erp, countdown }: { erp: ErpConnectionState; countdown: numb
 
 // ─── AI Copilot panel ─────────────────────────────────────────────────────────
 
-// Section config: emoji → label, border, bg, text colour
-const SECTION_META: Record<string, { label: string; border: string; bg: string; heading: string }> = {
-  "🧠": { label: "Overall Operations Summary", border: "border-blue-200 dark:border-blue-800", bg: "bg-blue-50/60 dark:bg-blue-950/20",  heading: "text-blue-700 dark:text-blue-400" },
-  "🚨": { label: "Top Risks",                   border: "border-red-200 dark:border-red-800",   bg: "bg-red-50/60 dark:bg-red-950/20",    heading: "text-red-700 dark:text-red-400"   },
-  "🔗": { label: "KPI Relationships",            border: "border-purple-200 dark:border-purple-800", bg: "bg-purple-50/60 dark:bg-purple-950/20", heading: "text-purple-700 dark:text-purple-400" },
-  "🎯": { label: "Priority Action Plan",         border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50/60 dark:bg-emerald-950/20", heading: "text-emerald-700 dark:text-emerald-400" },
+// Section config keyed by "## N." number string
+const SECTION_META: Record<string, { label: string; border: string; bg: string; heading: string; icon: string }> = {
+  "1": { label: "Overall Operations Summary", icon: "◈", border: "border-blue-200 dark:border-blue-800",     bg: "bg-blue-50/60 dark:bg-blue-950/20",      heading: "text-blue-700 dark:text-blue-400"     },
+  "2": { label: "Top Risks",                  icon: "◉", border: "border-red-200 dark:border-red-800",       bg: "bg-red-50/60 dark:bg-red-950/20",        heading: "text-red-700 dark:text-red-400"       },
+  "3": { label: "KPI Relationships",          icon: "◎", border: "border-purple-200 dark:border-purple-800", bg: "bg-purple-50/60 dark:bg-purple-950/20",  heading: "text-purple-700 dark:text-purple-400" },
+  "4": { label: "Priority Action Plan",       icon: "◆", border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50/60 dark:bg-emerald-950/20", heading: "text-emerald-700 dark:text-emerald-400" },
 };
 
-const SECTION_EMOJIS = ["🧠", "🚨", "🔗", "🎯"];
+interface ParsedSection { key: string; content: string }
 
-interface ParsedSection { emoji: string; content: string }
+// Matches "## 1. Overall Operations Summary" style headers
+const SECTION_HEADER_RE = /^##\s+(\d+)\.\s+/;
 
 function parseSections(text: string): ParsedSection[] {
   const lines = text.split("\n");
@@ -144,10 +145,10 @@ function parseSections(text: string): ParsedSection[] {
   let current: ParsedSection | null = null;
 
   for (const line of lines) {
-    const emoji = SECTION_EMOJIS.find((e) => line.trimStart().startsWith(e));
-    if (emoji) {
+    const m = line.match(SECTION_HEADER_RE);
+    if (m) {
       if (current) sections.push(current);
-      current = { emoji, content: "" };
+      current = { key: m[1], content: "" };
     } else if (current) {
       current.content += line + "\n";
     }
@@ -187,7 +188,14 @@ function parseBlocks(content: string): Block[] {
 
     flush();
 
-    if (t.includes("→")) { blocks.push({ kind: "arrow", parts: t.split("→").map((p) => p.trim()) }); continue; }
+    // Accept both Unicode → and ASCII -> as arrow chains
+    if (t.includes("→") || t.includes("->")) {
+      const parts = t.includes("→")
+        ? t.split("→").map((p) => p.trim())
+        : t.split("->").map((p) => p.trim());
+      blocks.push({ kind: "arrow", parts });
+      continue;
+    }
     if (t.startsWith("- ") || t.startsWith("• ")) { blocks.push({ kind: "bullet", text: t.replace(/^[-•]\s*/, "") }); continue; }
     blocks.push({ kind: "text", text: t });
   }
@@ -282,19 +290,19 @@ function SectionBlocks({ content }: { content: string }) {
   );
 }
 
-function CopilotSection({ emoji, content }: ParsedSection) {
-  const meta = SECTION_META[emoji];
+function CopilotSection({ key: _k, ...s }: ParsedSection) {
+  const meta = SECTION_META[s.key];
   if (!meta) return null;
   return (
     <Card className={cn("border", meta.border, meta.bg)}>
       <CardHeader className="pb-2 pt-4 px-4">
         <CardTitle className={cn("text-sm font-bold flex items-center gap-2", meta.heading)}>
-          <span className="text-base">{emoji}</span>
+          <span className="text-sm font-mono opacity-60">{s.key}.</span>
           {meta.label}
         </CardTitle>
       </CardHeader>
       <CardContent className="px-4 pb-4">
-        <SectionBlocks content={content} />
+        <SectionBlocks content={s.content} />
       </CardContent>
     </Card>
   );
@@ -457,7 +465,7 @@ function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
               // Streaming in
               <div className="space-y-3">
                 {sections.length > 0
-                  ? sections.map((s) => <CopilotSection key={s.emoji} {...s} />)
+                  ? sections.map((s) => <CopilotSection key={s.key} {...s} />)
                   : (
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap font-mono bg-muted/20 rounded-lg p-4 border border-border">
                       {rawText}
@@ -473,7 +481,7 @@ function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
         {/* Done */}
         {status === "done" && sections.length > 0 && (
           <div className="space-y-3">
-            {sections.map((s) => <CopilotSection key={s.emoji} {...s} />)}
+            {sections.map((s) => <CopilotSection key={s.key} {...s} />)}
           </div>
         )}
 
