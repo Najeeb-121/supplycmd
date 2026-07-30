@@ -59,6 +59,43 @@ function parseFile(buffer: Buffer, mimetype: string, originalname: string): Reco
 function num(v: unknown): number { return parseFloat(String(v)) || 0; }
 function str(v: unknown): string { return String(v ?? "").trim(); }
 
+// ─── Date normalizer ───────────────────────────────────────────────────────────
+// Accepts YYYY-MM-DD, MM/DD/YYYY, DD-MM-YYYY, DD/MM/YYYY, or JS-parseable strings.
+// Returns YYYY-MM-DD or null if unparseable.
+function parseDate(v: unknown): string | null {
+  const s = str(v);
+  if (!s) return null;
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // MM/DD/YYYY
+  const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
+
+  // DD-MM-YYYY
+  const dmy1 = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dmy1) return `${dmy1[3]}-${dmy1[2].padStart(2, "0")}-${dmy1[1].padStart(2, "0")}`;
+
+  // DD/MM/YYYY
+  const dmy2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy2) return `${dmy2[3]}-${dmy2[2].padStart(2, "0")}-${dmy2[1].padStart(2, "0")}`;
+
+  // XLSX serial date number (days since 1900-01-01)
+  const serial = parseFloat(s);
+  if (!isNaN(serial) && serial > 0 && serial < 100000) {
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const d = new Date(excelEpoch.getTime() + serial * 86400000);
+    if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+  }
+
+  // Fallback: JS Date parse
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+
+  return null;
+}
+
 // EOQ / safety stock helpers (mirror of inventory route)
 function calcEOQ(d: number, s: number, h_unit: number): number {
   return h_unit > 0 ? Math.sqrt((2 * d * s) / h_unit) : 0;
@@ -71,7 +108,7 @@ function calcROP(leadDays: number, annualD: number): number {
   return Math.ceil((annualD / 365) * leadDays + calcSafetyStock(leadDays, annualD));
 }
 
-// POST /api/import  (multipart: file + entity)
+// POST /api/import  (multipart: file + entity + optional fieldMap JSON)
 router.post(
   "/import",
   upload.single("file"),
@@ -93,10 +130,28 @@ router.post(
 
     if (rows.length === 0) { res.status(400).json({ error: "File contains no data rows." }); return; }
 
+    // Apply explicit field map if provided  { expectedKey: fileColumnHeader }
+    if (req.body.fieldMap) {
+      try {
+        const fieldMap: Record<string, string> = JSON.parse(req.body.fieldMap);
+        rows = rows.map((row) => {
+          const newRow: Record<string, string> = { ...row };
+          for (const [expectedKey, fileCol] of Object.entries(fieldMap)) {
+            if (fileCol && fileCol !== "__skip__") {
+              newRow[expectedKey] = String(row[fileCol] ?? "");
+            }
+          }
+          return newRow;
+        });
+      } catch {
+        logger.warn("Failed to parse fieldMap — falling back to fuzzy matching");
+      }
+    }
+
     let imported = 0;
     const errors: string[] = [];
 
-    // Normalize header keys (trim, camelCase-ish: strip spaces/underscores, lowercase first compare)
+    // Normalize header keys: strip spaces/underscores, case-insensitive
     function get(row: Record<string, string>, ...keys: string[]): string {
       for (const k of keys) {
         for (const rk of Object.keys(row)) {
@@ -152,8 +207,13 @@ router.post(
         const r = rows[i];
         try {
           const productName = get(r, "productName", "product_name", "productname");
-          const runDate = get(r, "runDate", "run_date", "rundate");
-          if (!productName || !runDate) { errors.push(`Row ${i + 2}: productName and runDate are required`); continue; }
+          const rawDate = get(r, "runDate", "run_date", "rundate");
+          if (!productName) { errors.push(`Row ${i + 2}: productName is required`); continue; }
+          const runDate = parseDate(rawDate);
+          if (!runDate) {
+            errors.push(`Row ${i + 2}: runDate "${rawDate}" is not a valid date — use YYYY-MM-DD, MM/DD/YYYY, or DD-MM-YYYY`);
+            continue;
+          }
           await db.insert(productionRunsTable).values({
             productName,
             plannedUnits: num(get(r, "plannedUnits", "planned_units", "plannedunits")),
@@ -183,16 +243,30 @@ router.post(
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
     } else if (entity === "orders") {
+      // Pre-fetch suppliers once for the whole batch
+      const allSuppliers = await db.select().from(suppliersTable);
+
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
         try {
-          const orderDate = get(r, "orderDate", "order_date", "orderdate");
-          const expectedDelivery = get(r, "expectedDelivery", "expected_delivery", "expecteddelivery");
-          if (!orderDate || !expectedDelivery) { errors.push(`Row ${i + 2}: orderDate and expectedDelivery are required`); continue; }
+          const rawOrderDate = get(r, "orderDate", "order_date", "orderdate");
+          const rawExpectedDelivery = get(r, "expectedDelivery", "expected_delivery", "expecteddelivery");
+
+          const orderDate = parseDate(rawOrderDate);
+          if (!orderDate) {
+            errors.push(`Row ${i + 2}: orderDate "${rawOrderDate}" is not a valid date — use YYYY-MM-DD or MM/DD/YYYY`);
+            continue;
+          }
+
+          const expectedDelivery = parseDate(rawExpectedDelivery);
+          if (!expectedDelivery) {
+            errors.push(`Row ${i + 2}: expectedDelivery "${rawExpectedDelivery}" is not a valid date — use YYYY-MM-DD or MM/DD/YYYY`);
+            continue;
+          }
+
           const supplierId = num(get(r, "supplierId", "supplier_id", "supplierid"));
-          // Try to look up supplier name
-          const suppliers = await db.select().from(suppliersTable);
-          const supplier = suppliers.find(s => s.id === supplierId);
+          const supplier = allSuppliers.find((s) => s.id === supplierId);
+
           await db.insert(ordersTable).values({
             supplierId,
             supplierName: (supplier?.name ?? get(r, "supplierName", "supplier_name", "suppliername")) || "Unknown",

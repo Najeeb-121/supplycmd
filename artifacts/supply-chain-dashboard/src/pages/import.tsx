@@ -22,34 +22,60 @@ import {
   AlertTriangle,
   ChevronRight,
   RefreshCw,
+  ArrowLeft,
+  Shuffle,
+  Info,
+  CircleAlert,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+type Step = "upload" | "mapping" | "result";
 type Entity = "inventory" | "production" | "demand" | "suppliers" | "orders";
+
+interface ColumnDef {
+  key: string;
+  label: string;
+  required: boolean;
+  hint?: string;
+}
 
 interface EntityConfig {
   label: string;
   description: string;
-  columns: { key: string; label: string; required: boolean }[];
+  columns: ColumnDef[];
   color: string;
 }
 
 const ENTITIES: Record<Entity, EntityConfig> = {
   inventory: {
     label: "Inventory Items",
-    description: "SKU master list with stock levels, costs, and EOQ parameters. EOQ, safety stock, and reorder points are auto-calculated.",
+    description:
+      "SKU master list with stock levels, costs, and EOQ parameters. EOQ, safety stock, and reorder points are auto-calculated.",
     color: "text-blue-600",
     columns: [
-      { key: "name", label: "Name", required: true },
-      { key: "sku", label: "SKU", required: true },
+      { key: "name", label: "Name", required: true, hint: "Product or item name" },
+      { key: "sku", label: "SKU", required: true, hint: "Unique stock-keeping unit code" },
       { key: "category", label: "Category", required: false },
-      { key: "currentStock", label: "Current Stock", required: true },
+      { key: "currentStock", label: "Current Stock", required: true, hint: "Units on hand" },
       { key: "leadTimeDays", label: "Lead Time (Days)", required: true },
       { key: "unitCost", label: "Unit Cost ($)", required: true },
       { key: "annualDemand", label: "Annual Demand", required: true },
@@ -59,7 +85,8 @@ const ENTITIES: Record<Entity, EntityConfig> = {
   },
   production: {
     label: "Production Runs",
-    description: "Historical production run data used to compute OEE, takt time, and throughput metrics.",
+    description:
+      "Historical production run data used to compute OEE, takt time, and throughput metrics.",
     color: "text-amber-600",
     columns: [
       { key: "productName", label: "Product Name", required: true },
@@ -69,12 +96,18 @@ const ENTITIES: Record<Entity, EntityConfig> = {
       { key: "actualTimeMin", label: "Actual Time (min)", required: true },
       { key: "defects", label: "Defects", required: false },
       { key: "downtimeMin", label: "Downtime (min)", required: false },
-      { key: "runDate", label: "Run Date (YYYY-MM-DD)", required: true },
+      {
+        key: "runDate",
+        label: "Run Date",
+        required: true,
+        hint: "YYYY-MM-DD, MM/DD/YYYY, or DD-MM-YYYY",
+      },
     ],
   },
   demand: {
     label: "Demand Records",
-    description: "Actual vs forecasted demand per period, used to calculate MAPE, MAD, and forecast accuracy.",
+    description:
+      "Actual vs forecasted demand per period, used to calculate MAPE, MAD, and forecast accuracy.",
     color: "text-purple-600",
     columns: [
       { key: "productName", label: "Product Name", required: true },
@@ -85,27 +118,53 @@ const ENTITIES: Record<Entity, EntityConfig> = {
   },
   suppliers: {
     label: "Suppliers",
-    description: "Supplier master data including performance metrics used to compute fill rate and OTIF.",
+    description:
+      "Supplier master data including performance metrics used to compute fill rate and OTIF.",
     color: "text-green-600",
     columns: [
       { key: "name", label: "Name", required: true },
       { key: "country", label: "Country", required: false },
       { key: "leadTimeDays", label: "Lead Time (Days)", required: true },
-      { key: "onTimeDeliveryRate", label: "On-Time Delivery Rate (0–1)", required: true },
+      {
+        key: "onTimeDeliveryRate",
+        label: "On-Time Delivery Rate (0–1)",
+        required: true,
+      },
       { key: "qualityScore", label: "Quality Score (0–100)", required: true },
       { key: "fillRate", label: "Fill Rate (0–1)", required: true },
     ],
   },
   orders: {
     label: "Purchase Orders",
-    description: "Purchase order history. Existing suppliers must be imported first so supplier IDs resolve correctly.",
+    description:
+      "Purchase order history. Import suppliers first so supplier IDs resolve correctly.",
     color: "text-rose-600",
     columns: [
-      { key: "supplierId", label: "Supplier ID", required: true },
+      {
+        key: "supplierId",
+        label: "Supplier ID",
+        required: true,
+        hint: "Numeric ID from the suppliers table",
+      },
       { key: "totalValue", label: "Total Value ($)", required: true },
-      { key: "status", label: "Status (pending/confirmed/shipped/delivered/cancelled)", required: false },
-      { key: "orderDate", label: "Order Date (YYYY-MM-DD)", required: true },
-      { key: "expectedDelivery", label: "Expected Delivery (YYYY-MM-DD)", required: true },
+      {
+        key: "status",
+        label: "Status",
+        required: false,
+        hint: "pending / confirmed / shipped / delivered / cancelled",
+      },
+      {
+        key: "orderDate",
+        label: "Order Date",
+        required: true,
+        hint: "YYYY-MM-DD, MM/DD/YYYY, or DD-MM-YYYY",
+      },
+      {
+        key: "expectedDelivery",
+        label: "Expected Delivery",
+        required: true,
+        hint: "YYYY-MM-DD, MM/DD/YYYY, or DD-MM-YYYY",
+      },
       { key: "itemCount", label: "Item Count", required: false },
     ],
   },
@@ -120,63 +179,386 @@ interface ImportResult {
 
 interface FileState {
   file: File | null;
-  preview: Record<string, string>[];
   headers: string[];
 }
 
+// ─── Fuzzy auto-match ──────────────────────────────────────────────────────────
+function normKey(s: string): string {
+  return s.replace(/[\s_\-\.]/g, "").toLowerCase();
+}
+
+function autoMatch(expectedKey: string, headers: string[]): string {
+  return headers.find((h) => normKey(h) === normKey(expectedKey)) ?? "";
+}
+
+function buildInitialMap(
+  columns: ColumnDef[],
+  headers: string[]
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const col of columns) {
+    map[col.key] = autoMatch(col.key, headers);
+  }
+  return map;
+}
+
+// ─── Step indicator ────────────────────────────────────────────────────────────
+const STEPS = ["Choose type", "Upload file", "Map fields", "Import"];
+
+function StepIndicator({ current }: { current: number }) {
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {STEPS.map((label, i) => (
+        <div key={label} className="flex items-center gap-1">
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors ${
+              i < current
+                ? "bg-primary/10 text-primary font-medium"
+                : i === current
+                ? "bg-primary text-primary-foreground font-semibold"
+                : "text-muted-foreground"
+            }`}
+          >
+            <span
+              className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                i < current
+                  ? "bg-primary text-primary-foreground"
+                  : i === current
+                  ? "bg-white/30 text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {i < current ? "✓" : i + 1}
+            </span>
+            <span className="hidden sm:inline">{label}</span>
+          </div>
+          {i < STEPS.length - 1 && (
+            <ChevronRight
+              className={`w-3 h-3 shrink-0 ${
+                i < current ? "text-primary" : "text-muted-foreground/30"
+              }`}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Mapping step ──────────────────────────────────────────────────────────────
+interface MappingStepProps {
+  file: File;
+  fileHeaders: string[];
+  columns: ColumnDef[];
+  fieldMap: Record<string, string>;
+  onMapChange: (key: string, value: string) => void;
+  onBack: () => void;
+  onConfirm: () => void;
+  isImporting: boolean;
+}
+
+function MappingStep({
+  file,
+  fileHeaders,
+  columns,
+  fieldMap,
+  onMapChange,
+  onBack,
+  onConfirm,
+  isImporting,
+}: MappingStepProps) {
+  const mappedCount = columns.filter((c) => fieldMap[c.key]).length;
+  const unmappedRequired = columns.filter((c) => c.required && !fieldMap[c.key]);
+  const canImport = unmappedRequired.length === 0;
+  const isXlsx = file.name.match(/\.xlsx?$/i) && fileHeaders.length === 0;
+
+  return (
+    <div className="space-y-4">
+      {/* File info bar */}
+      <Card className="border-border bg-muted/20">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <FileSpreadsheet className="w-8 h-8 text-primary shrink-0" />
+              <div>
+                <p className="font-semibold text-sm">{file.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {isXlsx
+                    ? "XLSX file — columns are mapped server-side"
+                    : `${fileHeaders.length} column${fileHeaders.length !== 1 ? "s" : ""} detected`}
+                  {" · "}
+                  {(file.size / 1024).toFixed(1)} KB
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge
+                className={
+                  canImport
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-amber-500 hover:bg-amber-600 text-white"
+                }
+              >
+                {mappedCount} / {columns.length} mapped
+              </Badge>
+              {!canImport && (
+                <Badge variant="destructive">
+                  {unmappedRequired.length} required missing
+                </Badge>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* XLSX notice */}
+      {isXlsx && (
+        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20">
+          <CardContent className="p-4 flex items-start gap-3">
+            <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-blue-800 dark:text-blue-300">
+              XLSX column headers can't be previewed in the browser. You can still map
+              fields manually below, or click{" "}
+              <strong>Confirm &amp; Import</strong> to let the server auto-match them.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Mapping table */}
+      <Card className="border-border">
+        <CardHeader className="pb-2 pt-5 px-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Shuffle className="w-4 h-4 text-muted-foreground" />
+                Field Mapping
+              </CardTitle>
+              <CardDescription className="mt-1">
+                We auto-matched columns from your file. Adjust any mismatches
+                using the dropdowns — then confirm to import.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 space-y-2">
+          {/* Column headers */}
+          <div className="grid grid-cols-[1fr_24px_1fr] gap-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-1 pb-1">
+            <span>Expected field</span>
+            <span />
+            <span>Your file column</span>
+          </div>
+
+          {columns.map((col) => {
+            const isMapped = !!fieldMap[col.key];
+            const isWarn = col.required && !isMapped;
+            return (
+              <div
+                key={col.key}
+                className={`grid grid-cols-[1fr_24px_1fr] gap-3 items-center p-3 rounded-lg border transition-colors ${
+                  isWarn
+                    ? "border-destructive/40 bg-destructive/5"
+                    : isMapped
+                    ? "border-border/60 bg-background"
+                    : "border-dashed border-border bg-muted/20"
+                }`}
+              >
+                {/* Left: expected field */}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                      {col.key}
+                    </span>
+                    {col.required ? (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] px-1.5 py-0 h-4"
+                      >
+                        required
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 h-4"
+                      >
+                        optional
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                    {col.label}
+                  </p>
+                  {col.hint && (
+                    <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                      {col.hint}
+                    </p>
+                  )}
+                </div>
+
+                {/* Arrow */}
+                <div className="flex flex-col items-center gap-0.5">
+                  {isWarn ? (
+                    <CircleAlert className="w-4 h-4 text-destructive" />
+                  ) : (
+                    <ChevronRight
+                      className={`w-4 h-4 ${
+                        isMapped ? "text-primary" : "text-muted-foreground/30"
+                      }`}
+                    />
+                  )}
+                </div>
+
+                {/* Right: dropdown */}
+                <Select
+                  value={fieldMap[col.key] || "__skip__"}
+                  onValueChange={(v) =>
+                    onMapChange(col.key, v === "__skip__" ? "" : v)
+                  }
+                >
+                  <SelectTrigger
+                    className={`h-8 text-xs ${
+                      isWarn ? "border-destructive" : ""
+                    }`}
+                  >
+                    <SelectValue placeholder="— select column —" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__skip__" className="text-xs text-muted-foreground">
+                      — skip this field —
+                    </SelectItem>
+                    {fileHeaders.map((h) => (
+                      <SelectItem key={h} value={h} className="text-xs font-mono">
+                        {h}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Unmapped required warning */}
+      {!canImport && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-destructive">
+                {unmappedRequired.length} required field
+                {unmappedRequired.length > 1 ? "s" : ""} not mapped
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {unmappedRequired.map((c) => c.label).join(", ")}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <Button variant="outline" onClick={onBack} disabled={isImporting}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
+        <Button
+          onClick={onConfirm}
+          disabled={!canImport || isImporting}
+          className="font-semibold flex-1 sm:flex-none sm:min-w-[200px]"
+          data-testid="button-import-submit"
+        >
+          {isImporting ? (
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Importing…
+            </>
+          ) : (
+            <>
+              <Upload className="w-4 h-4 mr-2" />
+              Confirm &amp; Import
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main page ─────────────────────────────────────────────────────────────────
 export default function ImportPage() {
   const [activeEntity, setActiveEntity] = useState<Entity>("inventory");
-  const [fileState, setFileState] = useState<FileState>({ file: null, preview: [], headers: [] });
+  const [fileState, setFileState] = useState<FileState>({ file: null, headers: [] });
   const [isDragging, setIsDragging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [step, setStep] = useState<Step>("upload");
+  const [fieldMap, setFieldMap] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const parsePreview = useCallback(async (file: File) => {
-    return new Promise<{ headers: string[]; rows: Record<string, string>[] }>((resolve) => {
+  const parseCSVHeaders = useCallback(async (file: File): Promise<string[]> => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const text = e.target?.result as string;
-        const lines = text.split(/\r?\n/).filter(Boolean);
-        if (lines.length === 0) { resolve({ headers: [], rows: [] }); return; }
-        const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
-        const rows = lines.slice(1, 6).map((line) => {
-          const vals = line.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
-          const obj: Record<string, string> = {};
-          headers.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
-          return obj;
-        });
-        resolve({ headers, rows });
+        const firstLine = text.split(/\r?\n/)[0] ?? "";
+        const headers = firstLine
+          .split(",")
+          .map((h) => h.trim().replace(/^"|"$/g, ""))
+          .filter(Boolean);
+        resolve(headers);
       };
-      // For XLSX/XLS we just show generic preview
-      if (file.name.endsWith(".csv")) {
-        reader.readAsText(file);
-      } else {
-        resolve({ headers: ["(XLSX file — preview not shown)"], rows: [] });
-      }
+      reader.readAsText(file);
     });
   }, []);
 
-  const handleFile = useCallback(async (file: File) => {
-    const allowed = ["text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"];
-    const extOk = /\.(csv|xlsx|xls)$/i.test(file.name);
-    if (!extOk && !allowed.includes(file.type)) {
-      toast({ title: "Unsupported file", description: "Please upload a .csv or .xlsx file.", variant: "destructive" });
-      return;
-    }
-    const { headers, rows } = await parsePreview(file);
-    setFileState({ file, headers, preview: rows });
-    setResult(null);
-  }, [parsePreview, toast]);
+  const handleFile = useCallback(
+    async (file: File) => {
+      const extOk = /\.(csv|xlsx|xls)$/i.test(file.name);
+      const mimeOk = [
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+      ].includes(file.type);
+      if (!extOk && !mimeOk) {
+        toast({
+          title: "Unsupported file",
+          description: "Please upload a .csv or .xlsx file.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }, [handleFile]);
+      let headers: string[] = [];
+      if (file.name.endsWith(".csv")) {
+        headers = await parseCSVHeaders(file);
+      }
+      // For XLSX we can't read headers client-side — leave empty, server handles it
+
+      setFileState({ file, headers });
+      setResult(null);
+      setFieldMap(buildInitialMap(ENTITIES[activeEntity].columns, headers));
+      setStep("mapping");
+    },
+    [parseCSVHeaders, toast, activeEntity]
+  );
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    },
+    [handleFile]
+  );
+
+  const handleMapChange = (key: string, value: string) => {
+    setFieldMap((prev) => ({ ...prev, [key]: value }));
+  };
 
   const handleImport = async () => {
     if (!fileState.file) return;
@@ -185,27 +567,58 @@ export default function ImportPage() {
       const form = new FormData();
       form.append("file", fileState.file);
       form.append("entity", activeEntity);
+      form.append("fieldMap", JSON.stringify(fieldMap));
+
       const res = await fetch(`${BASE}/api/import`, { method: "POST", body: form });
       const data: ImportResult = await res.json();
-      if (!res.ok) { toast({ title: "Import failed", description: (data as any).error, variant: "destructive" }); return; }
+      if (!res.ok) {
+        toast({
+          title: "Import failed",
+          description: (data as any).error,
+          variant: "destructive",
+        });
+        return;
+      }
       setResult(data);
-      // Invalidate all relevant query caches
+      setStep("result");
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListInventoryQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getListProductionRunsQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getListDemandRecordsQueryKey() }),
+        queryClient.invalidateQueries({
+          queryKey: getListProductionRunsQueryKey(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: getListDemandRecordsQueryKey(),
+        }),
         queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetInventoryHealthQueryKey() }),
+        queryClient.invalidateQueries({
+          queryKey: getGetDashboardSummaryQueryKey(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: getGetInventoryHealthQueryKey(),
+        }),
         queryClient.invalidateQueries({ queryKey: getGetOeeMetricsQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetDemandForecastQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetLogisticsKpisQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetReorderAlertsQueryKey() }),
+        queryClient.invalidateQueries({
+          queryKey: getGetDemandForecastQueryKey(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: getGetLogisticsKpisQueryKey(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: getGetReorderAlertsQueryKey(),
+        }),
       ]);
-      toast({ title: `Import complete`, description: `${data.imported} rows imported successfully.` });
+      toast({
+        title: "Import complete",
+        description: `${data.imported} rows imported successfully.`,
+      });
     } catch {
-      toast({ title: "Network error", description: "Could not reach the server.", variant: "destructive" });
+      toast({
+        title: "Network error",
+        description: "Could not reach the server.",
+        variant: "destructive",
+      });
     } finally {
       setIsImporting(false);
     }
@@ -215,61 +628,48 @@ export default function ImportPage() {
     window.open(`${BASE}/api/import/templates/${entity}`, "_blank");
   };
 
-  const resetFile = () => {
-    setFileState({ file: null, preview: [], headers: [] });
+  const reset = () => {
+    setFileState({ file: null, headers: [] });
     setResult(null);
+    setFieldMap({});
+    setStep("upload");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const cfg = ENTITIES[activeEntity];
+  const resetEntity = (entity: Entity) => {
+    setActiveEntity(entity as Entity);
+    reset();
+  };
+
+  // Step index for indicator: 0=Choose type, 1=Upload, 2=Mapping, 3=Result
+  const stepIndex = step === "upload" ? 1 : step === "mapping" ? 2 : 3;
 
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">ERP Data Import</h1>
-        <p className="text-muted-foreground mt-1">
-          Import live data from any ERP export — CSV or XLSX files accepted. All supply chain equations are recalculated automatically on import.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">ERP Data Import</h1>
+          <p className="text-muted-foreground mt-1">
+            Import from any ERP export — CSV or XLSX. Map your columns visually
+            before committing.
+          </p>
+        </div>
+        <StepIndicator current={stepIndex} />
       </div>
 
-      {/* How it works */}
-      <Card className="border-border bg-muted/20">
-        <CardContent className="p-5">
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2 font-medium text-foreground">
-              <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">1</span>
-              Choose data type
-            </div>
-            <ChevronRight className="w-4 h-4" />
-            <div className="flex items-center gap-2 font-medium text-foreground">
-              <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">2</span>
-              Download template
-            </div>
-            <ChevronRight className="w-4 h-4" />
-            <div className="flex items-center gap-2 font-medium text-foreground">
-              <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">3</span>
-              Fill with ERP export data
-            </div>
-            <ChevronRight className="w-4 h-4" />
-            <div className="flex items-center gap-2 font-medium text-foreground">
-              <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">4</span>
-              Upload &amp; import
-            </div>
-            <ChevronRight className="w-4 h-4" />
-            <div className="flex items-center gap-2 font-medium text-foreground">
-              <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">5</span>
-              Dashboard updates live
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Entity Tabs */}
-      <Tabs value={activeEntity} onValueChange={(v) => { setActiveEntity(v as Entity); resetFile(); }}>
+      <Tabs
+        value={activeEntity}
+        onValueChange={(v) => resetEntity(v as Entity)}
+      >
         <TabsList className="h-auto flex-wrap gap-1 bg-muted p-1">
           {(Object.keys(ENTITIES) as Entity[]).map((key) => (
-            <TabsTrigger key={key} value={key} className="text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger
+              key={key}
+              value={key}
+              className="text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
               {ENTITIES[key].label}
             </TabsTrigger>
           ))}
@@ -277,176 +677,222 @@ export default function ImportPage() {
 
         {(Object.keys(ENTITIES) as Entity[]).map((entity) => (
           <TabsContent key={entity} value={entity} className="mt-4 space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Column Reference */}
-              <Card className="border-border">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Column Reference</CardTitle>
-                  <CardDescription>{ENTITIES[entity].description}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {ENTITIES[entity].columns.map((col) => (
-                    <div key={col.key} className="flex items-center justify-between text-sm">
-                      <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{col.key}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground text-xs">{col.label}</span>
-                        {col.required ? (
-                          <Badge variant="secondary" className="text-xs px-1.5 py-0">required</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs px-1.5 py-0">optional</Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full mt-3"
-                    onClick={() => handleDownloadTemplate(entity)}
-                    data-testid={`button-download-template-${entity}`}
-                  >
-                    <Download className="w-3.5 h-3.5 mr-2" />
-                    Download CSV Template
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Upload Zone */}
-              <div className="lg:col-span-2 space-y-4">
-                {/* Drop Zone */}
-                <Card
-                  className={`border-2 border-dashed transition-colors cursor-pointer ${isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30"}`}
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={onDrop}
-                  onClick={() => !fileState.file && fileInputRef.current?.click()}
-                >
-                  <CardContent className="p-8 flex flex-col items-center text-center gap-3">
-                    {fileState.file ? (
-                      <>
-                        <FileSpreadsheet className="w-10 h-10 text-primary" />
-                        <p className="font-semibold text-foreground">{fileState.file.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {(fileState.file.size / 1024).toFixed(1)} KB
-                          {fileState.preview.length > 0 && ` — ${fileState.preview.length} preview rows`}
-                        </p>
-                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); resetFile(); }}>
-                          <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Choose a different file
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className={`w-10 h-10 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
-                        <div>
-                          <p className="font-semibold text-foreground">Drop your file here</p>
-                          <p className="text-sm text-muted-foreground mt-1">or click to browse — CSV or XLSX accepted, up to 20 MB</p>
+            {/* ── UPLOAD STEP ── */}
+            {step === "upload" && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Column reference */}
+                <Card className="border-border">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Column Reference</CardTitle>
+                    <CardDescription>
+                      {ENTITIES[entity].description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {ENTITIES[entity].columns.map((col) => (
+                      <div
+                        key={col.key}
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">
+                          {col.key}
+                        </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-muted-foreground text-xs truncate">
+                            {col.label}
+                          </span>
+                          {col.required ? (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs px-1.5 py-0 shrink-0"
+                            >
+                              required
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="text-xs px-1.5 py-0 shrink-0"
+                            >
+                              optional
+                            </Badge>
+                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Column names are matched case-insensitively. Spaces and underscores are ignored.
-                        </p>
-                      </>
-                    )}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      className="hidden"
-                      data-testid="input-file-upload"
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-                    />
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-3"
+                      onClick={() => handleDownloadTemplate(entity)}
+                      data-testid={`button-download-template-${entity}`}
+                    >
+                      <Download className="w-3.5 h-3.5 mr-2" />
+                      Download CSV Template
+                    </Button>
                   </CardContent>
                 </Card>
 
-                {/* CSV Preview */}
-                {fileState.preview.length > 0 && (
-                  <Card className="border-border">
-                    <CardHeader className="pb-2 pt-4 px-4">
-                      <CardTitle className="text-sm font-semibold">File Preview (first {fileState.preview.length} rows)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0 overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead className="bg-muted/40">
-                          <tr>
-                            {fileState.headers.map((h) => (
-                              <th key={h} className="px-3 py-2 text-left font-mono font-semibold text-muted-foreground whitespace-nowrap">
-                                {h}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fileState.preview.map((row, i) => (
-                            <tr key={i} className="border-t border-border">
-                              {fileState.headers.map((h) => (
-                                <td key={h} className="px-3 py-1.5 text-foreground whitespace-nowrap">{row[h]}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Import Result */}
-                {result && (
-                  <Card className={`border ${result.errors.length === 0 ? "border-green-200 bg-green-50 dark:bg-green-950/20" : "border-amber-200 bg-amber-50 dark:bg-amber-950/20"}`}>
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center gap-3">
-                        {result.errors.length === 0 ? (
-                          <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
-                        ) : (
-                          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                        )}
-                        <p className="font-semibold text-foreground">
-                          Import complete — {result.imported} of {result.total} rows imported
+                {/* Drop zone */}
+                <div className="lg:col-span-2">
+                  <Card
+                    className={`border-2 border-dashed transition-colors cursor-pointer h-full min-h-[280px] ${
+                      isDragging
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50 hover:bg-muted/30"
+                    }`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={onDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <CardContent className="p-12 flex flex-col items-center text-center gap-4 h-full justify-center">
+                      <Upload
+                        className={`w-12 h-12 transition-colors ${
+                          isDragging ? "text-primary" : "text-muted-foreground"
+                        }`}
+                      />
+                      <div>
+                        <p className="font-semibold text-foreground text-lg">
+                          Drop your file here
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          or click to browse — CSV or XLSX, up to 20 MB
                         </p>
                       </div>
-                      <div className="flex gap-4 text-sm">
-                        <span className="text-green-700 font-medium">{result.imported} imported</span>
-                        {result.skipped > 0 && <span className="text-muted-foreground">{result.skipped} skipped</span>}
-                        {result.errors.length > 0 && <span className="text-red-600 font-medium">{result.errors.length} errors</span>}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted px-3 py-2 rounded-md max-w-sm">
+                        <Info className="w-3.5 h-3.5 shrink-0" />
+                        Column names don't need to match exactly — you'll map them
+                        in the next step
                       </div>
-                      {result.errors.length > 0 && (
-                        <div className="space-y-1">
-                          {result.errors.slice(0, 10).map((err, i) => (
-                            <div key={i} className="flex items-start gap-2 text-xs text-red-700">
-                              <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                              {err}
-                            </div>
-                          ))}
-                          {result.errors.length > 10 && (
-                            <p className="text-xs text-muted-foreground">...and {result.errors.length - 10} more errors</p>
-                          )}
-                        </div>
-                      )}
-                      <p className="text-xs text-muted-foreground">All dashboard KPIs and charts have been refreshed.</p>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv,.xlsx,.xls"
+                        className="hidden"
+                        data-testid="input-file-upload"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleFile(f);
+                        }}
+                      />
                     </CardContent>
                   </Card>
-                )}
-
-                {/* Import Button */}
-                {fileState.file && !result && (
-                  <Button
-                    onClick={handleImport}
-                    disabled={isImporting}
-                    className="w-full font-semibold"
-                    data-testid="button-import-submit"
-                  >
-                    {isImporting ? (
-                      <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Importing…</>
-                    ) : (
-                      <><Upload className="w-4 h-4 mr-2" /> Import {ENTITIES[entity].label}</>
-                    )}
-                  </Button>
-                )}
-                {result && (
-                  <Button variant="outline" onClick={resetFile} className="w-full" data-testid="button-import-another">
-                    <Upload className="w-4 h-4 mr-2" /> Import Another File
-                  </Button>
-                )}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* ── MAPPING STEP ── */}
+            {step === "mapping" && fileState.file && (
+              <MappingStep
+                file={fileState.file}
+                fileHeaders={fileState.headers}
+                columns={ENTITIES[entity].columns}
+                fieldMap={fieldMap}
+                onMapChange={handleMapChange}
+                onBack={reset}
+                onConfirm={handleImport}
+                isImporting={isImporting}
+              />
+            )}
+
+            {/* ── RESULT STEP ── */}
+            {step === "result" && result && (
+              <div className="space-y-4 max-w-2xl">
+                <Card
+                  className={`border ${
+                    result.errors.length === 0
+                      ? "border-green-200 bg-green-50 dark:bg-green-950/20"
+                      : "border-amber-200 bg-amber-50 dark:bg-amber-950/20"
+                  }`}
+                >
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center gap-3">
+                      {result.errors.length === 0 ? (
+                        <CheckCircle2 className="w-6 h-6 text-green-600 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-semibold text-foreground text-lg">
+                          Import complete
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {result.imported} of {result.total} rows imported
+                          successfully
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-4 text-sm font-medium">
+                      <span className="flex items-center gap-1.5 text-green-700">
+                        <CheckCircle2 className="w-4 h-4" />
+                        {result.imported} imported
+                      </span>
+                      {result.skipped > 0 && (
+                        <span className="text-muted-foreground">
+                          {result.skipped} skipped
+                        </span>
+                      )}
+                      {result.errors.length > 0 && (
+                        <span className="flex items-center gap-1.5 text-red-600">
+                          <XCircle className="w-4 h-4" />
+                          {result.errors.length} errors
+                        </span>
+                      )}
+                    </div>
+
+                    {result.errors.length > 0 && (
+                      <div className="space-y-1.5 border-t border-border/50 pt-3">
+                        {result.errors.slice(0, 10).map((err, i) => (
+                          <div
+                            key={i}
+                            className="flex items-start gap-2 text-xs text-red-700"
+                          >
+                            <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            {err}
+                          </div>
+                        ))}
+                        {result.errors.length > 10 && (
+                          <p className="text-xs text-muted-foreground">
+                            …and {result.errors.length - 10} more errors
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <p className="text-xs text-muted-foreground border-t border-border/50 pt-3">
+                      All dashboard KPIs and charts have been refreshed.
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={reset}
+                    data-testid="button-import-another"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Import Another File
+                  </Button>
+                  {result.errors.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setStep("mapping");
+                        setResult(null);
+                      }}
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Adjust Mapping
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </TabsContent>
         ))}
       </Tabs>
