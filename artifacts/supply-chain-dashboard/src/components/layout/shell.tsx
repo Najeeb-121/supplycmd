@@ -9,7 +9,8 @@ import {
   Truck,
   Upload,
   Plug,
-  Brain
+  Brain,
+  Cpu
 } from "lucide-react";
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { path: "/import", label: "ERP Import", icon: Upload },
   { path: "/erp-integration", label: "ERP Integration", icon: Plug },
   { path: "/operational-intelligence", label: "Ops Intelligence", icon: Brain },
+  { path: "/ai-decision-engine", label: "AI Decision Engine", icon: Cpu },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
