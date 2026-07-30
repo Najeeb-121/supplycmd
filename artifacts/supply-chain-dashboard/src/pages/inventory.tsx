@@ -112,9 +112,9 @@ const itemSchema = z.object({
 type ItemForm = z.infer<typeof itemSchema>;
 
 const movementSchema = z.object({
-  movementType:    z.string().min(1),
-  action:          z.string().min(2),
-  quantityChanged: z.coerce.number(),
+  movementType:    z.string().min(1, "Movement type is required"),
+  action:          z.string().min(2, "Action description is required"),
+  quantityChanged: z.coerce.number().int("Quantity must be a whole number").refine(v => v !== 0, { message: "Quantity must be non-zero" }),
   referenceNumber: z.string().optional(),
   reason:          z.string().optional(),
   warehouse:       z.string().optional(),
@@ -207,6 +207,7 @@ export default function InventoryPage() {
   const movForm = useForm<MovementForm>({
     resolver: zodResolver(movementSchema),
     defaultValues: { movementType: "", action: "", quantityChanged: 0, user: "operator" },
+    mode: "onChange",
   });
 
   // ── derived filter options ──────────────────────────────────────────────────
@@ -1117,7 +1118,7 @@ export default function InventoryPage() {
               )}
               <div className="flex justify-end gap-3 pt-2 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setMovDialog({ open: false, item: null })}>Cancel</Button>
-                <Button type="submit" disabled={moveMut.isPending}><ArrowRightLeft className="w-4 h-4 mr-2" /> Record Movement</Button>
+                <Button type="submit" disabled={moveMut.isPending || !movForm.formState.isValid}><ArrowRightLeft className="w-4 h-4 mr-2" /> Record Movement</Button>
               </div>
             </form>
           </Form>

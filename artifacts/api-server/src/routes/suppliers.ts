@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { db, suppliersTable } from "@workspace/db";
 import {
   CreateSupplierBody,
@@ -7,6 +8,26 @@ import {
   UpdateSupplierParams,
   DeleteSupplierParams,
 } from "@workspace/api-zod";
+import { validateBody } from "../lib/validate.js";
+
+// ── Stricter supplier schemas ──────────────────────────────────────────────────
+const StrictSupplierBody = CreateSupplierBody.extend({
+  name:                z.string().min(1, "Supplier name is required"),
+  country:             z.string().min(1, "Country is required"),
+  leadTimeDays:        z.number().int().min(0).max(365),
+  onTimeDeliveryRate:  z.number().min(0).max(100),
+  qualityScore:        z.number().min(0).max(100),
+  fillRate:            z.number().min(0).max(100),
+});
+
+const StrictSupplierPatch = UpdateSupplierBody.extend({
+  name:                z.string().min(1, "Supplier name is required").optional(),
+  country:             z.string().min(1, "Country is required").optional(),
+  leadTimeDays:        z.number().int().min(0).max(365).optional(),
+  onTimeDeliveryRate:  z.number().min(0).max(100).optional(),
+  qualityScore:        z.number().min(0).max(100).optional(),
+  fillRate:            z.number().min(0).max(100).optional(),
+});
 
 const router: IRouter = Router();
 
@@ -16,8 +37,8 @@ router.get("/suppliers", async (_req, res): Promise<void> => {
 });
 
 router.post("/suppliers", async (req, res): Promise<void> => {
-  const parsed = CreateSupplierBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const parsed = validateBody(StrictSupplierBody, req, res);
+  if (!parsed.ok) return;
 
   const [supplier] = await db.insert(suppliersTable).values(parsed.data).returning();
   res.status(201).json(supplier);
@@ -27,8 +48,8 @@ router.patch("/suppliers/:id", async (req, res): Promise<void> => {
   const params = UpdateSupplierParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
-  const parsed = UpdateSupplierBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const parsed = validateBody(StrictSupplierPatch, req, res);
+  if (!parsed.ok) return;
 
   const [updated] = await db
     .update(suppliersTable)

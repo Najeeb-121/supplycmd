@@ -283,12 +283,20 @@ router.delete("/inventory/:id", async (req: Request, res: Response): Promise<voi
   res.sendStatus(204);
 });
 
+// ── Stricter movement schema ───────────────────────────────────────────────────
+const StrictMovementBody = CreateStockMovementBody.extend({
+  movementType:    z.string().min(1, "Movement type is required"),
+  action:          z.string().min(2, "Action description is required"),
+  quantityChanged: z.number().int("Quantity must be a whole number").refine(v => v !== 0, { message: "Quantity must be non-zero" }),
+  user:            z.string().min(1, "Operator name is required"),
+});
+
 // ── POST /inventory/:id/movements ─────────────────────────────────────────────
 router.post("/inventory/:id/movements", async (req: Request, res: Response): Promise<void> => {
   const params = CreateStockMovementParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const parsed = CreateStockMovementBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const parsed = validateBody(StrictMovementBody, req, res);
+  if (!parsed.ok) return;
 
   const [item] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, params.data.id));
   if (!item) { res.status(404).json({ error: "Inventory item not found" }); return; }
