@@ -127,11 +127,11 @@ const ENTITIES: Record<Entity, EntityConfig> = {
       { key: "leadTimeDays", label: "Lead Time (Days)", required: true },
       {
         key: "onTimeDeliveryRate",
-        label: "On-Time Delivery Rate (0–1)",
+        label: "On-Time Delivery Rate (0–100)",
         required: true,
       },
       { key: "qualityScore", label: "Quality Score (0–100)", required: true },
-      { key: "fillRate", label: "Fill Rate (0–1)", required: true },
+      { key: "fillRate", label: "Fill Rate (0–100)", required: true },
     ],
   },
   orders: {

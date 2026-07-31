@@ -10,7 +10,7 @@ import {
 import { validateBody } from "../lib/validate.js";
 
 // ── Stricter order schema with cross-field date rule ──────────────────────────
-const StrictOrderBody = CreateOrderBody
+export const StrictOrderBody = CreateOrderBody
   .extend({
     totalValue: z.number().min(0),
     itemCount:  z.number().int().min(1),

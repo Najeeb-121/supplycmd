@@ -10,7 +10,7 @@ import {
 import { validateBody } from "../lib/validate.js";
 
 // ── Stricter production schema with cross-field rule ──────────────────────────
-const StrictProductionBody = CreateProductionRunBody
+export const StrictProductionBody = CreateProductionRunBody
   .extend({
     plannedUnits:   z.number().int().min(0),
     actualUnits:    z.number().int().min(0),
@@ -62,7 +62,7 @@ router.get("/production/metrics/oee", async (_req, res): Promise<void> => {
 
   for (const run of runs) {
     const availability = run.plannedTimeMin > 0
-      ? Math.min(1, (run.actualTimeMin - run.downtimeMin) / run.plannedTimeMin)
+      ? Math.max(0, Math.min(1, (run.actualTimeMin - run.downtimeMin) / run.plannedTimeMin))
       : 0;
     const performance = run.plannedUnits > 0
       ? Math.min(1, run.actualUnits / run.plannedUnits)

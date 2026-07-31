@@ -266,7 +266,7 @@ export default function DemandPage() {
                     <FormItem>
                       <FormLabel>Forecasted</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" step="0.01" {...field} />
+                        <Input type="number" min="0" step="1" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -279,7 +279,7 @@ export default function DemandPage() {
                     <FormItem>
                       <FormLabel>Actual</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" step="0.01" {...field} />
+                        <Input type="number" min="0" step="1" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

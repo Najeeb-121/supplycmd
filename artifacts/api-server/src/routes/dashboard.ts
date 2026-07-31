@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { lte, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   db,
   inventoryItemsTable,
@@ -13,7 +13,7 @@ const router: IRouter = Router();
 
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const [items, suppliers, orders, productionRuns, demandRecords] = await Promise.all([
-    db.select().from(inventoryItemsTable),
+    db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.archived, false)),
     db.select().from(suppliersTable),
     db.select().from(ordersTable),
     db.select().from(productionRunsTable),
@@ -38,7 +38,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   let oeePercent = 0;
   if (productionRuns.length > 0) {
     const oees = productionRuns.map((run) => {
-      const avail = run.plannedTimeMin > 0 ? Math.min(1, (run.actualTimeMin - run.downtimeMin) / run.plannedTimeMin) : 0;
+      const avail = run.plannedTimeMin > 0 ? Math.max(0, Math.min(1, (run.actualTimeMin - run.downtimeMin) / run.plannedTimeMin)) : 0;
       const perf = run.plannedUnits > 0 ? Math.min(1, run.actualUnits / run.plannedUnits) : 0;
       const qual = run.actualUnits > 0 ? Math.max(0, (run.actualUnits - run.defects) / run.actualUnits) : 0;
       return avail * perf * qual;
@@ -57,12 +57,12 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     forecastAccuracy = Math.round(Math.max(0, 100 - mape) * 10) / 10;
   }
 
-  // Fill rate & OTIF from suppliers
+  // Fill rate & OTIF from suppliers (both already stored on a 0-100 scale)
   const fillRate = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.fillRate, 0) / suppliers.length) * 1000) / 10
+    ? Math.round((suppliers.reduce((s, sup) => s + sup.fillRate, 0) / suppliers.length) * 10) / 10
     : 0;
   const otifPercent = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.onTimeDeliveryRate, 0) / suppliers.length) * 1000) / 10
+    ? Math.round((suppliers.reduce((s, sup) => s + sup.onTimeDeliveryRate, 0) / suppliers.length) * 10) / 10
     : 0;
 
   res.json({
@@ -80,7 +80,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
 });
 
 router.get("/dashboard/inventory-health", async (_req, res): Promise<void> => {
-  const items = await db.select().from(inventoryItemsTable);
+  const items = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.archived, false));
 
   const avgTurnoverRate = items.length > 0
     ? items.reduce((s, i) => {
@@ -140,11 +140,11 @@ router.get("/dashboard/logistics-kpis", async (_req, res): Promise<void> => {
   ]);
 
   const fillRate = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.fillRate, 0) / suppliers.length) * 1000) / 10
+    ? Math.round((suppliers.reduce((s, sup) => s + sup.fillRate, 0) / suppliers.length) * 10) / 10
     : 0;
 
   const otifPercent = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.onTimeDeliveryRate, 0) / suppliers.length) * 1000) / 10
+    ? Math.round((suppliers.reduce((s, sup) => s + sup.onTimeDeliveryRate, 0) / suppliers.length) * 10) / 10
     : 0;
 
   const avgLeadTimeDays = suppliers.length > 0

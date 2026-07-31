@@ -13,8 +13,11 @@ import {
 } from "@workspace/api-zod";
 import { validateBody } from "../lib/validate.js";
 
+class NotFoundError extends Error {}
+class InsufficientStockError extends Error {}
+
 // ── Stricter inventory schema with cross-field rules ───────────────────────────
-const StrictInventoryBody = CreateInventoryItemBody
+export const StrictInventoryBody = CreateInventoryItemBody
   .extend({
     currentStock:     z.number().int().min(0),
     reservedQuantity: z.number().int().min(0).optional(),
@@ -194,7 +197,10 @@ router.get("/inventory/reorder-alerts", async (_req: Request, res: Response): Pr
   const items = await db
     .select()
     .from(inventoryItemsTable)
-    .where(lte(inventoryItemsTable.currentStock, inventoryItemsTable.reorderPoint));
+    .where(and(
+      eq(inventoryItemsTable.archived, false),
+      lte(inventoryItemsTable.currentStock, inventoryItemsTable.reorderPoint),
+    ));
 
   res.json(items.map(item => ({
     id: item.id,
@@ -298,30 +304,49 @@ router.post("/inventory/:id/movements", async (req: Request, res: Response): Pro
   const parsed = validateBody(StrictMovementBody, req, res);
   if (!parsed.ok) return;
 
-  const [item] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, params.data.id));
-  if (!item) { res.status(404).json({ error: "Inventory item not found" }); return; }
+  try {
+    const movement = await db.transaction(async (tx) => {
+      // Lock the row for the duration of the transaction so concurrent
+      // movements on the same item can't read a stale currentStock.
+      const [item] = await tx
+        .select()
+        .from(inventoryItemsTable)
+        .where(eq(inventoryItemsTable.id, params.data.id))
+        .for("update");
+      if (!item) throw new NotFoundError("Inventory item not found");
 
-  const quantityBefore = item.currentStock;
-  const quantityAfter = quantityBefore + parsed.data.quantityChanged;
+      const quantityBefore = item.currentStock;
+      const quantityAfter = quantityBefore + parsed.data.quantityChanged;
+      if (quantityAfter < 0) {
+        throw new InsufficientStockError(
+          `Movement would take stock below zero (current: ${quantityBefore}, change: ${parsed.data.quantityChanged})`,
+        );
+      }
 
-  // Record movement
-  const [movement] = await db.insert(stockMovementsTable).values({
-    inventoryItemId: item.id,
-    user: parsed.data.user,
-    movementType: parsed.data.movementType,
-    action: parsed.data.action,
-    referenceNumber: parsed.data.referenceNumber ?? null,
-    reason: parsed.data.reason ?? null,
-    warehouse: parsed.data.warehouse ?? item.warehouse ?? null,
-    quantityBefore,
-    quantityChanged: parsed.data.quantityChanged,
-    quantityAfter,
-  }).returning();
+      const [inserted] = await tx.insert(stockMovementsTable).values({
+        inventoryItemId: item.id,
+        user: parsed.data.user,
+        movementType: parsed.data.movementType,
+        action: parsed.data.action,
+        referenceNumber: parsed.data.referenceNumber ?? null,
+        reason: parsed.data.reason ?? null,
+        warehouse: parsed.data.warehouse ?? item.warehouse ?? null,
+        quantityBefore,
+        quantityChanged: parsed.data.quantityChanged,
+        quantityAfter,
+      }).returning();
 
-  // Update item stock
-  await db.update(inventoryItemsTable).set({ currentStock: quantityAfter }).where(eq(inventoryItemsTable.id, item.id));
+      await tx.update(inventoryItemsTable).set({ currentStock: quantityAfter }).where(eq(inventoryItemsTable.id, item.id));
 
-  res.status(201).json(movement);
+      return inserted;
+    });
+
+    res.status(201).json(movement);
+  } catch (err) {
+    if (err instanceof NotFoundError) { res.status(404).json({ error: err.message }); return; }
+    if (err instanceof InsufficientStockError) { res.status(400).json({ error: err.message }); return; }
+    throw err;
+  }
 });
 
 export default router;

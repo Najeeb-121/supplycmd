@@ -11,7 +11,7 @@ import {
 import { validateBody } from "../lib/validate.js";
 
 // ── Stricter supplier schemas ──────────────────────────────────────────────────
-const StrictSupplierBody = CreateSupplierBody.extend({
+export const StrictSupplierBody = CreateSupplierBody.extend({
   name:                z.string().min(1, "Supplier name is required"),
   country:             z.string().min(1, "Country is required"),
   leadTimeDays:        z.number().int().min(0).max(365),

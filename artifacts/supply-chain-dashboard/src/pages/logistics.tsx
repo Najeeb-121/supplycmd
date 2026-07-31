@@ -1,16 +1,21 @@
 import { useState, useRef } from "react";
-import { 
+import {
   useGetLogisticsKpis,
   useListSuppliers,
+  useCreateSupplier,
+  useUpdateSupplier,
+  useDeleteSupplier,
+  getListSuppliersQueryKey,
   useListOrders,
   useCreateOrder,
   useUpdateOrder,
   getListOrdersQueryKey
 } from "@workspace/api-client-react";
+import type { Supplier } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Truck, PackageCheck, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Truck, PackageCheck, Clock, CheckCircle2, XCircle, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -45,13 +50,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
 
 import { orderSchema, type OrderFormValues } from "@/schemas/orders";
+import { supplierSchema, type SupplierFormValues } from "@/schemas/suppliers";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function LogisticsPage() {
   const [isOrderFormOpen, setIsOrderFormOpen] = useState(false);
-  
+  const [isSupplierFormOpen, setIsSupplierFormOpen] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [deletingSupplier, setDeletingSupplier] = useState<Supplier | null>(null);
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   const { data: kpis, isLoading: kpisLoading } = useGetLogisticsKpis();
   const { data: suppliers, isLoading: suppliersLoading } = useListSuppliers();
   const { data: orders, isLoading: ordersLoading } = useListOrders();
@@ -63,6 +82,99 @@ export default function LogisticsPage() {
   const updateOrderMutationRef = useRef(useUpdateOrder().mutate);
   const updateOrderMutation = useUpdateOrder();
   updateOrderMutationRef.current = updateOrderMutation.mutate;
+
+  const createSupplierMutationRef = useRef(useCreateSupplier().mutate);
+  const createSupplierMutation = useCreateSupplier();
+  createSupplierMutationRef.current = createSupplierMutation.mutate;
+
+  const updateSupplierMutationRef = useRef(useUpdateSupplier().mutate);
+  const updateSupplierMutation = useUpdateSupplier();
+  updateSupplierMutationRef.current = updateSupplierMutation.mutate;
+
+  const deleteSupplierMutationRef = useRef(useDeleteSupplier().mutate);
+  const deleteSupplierMutation = useDeleteSupplier();
+  deleteSupplierMutationRef.current = deleteSupplierMutation.mutate;
+
+  const supplierForm = useForm<SupplierFormValues>({
+    resolver: zodResolver(supplierSchema),
+    defaultValues: {
+      name: "",
+      country: "",
+      leadTimeDays: 7,
+      onTimeDeliveryRate: 95,
+      qualityScore: 90,
+      fillRate: 97,
+    },
+    mode: "onChange",
+  });
+
+  const openCreateSupplierForm = () => {
+    setEditingSupplier(null);
+    supplierForm.reset({
+      name: "",
+      country: "",
+      leadTimeDays: 7,
+      onTimeDeliveryRate: 95,
+      qualityScore: 90,
+      fillRate: 97,
+    });
+    setIsSupplierFormOpen(true);
+  };
+
+  const openEditSupplierForm = (supplier: Supplier) => {
+    setEditingSupplier(supplier);
+    supplierForm.reset({
+      name: supplier.name,
+      country: supplier.country,
+      leadTimeDays: supplier.leadTimeDays,
+      onTimeDeliveryRate: supplier.onTimeDeliveryRate,
+      qualityScore: supplier.qualityScore,
+      fillRate: supplier.fillRate,
+    });
+    setIsSupplierFormOpen(true);
+  };
+
+  const onSubmitSupplier = (values: SupplierFormValues) => {
+    const onSuccess = () => {
+      queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() });
+      setIsSupplierFormOpen(false);
+      toast({
+        title: editingSupplier ? "Supplier Updated" : "Supplier Added",
+        description: `${values.name} has been saved.`,
+      });
+    };
+    const onError = (e: any) => {
+      const apiErrors = e?.response?.data?.errors ?? e?.data?.errors;
+      if (apiErrors && typeof apiErrors === "object") {
+        Object.entries(apiErrors).forEach(([field, message]) => {
+          supplierForm.setError(field as any, { message: String(message) });
+        });
+      } else {
+        toast({ title: "Error", description: String(e), variant: "destructive" });
+      }
+    };
+
+    if (editingSupplier) {
+      updateSupplierMutationRef.current({ id: editingSupplier.id, data: values }, { onSuccess, onError });
+    } else {
+      createSupplierMutationRef.current({ data: values }, { onSuccess, onError });
+    }
+  };
+
+  const confirmDeleteSupplier = () => {
+    if (!deletingSupplier) return;
+    deleteSupplierMutationRef.current({ id: deletingSupplier.id }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() });
+        toast({ title: "Supplier Removed", description: `${deletingSupplier.name} has been deleted.` });
+        setDeletingSupplier(null);
+      },
+      onError: (e: any) => {
+        toast({ title: "Error", description: String(e), variant: "destructive" });
+        setDeletingSupplier(null);
+      },
+    });
+  };
 
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
@@ -207,6 +319,9 @@ export default function LogisticsPage() {
               <CardTitle>Supplier Scorecard</CardTitle>
               <CardDescription>Performance metrics across vendor base</CardDescription>
             </div>
+            <Button onClick={openCreateSupplierForm} size="sm" className="h-8" data-testid="button-add-supplier">
+              <Plus className="w-3 h-3 mr-1" /> Add Supplier
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             {suppliersLoading ? (
@@ -221,13 +336,14 @@ export default function LogisticsPage() {
                       <TableHead className="text-right">OTD %</TableHead>
                       <TableHead className="text-right">Quality</TableHead>
                       <TableHead className="text-right">Fill Rate</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {!suppliers || suppliers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                          No suppliers found.
+                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                          No suppliers found. Click "Add Supplier" to register one.
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -250,6 +366,26 @@ export default function LogisticsPage() {
                           </TableCell>
                           <TableCell className="text-right font-mono font-medium">
                             {s.fillRate.toFixed(1)}%
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => openEditSupplierForm(s)}
+                              data-testid={`button-edit-supplier-${s.id}`}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                              onClick={() => setDeletingSupplier(s)}
+                              data-testid={`button-delete-supplier-${s.id}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
@@ -428,7 +564,7 @@ export default function LogisticsPage() {
                     <FormItem>
                       <FormLabel>Total Value ($)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" step="0.01" {...field} />
+                        <Input type="number" min="0" step="1" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -446,6 +582,139 @@ export default function LogisticsPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isSupplierFormOpen} onOpenChange={setIsSupplierFormOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>{editingSupplier ? "Edit Supplier" : "Add Supplier"}</DialogTitle>
+            <DialogDescription>
+              {editingSupplier
+                ? "Update this supplier's performance metrics."
+                : "Register a new supplier so it appears in the Purchase Order dropdown and scorecard."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...supplierForm}>
+            <form onSubmit={supplierForm.handleSubmit(onSubmitSupplier)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={supplierForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Supplier Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Acme Steel Works" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={supplierForm.control}
+                  name="country"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Country</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. USA" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={supplierForm.control}
+                  name="leadTimeDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Lead Time (Days)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="1" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={supplierForm.control}
+                  name="onTimeDeliveryRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>On-Time Delivery (0-100)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" max="100" step="0.1" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={supplierForm.control}
+                  name="qualityScore"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quality Score (0-100)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" max="100" step="0.1" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={supplierForm.control}
+                  name="fillRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fill Rate (0-100)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" max="100" step="0.1" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                <Button type="button" variant="outline" onClick={() => setIsSupplierFormOpen(false)}>Cancel</Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    createSupplierMutation.isPending ||
+                    updateSupplierMutation.isPending ||
+                    !supplierForm.formState.isValid
+                  }
+                >
+                  {editingSupplier ? "Save Changes" : "Add Supplier"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deletingSupplier} onOpenChange={(open) => !open && setDeletingSupplier(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete supplier?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove "{deletingSupplier?.name}". Purchase orders already issued to this
+              supplier keep their own record and won't be affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteSupplier}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

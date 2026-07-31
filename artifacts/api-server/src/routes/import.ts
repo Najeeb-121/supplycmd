@@ -1,8 +1,26 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
+import type { ZodType } from "zod";
 import { db, inventoryItemsTable, suppliersTable, productionRunsTable, demandRecordsTable, ordersTable } from "@workspace/db";
 import { logger } from "../lib/logger";
+import { StrictInventoryBody } from "./inventory";
+import { StrictSupplierBody } from "./suppliers";
+import { StrictProductionBody } from "./production";
+import { StrictDemandBody } from "./demand";
+import { StrictOrderBody } from "./orders";
+
+// Run the same validation the manual API routes enforce, so a CSV/XLSX
+// import can't slip in data (negative lead times, out-of-range scores, ...)
+// that would be rejected if entered through the UI.
+function formatZodError(err: { issues: { path: (string | number)[]; message: string }[] }): string {
+  return err.issues.map((iss) => `${iss.path.join(".") || "value"}: ${iss.message}`).join("; ");
+}
+function validateRow<T>(schema: ZodType<T>, candidate: unknown): { ok: true; data: T } | { ok: false; error: string } {
+  const result = schema.safeParse(candidate);
+  if (!result.success) return { ok: false, error: formatZodError(result.error) };
+  return { ok: true, data: result.data };
+}
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -23,7 +41,7 @@ const TEMPLATES: Record<string, { headers: string[]; example: string[] }> = {
   },
   suppliers: {
     headers: ["name", "country", "leadTimeDays", "onTimeDeliveryRate", "qualityScore", "fillRate"],
-    example: ["Acme Steel Works", "USA", "7", "0.96", "94", "0.98"],
+    example: ["Acme Steel Works", "USA", "7", "96", "94", "98"],
   },
   orders: {
     headers: ["supplierId", "totalValue", "status", "orderDate", "expectedDelivery", "itemCount"],
@@ -172,16 +190,23 @@ router.post(
           const unitCost     = num(get(r, "unitCost", "unit_cost", "unitcost"));
           const holdingCostRate = num(get(r, "holdingCostRate", "holding_cost_rate", "holdingcostrate")) || 0.25;
           const leadTimeDays = num(get(r, "leadTimeDays", "lead_time_days", "leadtimedays")) || 7;
+          const currentStock = num(get(r, "currentStock", "current_stock", "currentstock"));
+          const category = get(r, "category") || "Uncategorized";
+
+          const validated = validateRow(StrictInventoryBody, {
+            name, sku, category, currentStock,
+            leadTimeDays, unitCost, annualDemand, holdingCostRate, orderingCost,
+          });
+          if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
+
           const eoq = calcEOQ(annualDemand, orderingCost, unitCost * holdingCostRate);
           const safetyStock = calcSafetyStock(leadTimeDays, annualDemand);
           const reorderPoint = calcROP(leadTimeDays, annualDemand);
           await db.insert(inventoryItemsTable).values({
-            name, sku,
-            category: get(r, "category") || "Uncategorized",
-            currentStock: num(get(r, "currentStock", "current_stock", "currentstock")),
+            name, sku, category, currentStock,
             leadTimeDays, unitCost, annualDemand, holdingCostRate, orderingCost,
             eoq, safetyStock, reorderPoint,
-          }).onConflictDoUpdate({ target: inventoryItemsTable.sku, set: { name, currentStock: num(get(r, "currentStock", "current_stock", "currentstock")), unitCost, annualDemand, holdingCostRate, orderingCost, leadTimeDays, eoq, safetyStock, reorderPoint } });
+          }).onConflictDoUpdate({ target: inventoryItemsTable.sku, set: { name, currentStock, unitCost, annualDemand, holdingCostRate, orderingCost, leadTimeDays, eoq, safetyStock, reorderPoint } });
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
@@ -191,14 +216,17 @@ router.post(
         try {
           const name = get(r, "name");
           if (!name) { errors.push(`Row ${i + 2}: name is required`); continue; }
-          await db.insert(suppliersTable).values({
+          const candidate = {
             name,
             country: get(r, "country") || "Unknown",
             leadTimeDays: num(get(r, "leadTimeDays", "lead_time_days", "leadtimedays")) || 7,
-            onTimeDeliveryRate: num(get(r, "onTimeDeliveryRate", "on_time_delivery_rate", "ontimedeliveryrate")) || 0.95,
+            onTimeDeliveryRate: num(get(r, "onTimeDeliveryRate", "on_time_delivery_rate", "ontimedeliveryrate")) || 95,
             qualityScore: num(get(r, "qualityScore", "quality_score", "qualityscore")) || 90,
-            fillRate: num(get(r, "fillRate", "fill_rate", "fillrate")) || 0.97,
-          });
+            fillRate: num(get(r, "fillRate", "fill_rate", "fillrate")) || 97,
+          };
+          const validated = validateRow(StrictSupplierBody, candidate);
+          if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
+          await db.insert(suppliersTable).values(validated.data);
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
@@ -214,7 +242,7 @@ router.post(
             errors.push(`Row ${i + 2}: runDate "${rawDate}" is not a valid date — use YYYY-MM-DD, MM/DD/YYYY, or DD-MM-YYYY`);
             continue;
           }
-          await db.insert(productionRunsTable).values({
+          const candidate = {
             productName,
             plannedUnits: num(get(r, "plannedUnits", "planned_units", "plannedunits")),
             actualUnits: num(get(r, "actualUnits", "actual_units", "actualunits")),
@@ -223,7 +251,10 @@ router.post(
             defects: num(get(r, "defects")) || 0,
             downtimeMin: num(get(r, "downtimeMin", "downtime_min", "downtimemin")) || 0,
             runDate,
-          });
+          };
+          const validated = validateRow(StrictProductionBody, candidate);
+          if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
+          await db.insert(productionRunsTable).values(validated.data);
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
@@ -234,11 +265,14 @@ router.post(
           const productName = get(r, "productName", "product_name", "productname");
           const period = get(r, "period");
           if (!productName || !period) { errors.push(`Row ${i + 2}: productName and period are required`); continue; }
-          await db.insert(demandRecordsTable).values({
+          const candidate = {
             productName, period,
             actualDemand: num(get(r, "actualDemand", "actual_demand", "actualdemand")),
             forecastedDemand: num(get(r, "forecastedDemand", "forecasted_demand", "forecasteddemand")),
-          });
+          };
+          const validated = validateRow(StrictDemandBody, candidate);
+          if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
+          await db.insert(demandRecordsTable).values(validated.data);
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
@@ -266,15 +300,22 @@ router.post(
 
           const supplierId = num(get(r, "supplierId", "supplier_id", "supplierid"));
           const supplier = allSuppliers.find((s) => s.id === supplierId);
+          if (!supplier) { errors.push(`Row ${i + 2}: supplierId ${supplierId} does not match any known supplier`); continue; }
 
-          await db.insert(ordersTable).values({
+          const candidate = {
             supplierId,
-            supplierName: (supplier?.name ?? get(r, "supplierName", "supplier_name", "suppliername")) || "Unknown",
             totalValue: num(get(r, "totalValue", "total_value", "totalvalue")),
-            status: get(r, "status") || "pending",
             orderDate,
             expectedDelivery,
             itemCount: num(get(r, "itemCount", "item_count", "itemcount")) || 1,
+          };
+          const validated = validateRow(StrictOrderBody, candidate);
+          if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
+
+          await db.insert(ordersTable).values({
+            ...validated.data,
+            supplierName: supplier.name,
+            status: get(r, "status") || "pending",
           });
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }

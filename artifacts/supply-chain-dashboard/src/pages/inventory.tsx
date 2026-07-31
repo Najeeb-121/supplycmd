@@ -945,10 +945,10 @@ export default function InventoryPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Pricing</p>
                 <div className="grid grid-cols-2 gap-3">
                   <FormField control={itemForm.control} name="unitCost" render={({ field }) => (
-                    <FormItem><FormLabel>Cost Price ($) *</FormLabel><FormControl><Input type="number" min="0" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Cost Price ($) *</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="sellingPrice" render={({ field }) => (
-                    <FormItem><FormLabel>Selling Price ($)</FormLabel><FormControl><Input type="number" min="0" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Selling Price ($)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
               </div>
@@ -983,7 +983,7 @@ export default function InventoryPage() {
                     <FormItem><FormLabel>Lead Time (Days)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="orderingCost" render={({ field }) => (
-                    <FormItem><FormLabel>Cost per Order ($)</FormLabel><FormControl><Input type="number" min="0" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Cost per Order ($)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="holdingCostRate" render={({ field }) => (
                     <FormItem><FormLabel>Holding Cost Rate (0–1)</FormLabel><FormControl><Input type="number" min="0" step="0.01" max="1" {...field} /></FormControl><FormMessage /></FormItem>
