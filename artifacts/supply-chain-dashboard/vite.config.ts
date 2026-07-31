@@ -72,6 +72,18 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // Outside Replit there is no shared reverse proxy routing /api to the
+    // API server artifact, so proxy it directly for local dev only.
+    ...(process.env.REPL_ID === undefined
+      ? {
+          proxy: {
+            '/api': {
+              target: process.env.LOCAL_API_PROXY_TARGET ?? 'http://localhost:8080',
+              changeOrigin: true,
+            },
+          },
+        }
+      : {}),
   },
   preview: {
     port,
