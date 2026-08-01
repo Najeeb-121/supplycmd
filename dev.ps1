@@ -21,7 +21,7 @@ if (-not (Test-CommandExists "docker")) {
     exit 1
 }
 
-# --- Env vars ---
+# --- Env vars (child windows inherit these automatically, no need to re-set them there) ---
 $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/supply_chain"
 $env:PORT = "8080"
 $env:NODE_ENV = "development"
@@ -32,6 +32,10 @@ if (-not $env:ENCRYPTION_KEY) { $env:ENCRYPTION_KEY = "1fa2ea5c0921937aa643f0da7
 # --- Install dependencies ---
 Write-Host "Installing dependencies (pnpm install)..." -ForegroundColor Cyan
 pnpm install
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "pnpm install failed (exit code $LASTEXITCODE) — fix the error above before continuing." -ForegroundColor Red
+    exit 1
+}
 
 # --- Make sure Postgres is up ---
 $running = docker ps --format "{{.Names}}" | Select-String -Pattern "^scf-postgres$"
@@ -50,28 +54,29 @@ if (-not $running) {
 # --- Push DB schema (safe to run every time) ---
 Write-Host "Pushing DB schema..." -ForegroundColor Cyan
 pnpm --filter @workspace/db run push
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "DB schema push failed (exit code $LASTEXITCODE) — fix the error above before continuing." -ForegroundColor Red
+    exit 1
+}
 
 # --- Start API server and frontend, each in its own window ---
+# Using -WorkingDirectory (not an embedded `cd '...'` string) so this
+# works even when the folder path itself contains a quote character.
 Write-Host "Starting API server on :8080 in a new window..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList @(
-    "-NoExit", "-Command",
-    "cd '$PSScriptRoot'; " +
-    "`$env:DATABASE_URL='$($env:DATABASE_URL)'; " +
-    "`$env:PORT='8080'; `$env:NODE_ENV='development'; " +
-    "`$env:AI_INTEGRATIONS_OPENAI_BASE_URL='$($env:AI_INTEGRATIONS_OPENAI_BASE_URL)'; " +
-    "`$env:AI_INTEGRATIONS_OPENAI_API_KEY='$($env:AI_INTEGRATIONS_OPENAI_API_KEY)'; " +
-    "`$env:ENCRYPTION_KEY='$($env:ENCRYPTION_KEY)'; " +
-    "pnpm --filter @workspace/api-server run dev"
+Start-Process powershell -WorkingDirectory $PSScriptRoot -ArgumentList @(
+    "-NoExit", "-Command", "pnpm --filter @workspace/api-server run dev"
 )
 
 Start-Sleep -Seconds 2
 
+# Frontend needs different PORT/BASE_PATH — update env here, then spawn.
+# The new process inherits the environment at the moment it's created.
+$env:PORT = "21927"
+$env:BASE_PATH = "/"
+
 Write-Host "Starting frontend on :21927 in a new window..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList @(
-    "-NoExit", "-Command",
-    "cd '$PSScriptRoot'; " +
-    "`$env:PORT='21927'; `$env:BASE_PATH='/'; " +
-    "pnpm --filter @workspace/supply-chain-dashboard run dev"
+Start-Process powershell -WorkingDirectory $PSScriptRoot -ArgumentList @(
+    "-NoExit", "-Command", "pnpm --filter @workspace/supply-chain-dashboard run dev"
 )
 
 Write-Host ""
