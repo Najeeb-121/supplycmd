@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, ordersTable, suppliersTable } from "@workspace/db";
 import {
   CreateOrderBody,
@@ -22,8 +22,8 @@ export const StrictOrderBody = CreateOrderBody
 
 const router: IRouter = Router();
 
-router.get("/orders", async (_req, res): Promise<void> => {
-  const orders = await db.select().from(ordersTable).orderBy(ordersTable.orderDate);
+router.get("/orders", async (req, res): Promise<void> => {
+  const orders = await db.select().from(ordersTable).where(eq(ordersTable.companyId, req.user!.companyId)).orderBy(ordersTable.orderDate);
   res.json(orders);
 });
 
@@ -31,8 +31,9 @@ router.post("/orders", async (req, res): Promise<void> => {
   const result = validateBody(StrictOrderBody, req, res);
   if (!result.ok) return;
 
-  // Lookup supplier name
-  const [supplier] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, result.data.supplierId));
+  // Lookup supplier name — scoped to this company so an order can't be
+  // issued against another company's supplier id.
+  const [supplier] = await db.select().from(suppliersTable).where(and(eq(suppliersTable.id, result.data.supplierId), eq(suppliersTable.companyId, req.user!.companyId)));
   if (!supplier) {
     res.status(400).json({ errors: { supplierId: "Supplier not found" } });
     return;
@@ -41,7 +42,7 @@ router.post("/orders", async (req, res): Promise<void> => {
 
   const [order] = await db
     .insert(ordersTable)
-    .values({ ...result.data, supplierName })
+    .values({ ...result.data, companyId: req.user!.companyId, supplierName })
     .returning();
   res.status(201).json(order);
 });
@@ -56,7 +57,7 @@ router.patch("/orders/:id", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(ordersTable)
     .set(parsed.data)
-    .where(eq(ordersTable.id, params.data.id))
+    .where(and(eq(ordersTable.id, params.data.id), eq(ordersTable.companyId, req.user!.companyId)))
     .returning();
   if (!updated) { res.status(404).json({ error: "Order not found" }); return; }
   res.json(updated);

@@ -9,6 +9,27 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface SignupInput {
+  companyName: string;
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  companyId: number;
+  companyName: string;
+}
+
 export interface InventoryItem {
   id: number;
   name: string;
@@ -358,6 +379,67 @@ export interface LogisticsKpis {
   ordersDeliveredOnTime: number;
   ordersFulfilled: number;
   totalOrders: number;
+}
+
+export interface OdooConnectionStatus {
+  connected: boolean;
+  /** @nullable */
+  odooVersion?: string | null;
+  /** @nullable */
+  error?: string | null;
+}
+
+export interface OdooSyncResult {
+  synced: number;
+  failed: number;
+  errors: string[];
+}
+
+export type OdooSyncLogEntryEntity = typeof OdooSyncLogEntryEntity[keyof typeof OdooSyncLogEntryEntity];
+
+
+export const OdooSyncLogEntryEntity = {
+  suppliers: 'suppliers',
+  inventory: 'inventory',
+} as const;
+
+export type OdooSyncLogEntryStatus = typeof OdooSyncLogEntryStatus[keyof typeof OdooSyncLogEntryStatus];
+
+
+export const OdooSyncLogEntryStatus = {
+  success: 'success',
+  partial: 'partial',
+  error: 'error',
+} as const;
+
+export interface OdooSyncLogEntry {
+  id: number;
+  entity: OdooSyncLogEntryEntity;
+  status: OdooSyncLogEntryStatus;
+  recordsSynced: number;
+  recordsFailed: number;
+  /** @nullable */
+  message?: string | null;
+  syncedAt: string;
+}
+
+export interface OdooConnectionInput {
+  url: string;
+  db: string;
+  username: string;
+  apiKey: string;
+}
+
+export interface OdooConnectionInfo {
+  connected: boolean;
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  db?: string | null;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  error?: string | null;
 }
 
 export type ListInventoryParams = {

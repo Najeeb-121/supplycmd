@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   db,
   inventoryItemsTable,
@@ -11,13 +11,14 @@ import {
 
 const router: IRouter = Router();
 
-router.get("/dashboard/summary", async (_req, res): Promise<void> => {
+router.get("/dashboard/summary", async (req, res): Promise<void> => {
+  const companyId = req.user!.companyId;
   const [items, suppliers, orders, productionRuns, demandRecords] = await Promise.all([
-    db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.archived, false)),
-    db.select().from(suppliersTable),
-    db.select().from(ordersTable),
-    db.select().from(productionRunsTable),
-    db.select().from(demandRecordsTable),
+    db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.companyId, companyId), eq(inventoryItemsTable.archived, false))),
+    db.select().from(suppliersTable).where(eq(suppliersTable.companyId, companyId)),
+    db.select().from(ordersTable).where(eq(ordersTable.companyId, companyId)),
+    db.select().from(productionRunsTable).where(eq(productionRunsTable.companyId, companyId)),
+    db.select().from(demandRecordsTable).where(eq(demandRecordsTable.companyId, companyId)),
   ]);
 
   // Inventory
@@ -79,8 +80,8 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/dashboard/inventory-health", async (_req, res): Promise<void> => {
-  const items = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.archived, false));
+router.get("/dashboard/inventory-health", async (req, res): Promise<void> => {
+  const items = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.companyId, req.user!.companyId), eq(inventoryItemsTable.archived, false)));
 
   const avgTurnoverRate = items.length > 0
     ? items.reduce((s, i) => {
@@ -133,10 +134,10 @@ router.get("/dashboard/inventory-health", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/dashboard/logistics-kpis", async (_req, res): Promise<void> => {
+router.get("/dashboard/logistics-kpis", async (req, res): Promise<void> => {
   const [suppliers, orders] = await Promise.all([
-    db.select().from(suppliersTable),
-    db.select().from(ordersTable),
+    db.select().from(suppliersTable).where(eq(suppliersTable.companyId, req.user!.companyId)),
+    db.select().from(ordersTable).where(eq(ordersTable.companyId, req.user!.companyId)),
   ]);
 
   const fillRate = suppliers.length > 0

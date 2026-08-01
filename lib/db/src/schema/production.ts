@@ -1,9 +1,13 @@
-import { pgTable, serial, text, real, date, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, real, date, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { companiesTable } from "./companies";
 
 export const productionRunsTable = pgTable("production_runs", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id")
+    .notNull()
+    .references(() => companiesTable.id, { onDelete: "cascade" }),
   productName: text("product_name").notNull(),
   plannedUnits: real("planned_units").notNull(),
   actualUnits: real("actual_units").notNull(),
@@ -17,6 +21,7 @@ export const productionRunsTable = pgTable("production_runs", {
 
 export const insertProductionRunSchema = createInsertSchema(productionRunsTable).omit({
   id: true,
+  companyId: true,
   createdAt: true,
 });
 

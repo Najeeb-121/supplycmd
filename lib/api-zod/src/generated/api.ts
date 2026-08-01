@@ -17,6 +17,63 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Create a new company and its first (owner) user
+ */
+export const SignupBody = zod.object({
+  "companyName": zod.string(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "password": zod.string()
+})
+
+export const SignupResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "companyId": zod.number(),
+  "companyName": zod.string()
+})
+
+
+/**
+ * @summary Log in with email and password
+ */
+export const LoginBody = zod.object({
+  "email": zod.string(),
+  "password": zod.string()
+})
+
+export const LoginResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "companyId": zod.number(),
+  "companyName": zod.string()
+})
+
+
+/**
+ * @summary Log out and clear the session
+ */
+export const LogoutResponse = zod.void()
+
+
+/**
+ * @summary Get the currently authenticated user, if any
+ */
+export const GetCurrentUserResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "companyId": zod.number(),
+  "companyName": zod.string()
+})
+
+
+/**
  * @summary List all inventory items
  */
 export const ListInventoryQueryParams = zod.object({
@@ -667,6 +724,82 @@ export const GetLogisticsKpisResponse = zod.object({
   "ordersDeliveredOnTime": zod.number(),
   "ordersFulfilled": zod.number(),
   "totalOrders": zod.number()
+})
+
+
+/**
+ * @summary Test the configured Odoo connection
+ */
+export const TestOdooConnectionResponse = zod.object({
+  "connected": zod.boolean(),
+  "odooVersion": zod.string().nullish(),
+  "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary Pull vendor contacts from Odoo into the suppliers table
+ */
+export const SyncOdooSuppliersResponse = zod.object({
+  "synced": zod.number(),
+  "failed": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Pull products from Odoo into the inventory_items table
+ */
+export const SyncOdooInventoryResponse = zod.object({
+  "synced": zod.number(),
+  "failed": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Recent Odoo sync history, newest first
+ */
+export const GetOdooSyncLogResponseItem = zod.object({
+  "id": zod.number(),
+  "entity": zod.enum(['suppliers', 'inventory']),
+  "status": zod.enum(['success', 'partial', 'error']),
+  "recordsSynced": zod.number(),
+  "recordsFailed": zod.number(),
+  "message": zod.string().nullish(),
+  "syncedAt": zod.string()
+})
+export const GetOdooSyncLogResponse = zod.array(GetOdooSyncLogResponseItem)
+
+
+/**
+ * @summary Get this company's saved Odoo connection info (never returns the API key)
+ */
+export const GetOdooConnectionResponse = zod.object({
+  "connected": zod.boolean(),
+  "url": zod.string().nullish(),
+  "db": zod.string().nullish(),
+  "username": zod.string().nullish(),
+  "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary Test and save this company's Odoo connection
+ */
+export const SaveOdooConnectionBody = zod.object({
+  "url": zod.string(),
+  "db": zod.string(),
+  "username": zod.string(),
+  "apiKey": zod.string()
+})
+
+export const SaveOdooConnectionResponse = zod.object({
+  "connected": zod.boolean(),
+  "url": zod.string().nullish(),
+  "db": zod.string().nullish(),
+  "username": zod.string().nullish(),
+  "error": zod.string().nullish()
 })
 
 

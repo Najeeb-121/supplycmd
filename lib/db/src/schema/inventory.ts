@@ -1,12 +1,21 @@
-import { pgTable, serial, text, real, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, boolean, timestamp, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { companiesTable } from "./companies";
 
 export const inventoryItemsTable = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id")
+    .notNull()
+    .references(() => companiesTable.id, { onDelete: "cascade" }),
+  // Odoo product.product id — set when this row came from an Odoo sync,
+  // used as the idempotency key so re-syncing updates instead of duplicating.
+  // Unique per company, not globally — two companies' Odoo databases can
+  // both have a product with the same internal id.
+  odooId: integer("odoo_id"),
   // Core identification
   name: text("name").notNull(),
-  sku: text("sku").notNull().unique(),
+  sku: text("sku").notNull(),
   barcode: text("barcode"),
   description: text("description"),
   // Classification
@@ -39,10 +48,14 @@ export const inventoryItemsTable = pgTable("inventory_items", {
   // Lifecycle
   archived: boolean("archived").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  unique().on(table.companyId, table.sku),
+  unique().on(table.companyId, table.odooId),
+]);
 
 export const insertInventoryItemSchema = createInsertSchema(inventoryItemsTable).omit({
   id: true,
+  companyId: true,
   createdAt: true,
   reorderPoint: true,
   safetyStock: true,
