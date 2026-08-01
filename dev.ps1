@@ -26,7 +26,7 @@ if (-not (Test-CommandExists "docker")) {
 function Stop-ProcessOnPort($port) {
     $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     foreach ($conn in $conns) {
-        Write-Host "Port $port is already in use (PID $($conn.OwningProcess)) — stopping it..." -ForegroundColor Yellow
+        Write-Host "Port $port is already in use (PID $($conn.OwningProcess)) - stopping it..." -ForegroundColor Yellow
         Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
     }
 }
@@ -46,7 +46,7 @@ if (-not $env:ENCRYPTION_KEY) { $env:ENCRYPTION_KEY = "1fa2ea5c0921937aa643f0da7
 Write-Host "Installing dependencies (pnpm install)..." -ForegroundColor Cyan
 pnpm install
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "pnpm install failed (exit code $LASTEXITCODE) — fix the error above before continuing." -ForegroundColor Red
+    Write-Host "pnpm install failed (exit code $LASTEXITCODE) - fix the error above before continuing." -ForegroundColor Red
     exit 1
 }
 
@@ -68,7 +68,7 @@ if (-not $running) {
 Write-Host "Pushing DB schema..." -ForegroundColor Cyan
 pnpm --filter @workspace/db run push
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "DB schema push failed (exit code $LASTEXITCODE) — fix the error above before continuing." -ForegroundColor Red
+    Write-Host "DB schema push failed (exit code $LASTEXITCODE) - fix the error above before continuing." -ForegroundColor Red
     exit 1
 }
 
@@ -82,7 +82,7 @@ Start-Process powershell -WorkingDirectory $PSScriptRoot -ArgumentList @(
 
 Start-Sleep -Seconds 2
 
-# Frontend needs different PORT/BASE_PATH — update env here, then spawn.
+# Frontend needs different PORT/BASE_PATH - update env here, then spawn.
 # The new process inherits the environment at the moment it's created.
 $env:PORT = "21927"
 $env:BASE_PATH = "/"
