@@ -2,9 +2,13 @@ import { pgTable, serial, integer, text, real, timestamp } from "drizzle-orm/pg-
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { inventoryItemsTable } from "./inventory";
+import { companiesTable } from "./companies";
 
 export const stockMovementsTable = pgTable("stock_movements", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id")
+    .notNull()
+    .references(() => companiesTable.id, { onDelete: "cascade" }),
   inventoryItemId: integer("inventory_item_id")
     .notNull()
     .references(() => inventoryItemsTable.id, { onDelete: "cascade" }),
@@ -26,6 +30,7 @@ export const stockMovementsTable = pgTable("stock_movements", {
 
 export const insertStockMovementSchema = createInsertSchema(stockMovementsTable).omit({
   id: true,
+  companyId: true,
   movedAt: true,
 });
 

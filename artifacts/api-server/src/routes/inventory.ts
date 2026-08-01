@@ -85,7 +85,7 @@ function deriveStatus(item: { currentStock: number; safetyStock: number; reorder
 router.get("/inventory", async (req: Request, res: Response): Promise<void> => {
   const { search, category, warehouse, supplier, status, archived } = req.query as Record<string, string>;
 
-  let items = await db.select().from(inventoryItemsTable).orderBy(inventoryItemsTable.name);
+  let items = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.companyId, req.user!.companyId)).orderBy(inventoryItemsTable.name);
 
   // Archive filter — default to active only
   if (archived === "true") {
@@ -118,8 +118,8 @@ router.get("/inventory", async (req: Request, res: Response): Promise<void> => {
 });
 
 // ── GET /inventory/kpis ────────────────────────────────────────────────────────
-router.get("/inventory/kpis", async (_req: Request, res: Response): Promise<void> => {
-  const items = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.archived, false));
+router.get("/inventory/kpis", async (req: Request, res: Response): Promise<void> => {
+  const items = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.companyId, req.user!.companyId), eq(inventoryItemsTable.archived, false)));
 
   let totalValue = 0, lowStockCount = 0, criticalCount = 0, outOfStockCount = 0, overstockCount = 0;
   let totalTurnover = 0, totalDaysOnHand = 0, turnoverItemCount = 0;
@@ -157,11 +157,12 @@ router.get("/inventory/kpis", async (_req: Request, res: Response): Promise<void
 });
 
 // ── GET /inventory/reorder-suggestions ────────────────────────────────────────
-router.get("/inventory/reorder-suggestions", async (_req: Request, res: Response): Promise<void> => {
+router.get("/inventory/reorder-suggestions", async (req: Request, res: Response): Promise<void> => {
   const items = await db
     .select()
     .from(inventoryItemsTable)
     .where(and(
+      eq(inventoryItemsTable.companyId, req.user!.companyId),
       eq(inventoryItemsTable.archived, false),
       lte(inventoryItemsTable.currentStock, inventoryItemsTable.reorderPoint),
     ));
@@ -193,11 +194,12 @@ router.get("/inventory/reorder-suggestions", async (_req: Request, res: Response
 });
 
 // ── GET /inventory/reorder-alerts ─────────────────────────────────────────────
-router.get("/inventory/reorder-alerts", async (_req: Request, res: Response): Promise<void> => {
+router.get("/inventory/reorder-alerts", async (req: Request, res: Response): Promise<void> => {
   const items = await db
     .select()
     .from(inventoryItemsTable)
     .where(and(
+      eq(inventoryItemsTable.companyId, req.user!.companyId),
       eq(inventoryItemsTable.archived, false),
       lte(inventoryItemsTable.currentStock, inventoryItemsTable.reorderPoint),
     ));
@@ -238,6 +240,7 @@ router.get("/inventory/movements", async (req: Request, res: Response): Promise<
     })
     .from(stockMovementsTable)
     .innerJoin(inventoryItemsTable, eq(stockMovementsTable.inventoryItemId, inventoryItemsTable.id))
+    .where(eq(stockMovementsTable.companyId, req.user!.companyId))
     .orderBy(sql`${stockMovementsTable.movedAt} DESC`);
 
   if (inventoryItemId) movements = movements.filter(m => m.inventoryItemId === parseInt(inventoryItemId));
@@ -249,7 +252,7 @@ router.get("/inventory/movements", async (req: Request, res: Response): Promise<
 router.get("/inventory/:id", async (req: Request, res: Response): Promise<void> => {
   const params = GetInventoryItemParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const [item] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, params.data.id));
+  const [item] = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.id, params.data.id), eq(inventoryItemsTable.companyId, req.user!.companyId)));
   if (!item) { res.status(404).json({ error: "Inventory item not found" }); return; }
   res.json(item);
 });
@@ -261,7 +264,7 @@ router.post("/inventory", async (req: Request, res: Response): Promise<void> => 
   const parsed = result;
   const { annualDemand, orderingCost, unitCost, holdingCostRate, leadTimeDays } = parsed.data;
   const { eoq, safetyStock, reorderPoint } = computeMetrics({ annualDemand, orderingCost, unitCost, holdingCostRate, leadTimeDays });
-  const [item] = await db.insert(inventoryItemsTable).values({ ...parsed.data, eoq, safetyStock, reorderPoint }).returning();
+  const [item] = await db.insert(inventoryItemsTable).values({ ...parsed.data, companyId: req.user!.companyId, eoq, safetyStock, reorderPoint }).returning();
   res.status(201).json(item);
 });
 
@@ -272,11 +275,11 @@ router.patch("/inventory/:id", async (req: Request, res: Response): Promise<void
   const result = validateBody(StrictInventoryPatch, req, res);
   if (!result.ok) return;
   const parsed = result;
-  const [existing] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, params.data.id));
+  const [existing] = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.id, params.data.id), eq(inventoryItemsTable.companyId, req.user!.companyId)));
   if (!existing) { res.status(404).json({ error: "Inventory item not found" }); return; }
   const merged = { ...existing, ...parsed.data };
   const { eoq, safetyStock, reorderPoint } = computeMetrics({ annualDemand: merged.annualDemand, orderingCost: merged.orderingCost, unitCost: merged.unitCost, holdingCostRate: merged.holdingCostRate, leadTimeDays: merged.leadTimeDays });
-  const [updated] = await db.update(inventoryItemsTable).set({ ...parsed.data, eoq, safetyStock, reorderPoint }).where(eq(inventoryItemsTable.id, params.data.id)).returning();
+  const [updated] = await db.update(inventoryItemsTable).set({ ...parsed.data, eoq, safetyStock, reorderPoint }).where(and(eq(inventoryItemsTable.id, params.data.id), eq(inventoryItemsTable.companyId, req.user!.companyId))).returning();
   res.json(updated);
 });
 
@@ -284,7 +287,7 @@ router.patch("/inventory/:id", async (req: Request, res: Response): Promise<void
 router.delete("/inventory/:id", async (req: Request, res: Response): Promise<void> => {
   const params = DeleteInventoryItemParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const [deleted] = await db.delete(inventoryItemsTable).where(eq(inventoryItemsTable.id, params.data.id)).returning();
+  const [deleted] = await db.delete(inventoryItemsTable).where(and(eq(inventoryItemsTable.id, params.data.id), eq(inventoryItemsTable.companyId, req.user!.companyId))).returning();
   if (!deleted) { res.status(404).json({ error: "Inventory item not found" }); return; }
   res.sendStatus(204);
 });
@@ -311,7 +314,7 @@ router.post("/inventory/:id/movements", async (req: Request, res: Response): Pro
       const [item] = await tx
         .select()
         .from(inventoryItemsTable)
-        .where(eq(inventoryItemsTable.id, params.data.id))
+        .where(and(eq(inventoryItemsTable.id, params.data.id), eq(inventoryItemsTable.companyId, req.user!.companyId)))
         .for("update");
       if (!item) throw new NotFoundError("Inventory item not found");
 
@@ -324,6 +327,7 @@ router.post("/inventory/:id/movements", async (req: Request, res: Response): Pro
       }
 
       const [inserted] = await tx.insert(stockMovementsTable).values({
+        companyId: req.user!.companyId,
         inventoryItemId: item.id,
         user: parsed.data.user,
         movementType: parsed.data.movementType,

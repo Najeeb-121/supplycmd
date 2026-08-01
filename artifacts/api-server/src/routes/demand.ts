@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, demandRecordsTable } from "@workspace/db";
 import { CreateDemandRecordBody } from "@workspace/api-zod";
@@ -13,13 +14,13 @@ export const StrictDemandBody = CreateDemandRecordBody.extend({
 
 const router: IRouter = Router();
 
-router.get("/demand", async (_req, res): Promise<void> => {
-  const records = await db.select().from(demandRecordsTable).orderBy(demandRecordsTable.period);
+router.get("/demand", async (req, res): Promise<void> => {
+  const records = await db.select().from(demandRecordsTable).where(eq(demandRecordsTable.companyId, req.user!.companyId)).orderBy(demandRecordsTable.period);
   res.json(records);
 });
 
-router.get("/demand/forecast", async (_req, res): Promise<void> => {
-  const records = await db.select().from(demandRecordsTable).orderBy(demandRecordsTable.period);
+router.get("/demand/forecast", async (req, res): Promise<void> => {
+  const records = await db.select().from(demandRecordsTable).where(eq(demandRecordsTable.companyId, req.user!.companyId)).orderBy(demandRecordsTable.period);
 
   // Group by product
   const byProduct = new Map<string, typeof records>();
@@ -76,7 +77,7 @@ router.post("/demand", async (req, res): Promise<void> => {
   const result = validateBody(StrictDemandBody, req, res);
   if (!result.ok) return;
 
-  const [record] = await db.insert(demandRecordsTable).values(result.data).returning();
+  const [record] = await db.insert(demandRecordsTable).values({ ...result.data, companyId: req.user!.companyId }).returning();
   res.status(201).json(record);
 });
 

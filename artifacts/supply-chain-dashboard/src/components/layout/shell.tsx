@@ -1,17 +1,19 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { 
-  Activity, 
-  BarChart3, 
-  Boxes, 
-  Calculator, 
-  LayoutDashboard, 
+import { useAuth } from "@/lib/auth";
+import {
+  Activity,
+  BarChart3,
+  Boxes,
+  Calculator,
+  LayoutDashboard,
   Truck,
   Upload,
   Plug,
   Brain,
   Cpu,
-  LineChart
+  LineChart,
+  LogOut
 } from "lucide-react";
 
 const navItems = [
@@ -30,6 +32,13 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { user, logout } = useAuth();
+  const initials = (user?.name || user?.email || "?")
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <div className="flex min-h-[100dvh] bg-background">
@@ -72,13 +81,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         
         <div className="p-4 border-t border-sidebar-border">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-bold text-sidebar-foreground">
-              PM
+            <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-bold text-sidebar-foreground shrink-0">
+              {initials}
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-sidebar-foreground">Prod Manager</span>
-              <span className="text-xs text-sidebar-foreground/60">Shift 1 Active</span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-medium text-sidebar-foreground truncate">{user?.name || user?.email}</span>
+              <span className="text-xs text-sidebar-foreground/60 truncate">{user?.companyName}</span>
             </div>
+            <button
+              onClick={logout}
+              className="ml-auto text-sidebar-foreground/60 hover:text-sidebar-foreground shrink-0"
+              title="Log out"
+              data-testid="button-logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </aside>

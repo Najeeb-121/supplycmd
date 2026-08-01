@@ -22,6 +22,10 @@ tags:
     description: Purchase orders
   - name: dashboard
     description: Dashboard KPI aggregates
+  - name: integrations
+    description: Third-party ERP integrations (Odoo)
+  - name: auth
+    description: Account signup, login, and session management
 paths:
   /healthz:
     get:
@@ -35,6 +39,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # --- Auth ---
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      summary: Create a new company and its first (owner) user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupInput"
+      responses:
+        "201":
+          description: Created — session cookie set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Logged in — session cookie set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Log out and clear the session
+      responses:
+        "204":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the currently authenticated user, if any
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
 
   # --- Inventory ---
   /inventory:
@@ -523,6 +588,97 @@ paths:
               schema:
                 $ref: "#/components/schemas/LogisticsKpis"
 
+  # --- Odoo integration ---
+  /integrations/odoo/test-connection:
+    post:
+      operationId: testOdooConnection
+      tags: [integrations]
+      summary: Test the configured Odoo connection
+      responses:
+        "200":
+          description: Connection result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OdooConnectionStatus"
+
+  /integrations/odoo/sync/suppliers:
+    post:
+      operationId: syncOdooSuppliers
+      tags: [integrations]
+      summary: Pull vendor contacts from Odoo into the suppliers table
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OdooSyncResult"
+
+  /integrations/odoo/sync/inventory:
+    post:
+      operationId: syncOdooInventory
+      tags: [integrations]
+      summary: Pull products from Odoo into the inventory_items table
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OdooSyncResult"
+
+  /integrations/odoo/sync-log:
+    get:
+      operationId: getOdooSyncLog
+      tags: [integrations]
+      summary: Recent Odoo sync history, newest first
+      responses:
+        "200":
+          description: Sync log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OdooSyncLogEntry"
+
+  /integrations/odoo/connection:
+    get:
+      operationId: getOdooConnection
+      tags: [integrations]
+      summary: Get this company's saved Odoo connection info (never returns the API key)
+      responses:
+        "200":
+          description: Connection info, or connected=false if none saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OdooConnectionInfo"
+    put:
+      operationId: saveOdooConnection
+      tags: [integrations]
+      summary: Test and save this company's Odoo connection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OdooConnectionInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OdooConnectionInfo"
+        "400":
+          description: Connection test failed — not saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OdooConnectionInfo"
+
 components:
   schemas:
     HealthStatus:
@@ -531,6 +687,34 @@ components:
         status:
           type: string
       required: [status]
+
+    # --- Auth ---
+    SignupInput:
+      type: object
+      required: [companyName, name, email, password]
+      properties:
+        companyName: { type: string }
+        name:        { type: string }
+        email:       { type: string }
+        password:    { type: string }
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:    { type: string }
+        password: { type: string }
+
+    AuthUser:
+      type: object
+      required: [id, email, name, role, companyId, companyName]
+      properties:
+        id:          { type: number }
+        email:       { type: string }
+        name:        { type: string }
+        role:        { type: string }
+        companyId:   { type: number }
+        companyName: { type: string }
 
     # --- Inventory ---
     InventoryItem:
@@ -887,3 +1071,53 @@ components:
         ordersDeliveredOnTime:  { type: number }
         ordersFulfilled:        { type: number }
         totalOrders:            { type: number }
+
+    # --- Odoo integration ---
+    OdooConnectionStatus:
+      type: object
+      required: [connected]
+      properties:
+        connected:   { type: boolean }
+        odooVersion: { type: ["string", "null"] }
+        error:       { type: ["string", "null"] }
+
+    OdooSyncResult:
+      type: object
+      required: [synced, failed, errors]
+      properties:
+        synced: { type: number }
+        failed: { type: number }
+        errors:
+          type: array
+          items: { type: string }
+
+    OdooSyncLogEntry:
+      type: object
+      required: [id, entity, status, recordsSynced, recordsFailed, syncedAt]
+      properties:
+        id:            { type: number }
+        entity:        { type: string, enum: [suppliers, inventory] }
+        status:        { type: string, enum: [success, partial, error] }
+        recordsSynced: { type: number }
+        recordsFailed: { type: number }
+        message:       { type: ["string", "null"] }
+        syncedAt:      { type: string }
+
+    OdooConnectionInput:
+      type: object
+      required: [url, db, username, apiKey]
+      properties:
+        url:      { type: string }
+        db:       { type: string }
+        username: { type: string }
+        apiKey:   { type: string }
+
+    OdooConnectionInfo:
+      type: object
+      required: [connected]
+      properties:
+        connected: { type: boolean }
+        url:       { type: ["string", "null"] }
+        db:        { type: ["string", "null"] }
+        username:  { type: ["string", "null"] }
+        error:     { type: ["string", "null"] }

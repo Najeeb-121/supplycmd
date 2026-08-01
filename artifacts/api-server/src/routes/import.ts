@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import type { ZodType } from "zod";
+import { eq } from "drizzle-orm";
 import { db, inventoryItemsTable, suppliersTable, productionRunsTable, demandRecordsTable, ordersTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { StrictInventoryBody } from "./inventory";
@@ -203,10 +204,11 @@ router.post(
           const safetyStock = calcSafetyStock(leadTimeDays, annualDemand);
           const reorderPoint = calcROP(leadTimeDays, annualDemand);
           await db.insert(inventoryItemsTable).values({
+            companyId: req.user!.companyId,
             name, sku, category, currentStock,
             leadTimeDays, unitCost, annualDemand, holdingCostRate, orderingCost,
             eoq, safetyStock, reorderPoint,
-          }).onConflictDoUpdate({ target: inventoryItemsTable.sku, set: { name, currentStock, unitCost, annualDemand, holdingCostRate, orderingCost, leadTimeDays, eoq, safetyStock, reorderPoint } });
+          }).onConflictDoUpdate({ target: [inventoryItemsTable.companyId, inventoryItemsTable.sku], set: { name, currentStock, unitCost, annualDemand, holdingCostRate, orderingCost, leadTimeDays, eoq, safetyStock, reorderPoint } });
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
@@ -226,7 +228,7 @@ router.post(
           };
           const validated = validateRow(StrictSupplierBody, candidate);
           if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
-          await db.insert(suppliersTable).values(validated.data);
+          await db.insert(suppliersTable).values({ ...validated.data, companyId: req.user!.companyId });
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
@@ -254,7 +256,7 @@ router.post(
           };
           const validated = validateRow(StrictProductionBody, candidate);
           if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
-          await db.insert(productionRunsTable).values(validated.data);
+          await db.insert(productionRunsTable).values({ ...validated.data, companyId: req.user!.companyId });
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
@@ -272,13 +274,13 @@ router.post(
           };
           const validated = validateRow(StrictDemandBody, candidate);
           if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
-          await db.insert(demandRecordsTable).values(validated.data);
+          await db.insert(demandRecordsTable).values({ ...validated.data, companyId: req.user!.companyId });
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
     } else if (entity === "orders") {
-      // Pre-fetch suppliers once for the whole batch
-      const allSuppliers = await db.select().from(suppliersTable);
+      // Pre-fetch suppliers once for the whole batch, scoped to this company
+      const allSuppliers = await db.select().from(suppliersTable).where(eq(suppliersTable.companyId, req.user!.companyId));
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
@@ -314,6 +316,7 @@ router.post(
 
           await db.insert(ordersTable).values({
             ...validated.data,
+            companyId: req.user!.companyId,
             supplierName: supplier.name,
             status: get(r, "status") || "pending",
           });

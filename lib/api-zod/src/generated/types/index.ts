@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './authUser';
 export * from './categoryBreakdown';
 export * from './dashboardSummary';
 export * from './demandRecord';
@@ -20,7 +21,15 @@ export * from './inventoryItemUpdate';
 export * from './inventoryKpis';
 export * from './listInventoryParams';
 export * from './listStockMovementsParams';
+export * from './loginInput';
 export * from './logisticsKpis';
+export * from './odooConnectionInfo';
+export * from './odooConnectionInput';
+export * from './odooConnectionStatus';
+export * from './odooSyncLogEntry';
+export * from './odooSyncLogEntryEntity';
+export * from './odooSyncLogEntryStatus';
+export * from './odooSyncResult';
 export * from './oeeMetrics';
 export * from './order';
 export * from './orderInput';
@@ -34,6 +43,7 @@ export * from './reorderAlert';
 export * from './reorderAlertUrgency';
 export * from './reorderSuggestion';
 export * from './reorderSuggestionPriority';
+export * from './signupInput';
 export * from './stockMovement';
 export * from './stockMovementInput';
 export * from './supplier';

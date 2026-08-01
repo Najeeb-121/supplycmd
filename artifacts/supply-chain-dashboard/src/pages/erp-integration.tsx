@@ -1,14 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  buildInitialConnectionState,
-  simulateSyncCycle,
-  buildSyncingState,
-  type ErpConnectionState,
-  type EntitySyncState,
-  type SyncLogEntry,
-  type EntityName,
-  MOCK_API_CONFIG,
-} from "@/services/erp-integration";
+  useTestOdooConnection,
+  useSyncOdooSuppliers,
+  useSyncOdooInventory,
+  useGetOdooSyncLog,
+  useGetOdooConnection,
+  useSaveOdooConnection,
+  getGetOdooSyncLogQueryKey,
+  getGetOdooConnectionQueryKey,
+  getListSuppliersQueryKey,
+  getListInventoryQueryKey,
+} from "@workspace/api-client-react";
 import {
   Card,
   CardContent,
@@ -18,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -29,10 +35,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   RefreshCw,
   Wifi,
@@ -41,222 +57,136 @@ import {
   CheckCircle2,
   Clock,
   Server,
-  Database,
-  Activity,
-  Settings2,
-  ShieldCheck,
-  Zap,
-  Package,
-  ShoppingCart,
-  Tag,
   Users,
-  Factory,
-  ChevronDown,
-  ChevronUp,
+  Package,
+  Plug,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const SYNC_INTERVAL_MS = 30_000;
-
-function formatMs(ms: number): string {
-  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
-}
-
-function formatNum(n: number): string {
-  return n.toLocaleString();
-}
-
-const ENTITY_ICONS: Record<EntityName, React.ElementType> = {
-  Inventory: Package,
-  "Purchase Orders": ShoppingCart,
-  "Sales Orders": Tag,
-  Suppliers: Users,
-  "Production Orders": Factory,
-};
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function StatusDot({ status }: { status: ErpConnectionState["status"] }) {
-  const color =
-    status === "connected"
-      ? "bg-emerald-500"
-      : status === "syncing"
-      ? "bg-amber-500"
-      : status === "error"
-      ? "bg-destructive"
-      : "bg-muted-foreground";
-
+function ConnectionBadge({ status }: { status: "unknown" | "connected" | "error" }) {
+  if (status === "connected")
+    return (
+      <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
+        <Wifi className="w-3 h-3" /> Connected
+      </Badge>
+    );
+  if (status === "error")
+    return (
+      <Badge variant="destructive" className="gap-1">
+        <WifiOff className="w-3 h-3" /> Not connected
+      </Badge>
+    );
   return (
-    <span className="relative flex h-3 w-3">
-      {status !== "disconnected" && (
-        <span
-          className={`animate-ping absolute inline-flex h-full w-full rounded-full ${color} opacity-60`}
-        />
-      )}
-      <span className={`relative inline-flex rounded-full h-3 w-3 ${color}`} />
-    </span>
-  );
-}
-
-function ConnectionBadge({ status }: { status: ErpConnectionState["status"] }) {
-  const map = {
-    connected: { label: "Connected", variant: "default" as const, className: "bg-emerald-600 hover:bg-emerald-700 text-white" },
-    syncing: { label: "Syncing…", variant: "secondary" as const, className: "bg-amber-500 hover:bg-amber-600 text-white" },
-    error: { label: "Error", variant: "destructive" as const, className: "" },
-    disconnected: { label: "Disconnected", variant: "secondary" as const, className: "" },
-  };
-  const { label, variant, className } = map[status];
-  return (
-    <Badge variant={variant} className={className}>
-      {label}
+    <Badge variant="secondary" className="gap-1">
+      Not connected
     </Badge>
   );
 }
 
-function EntityStatusBadge({ status }: { status: EntitySyncState["status"] }) {
+function SyncStatusBadge({ status }: { status: string }) {
   if (status === "success")
-    return <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs">Synced</Badge>;
-  if (status === "syncing")
-    return <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-xs">Syncing</Badge>;
-  if (status === "error")
-    return <Badge variant="destructive" className="text-xs">Error</Badge>;
-  return <Badge variant="secondary" className="text-xs">Idle</Badge>;
+    return <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs">Success</Badge>;
+  if (status === "partial")
+    return <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-xs">Partial</Badge>;
+  return <Badge variant="destructive" className="text-xs">Error</Badge>;
 }
 
-function SyncProgress({ entities }: { entities: EntitySyncState[] }) {
-  const total = entities.reduce((s, e) => s + e.totalRecords, 0);
-  const imported = entities.reduce((s, e) => s + e.importedRecords, 0);
-  const pct = total > 0 ? Math.round((imported / total) * 100) : 0;
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex justify-between text-sm">
-        <span className="text-muted-foreground font-medium">Overall Sync Coverage</span>
-        <span className="font-mono font-bold text-foreground">{pct}%</span>
-      </div>
-      <Progress value={pct} className="h-2" />
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{formatNum(imported)} imported</span>
-        <span>{formatNum(total - imported)} pending</span>
-      </div>
-    </div>
-  );
-}
-
-function CounterCell({ value, animate }: { value: number; animate: boolean }) {
-  return (
-    <span
-      className={`font-mono font-semibold transition-colors duration-300 ${
-        animate ? "text-primary" : "text-foreground"
-      }`}
-    >
-      {formatNum(value)}
-    </span>
-  );
-}
-
-function LogRow({ entry }: { entry: SyncLogEntry }) {
-  const icon =
-    entry.action === "error" ? (
-      <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
-    ) : entry.action === "connect" ? (
-      <Wifi className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-    ) : entry.action === "disconnect" ? (
-      <WifiOff className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-    ) : (
-      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-    );
-
-  return (
-    <div className="flex items-start gap-2 py-1.5 border-b border-border/50 last:border-0">
-      <span className="mt-0.5">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs text-foreground leading-snug">{entry.message}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5">
-          {entry.entity} · {format(entry.timestamp, "HH:mm:ss")} ·{" "}
-          {formatDistanceToNow(entry.timestamp, { addSuffix: true })}
-        </p>
-      </div>
-    </div>
-  );
-}
+const connectionSchema = z.object({
+  url: z.string().url("Enter a valid URL, e.g. https://yourcompany.odoo.com"),
+  db: z.string().min(1, "Database name is required"),
+  username: z.string().min(1, "Username is required"),
+  apiKey: z.string().min(1, "API key is required"),
+});
+type ConnectionFormValues = z.infer<typeof connectionSchema>;
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ErpIntegrationPage() {
-  const [state, setState] = useState<ErpConnectionState>(() =>
-    buildInitialConnectionState()
-  );
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastFlash, setLastFlash] = useState<Set<EntityName>>(new Set());
-  const [countdown, setCountdown] = useState(SYNC_INTERVAL_MS / 1000);
-  const [showAllLogs, setShowAllLogs] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const queryClient = useQueryClient();
+  const [isConnectFormOpen, setIsConnectFormOpen] = useState(false);
+  const [connectionTestResult, setConnectionTestResult] = useState<{
+    odooVersion: string | null;
+    error: string | null;
+  } | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    entity: "suppliers" | "inventory";
+    synced: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
 
-  // ── Auto-sync every 30 s ───────────────────────────────────────────────────
-  const runSync = useCallback((current: ErpConnectionState) => {
-    setIsSyncing(true);
-    setState(buildSyncingState(current));
+  const { data: connection, isLoading: connectionLoading } = useGetOdooConnection();
+  const testConnection = useTestOdooConnection();
+  const saveConnection = useSaveOdooConnection();
+  const syncSuppliers = useSyncOdooSuppliers();
+  const syncInventory = useSyncOdooInventory();
+  const { data: syncLog, isLoading: logLoading } = useGetOdooSyncLog();
 
-    setTimeout(() => {
-      setState((prev) => {
-        const next = simulateSyncCycle(prev);
-        setLastFlash(new Set(next.entities.map((e) => e.entity)));
-        setTimeout(() => setLastFlash(new Set()), 1200);
-        return next;
-      });
-      setIsSyncing(false);
-      setCountdown(SYNC_INTERVAL_MS / 1000);
-    }, 1500);
-  }, []);
+  const status: "unknown" | "connected" | "error" = !connection
+    ? "unknown"
+    : connection.connected
+      ? "connected"
+      : "error";
 
-  useEffect(() => {
-    // Countdown tick
-    countdownRef.current = setInterval(() => {
-      setCountdown((c) => (c > 0 ? c - 1 : 0));
-    }, 1000);
+  const form = useForm<ConnectionFormValues>({
+    resolver: zodResolver(connectionSchema),
+    defaultValues: { url: "", db: "", username: "", apiKey: "" },
+    mode: "onChange",
+  });
 
-    // Sync interval
-    syncTimerRef.current = setInterval(() => {
-      setState((prev) => {
-        runSync(prev);
-        return prev; // actual update happens inside runSync
-      });
-    }, SYNC_INTERVAL_MS);
-
-    return () => {
-      if (syncTimerRef.current) clearInterval(syncTimerRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, [runSync]);
-
-  // ── Manual sync ───────────────────────────────────────────────────────────
-  function handleManualSync() {
-    if (isSyncing) return;
-    if (syncTimerRef.current) clearInterval(syncTimerRef.current);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-
-    runSync(state);
-
-    countdownRef.current = setInterval(() => {
-      setCountdown((c) => (c > 0 ? c - 1 : 0));
-    }, 1000);
-
-    syncTimerRef.current = setInterval(() => {
-      setState((prev) => {
-        runSync(prev);
-        return prev;
-      });
-    }, SYNC_INTERVAL_MS);
+  function openConnectForm() {
+    form.reset({
+      url: connection?.url ?? "",
+      db: connection?.db ?? "",
+      username: connection?.username ?? "",
+      apiKey: "",
+    });
+    setIsConnectFormOpen(true);
   }
 
-  const visibleLogs = showAllLogs ? state.logs : state.logs.slice(0, 6);
-  const totalImported = state.entities.reduce((s, e) => s + e.importedRecords, 0);
-  const totalFailed = state.entities.reduce((s, e) => s + e.failedRecords, 0);
+  function onSubmitConnection(values: ConnectionFormValues) {
+    saveConnection.mutate({ data: values }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetOdooConnectionQueryKey() });
+        setIsConnectFormOpen(false);
+      },
+      onError: (e: any) => {
+        const message = e?.data?.error ?? e?.response?.data?.error ?? "Connection test failed — check your credentials.";
+        form.setError("apiKey", { message });
+      },
+    });
+  }
+
+  function handleTestConnection() {
+    testConnection.mutate(undefined, {
+      onSuccess: (data) => {
+        setConnectionTestResult({ odooVersion: data.odooVersion ?? null, error: data.error ?? null });
+        queryClient.invalidateQueries({ queryKey: getGetOdooConnectionQueryKey() });
+      },
+    });
+  }
+
+  function handleSyncSuppliers() {
+    syncSuppliers.mutate(undefined, {
+      onSuccess: (data) => {
+        setSyncResult({ entity: "suppliers", ...data });
+        queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetOdooSyncLogQueryKey() });
+      },
+    });
+  }
+
+  function handleSyncInventory() {
+    syncInventory.mutate(undefined, {
+      onSuccess: (data) => {
+        setSyncResult({ entity: "inventory", ...data });
+        queryClient.invalidateQueries({ queryKey: getListInventoryQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetOdooSyncLogQueryKey() });
+      },
+    });
+  }
 
   return (
     <div className="p-8 space-y-8 bg-background min-h-[100dvh]">
@@ -267,455 +197,262 @@ export default function ErpIntegrationPage() {
             ERP Integration
           </h1>
           <p className="text-muted-foreground mt-1">
-            Real-time synchronisation with {state.system.name}.
+            Connect your company's Odoo account, then pull vendors and products in. Every sync is
+            triggered manually — nothing runs automatically in the background.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs text-muted-foreground font-mono">NEXT SYNC</p>
-            <p className="text-sm font-mono font-semibold text-foreground">
-              {countdown}s
-            </p>
-          </div>
-          <Button
-            onClick={handleManualSync}
-            disabled={isSyncing}
-            className="gap-2"
-          >
-            <RefreshCw
-              className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`}
-            />
-            {isSyncing ? "Syncing…" : "Sync Now"}
+        <div className="flex items-center gap-2">
+          <Button onClick={openConnectForm} className="gap-2" data-testid="button-connect-odoo">
+            <Plug className="w-4 h-4" />
+            {connection?.connected ? "Reconnect" : "Connect to Odoo"}
           </Button>
+          {connection?.connected && (
+            <Button onClick={handleTestConnection} disabled={testConnection.isPending} variant="outline" className="gap-2">
+              <RefreshCw className={`w-4 h-4 ${testConnection.isPending ? "animate-spin" : ""}`} />
+              Test
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* ── Top KPI row ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Connection
+      {/* ── Connection status ── */}
+      <Card className="border-border shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Server className="w-4 h-4 text-primary" />
+              Odoo Connection
             </CardTitle>
-            <StatusDot status={state.status} />
-          </CardHeader>
-          <CardContent className="pt-0">
-            <ConnectionBadge status={state.status} />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              {state.system.environment === "production" ? "Production" : "Sandbox"} env
+            <ConnectionBadge status={status} />
+          </div>
+          {connection?.connected ? (
+            <CardDescription>
+              {connection.url} · db: {connection.db} · user: {connection.username}
+            </CardDescription>
+          ) : (
+            <CardDescription>No Odoo account connected yet for this company.</CardDescription>
+          )}
+        </CardHeader>
+        <CardContent className="text-sm space-y-2">
+          {connectionLoading ? (
+            <p className="text-muted-foreground">Loading...</p>
+          ) : connectionTestResult?.odooVersion && (
+            <p className="text-muted-foreground">
+              Odoo server version: <span className="font-mono text-foreground">{connectionTestResult.odooVersion}</span>
             </p>
+          )}
+          {connectionTestResult?.error && (
+            <p className="text-destructive flex items-start gap-1.5">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              {connectionTestResult.error}
+            </p>
+          )}
+          {!connectionLoading && !connection?.connected && !connectionTestResult && (
+            <p className="text-muted-foreground">Click "Connect to Odoo" to link your company's Odoo account.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Sync actions ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="border-border shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary" />
+              Suppliers
+            </CardTitle>
+            <CardDescription>
+              Pulls Odoo contacts flagged as vendors (res.partner, supplier_rank &gt; 0) into the Suppliers table.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={handleSyncSuppliers} disabled={!connection?.connected || syncSuppliers.isPending} className="gap-2">
+              <RefreshCw className={`w-4 h-4 ${syncSuppliers.isPending ? "animate-spin" : ""}`} />
+              {syncSuppliers.isPending ? "Syncing…" : "Sync Suppliers"}
+            </Button>
+            {syncResult?.entity === "suppliers" && (
+              <p className="text-sm text-muted-foreground mt-3">
+                {syncResult.synced} synced
+                {syncResult.failed > 0 && <span className="text-destructive">, {syncResult.failed} failed</span>}
+              </p>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Last Sync
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="w-4 h-4 text-primary" />
+              Inventory
             </CardTitle>
-            <Clock className="w-4 h-4 text-primary" />
+            <CardDescription>
+              Pulls Odoo products (product.product, matched by default_code as SKU) into the Inventory table.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-sm font-mono font-bold text-foreground leading-tight">
-              {state.lastSyncAt
-                ? formatDistanceToNow(state.lastSyncAt, { addSuffix: true })
-                : "—"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {state.lastSyncAt ? format(state.lastSyncAt, "HH:mm:ss") : "Never"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Records Synced
-            </CardTitle>
-            <Database className="w-4 h-4 text-primary" />
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-2xl font-mono font-bold text-foreground">
-              {formatNum(totalImported)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {totalFailed > 0 ? (
-                <span className="text-destructive">{totalFailed} failed</span>
-              ) : (
-                "All records clean"
-              )}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Latency
-            </CardTitle>
-            <Zap className="w-4 h-4 text-primary" />
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-2xl font-mono font-bold text-foreground">
-              {formatMs(state.latencyMs)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Uptime {state.uptimePercent.toFixed(2)}%
-            </p>
+          <CardContent>
+            <Button onClick={handleSyncInventory} disabled={!connection?.connected || syncInventory.isPending} className="gap-2">
+              <RefreshCw className={`w-4 h-4 ${syncInventory.isPending ? "animate-spin" : ""}`} />
+              {syncInventory.isPending ? "Syncing…" : "Sync Inventory"}
+            </Button>
+            {syncResult?.entity === "inventory" && (
+              <p className="text-sm text-muted-foreground mt-3">
+                {syncResult.synced} synced
+                {syncResult.failed > 0 && <span className="text-destructive">, {syncResult.failed} failed</span>}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Main body: connected system + sync progress ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Connected system card */}
-        <Card className="border-border shadow-sm lg:col-span-1">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Server className="w-4 h-4 text-primary" />
-                Connected System
-              </CardTitle>
-              <ConnectionBadge status={state.status} />
-            </div>
-            <CardDescription>ERP platform details</CardDescription>
+      {syncResult && syncResult.errors.length > 0 && (
+        <Card className="border-destructive/40 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-destructive">Sync errors</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <Row label="System" value={state.system.name} />
-            <Row label="Vendor" value={state.system.vendor} />
-            <Row label="Version" value={state.system.version} />
-            <Row
-              label="Environment"
-              value={
-                <Badge
-                  variant={
-                    state.system.environment === "production"
-                      ? "default"
-                      : "secondary"
-                  }
-                  className={
-                    state.system.environment === "production"
-                      ? "bg-emerald-600 text-white text-xs"
-                      : "text-xs"
-                  }
-                >
-                  {state.system.environment}
-                </Badge>
-              }
-            />
-            <Row label="Region" value={state.system.region} />
-            <Separator />
-            <Row
-              label="All-time synced"
-              value={
-                <span className="font-mono font-semibold text-foreground">
-                  {formatNum(state.totalSyncedAllTime)}
-                </span>
-              }
-            />
-            <Row
-              label="Sync interval"
-              value={`${state.config.syncInterval} s`}
-            />
+          <CardContent className="text-xs text-muted-foreground space-y-1">
+            {syncResult.errors.map((e, i) => (
+              <p key={i}>{e}</p>
+            ))}
           </CardContent>
         </Card>
+      )}
 
-        {/* Sync progress + entities */}
-        <Card className="border-border shadow-sm lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="w-4 h-4 text-primary" />
-              Sync Progress
-            </CardTitle>
-            <CardDescription>Per-entity import coverage</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <SyncProgress entities={state.entities} />
-            <Separator />
-
+      {/* ── Sync log ── */}
+      <Card className="border-border shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
+            Sync History
+          </CardTitle>
+          <CardDescription>Every sync attempt, newest first</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {logLoading ? (
+            <div className="p-8 text-center text-muted-foreground animate-pulse">Loading sync history...</div>
+          ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">Entity</TableHead>
-                    <TableHead className="text-xs text-right">Total</TableHead>
-                    <TableHead className="text-xs text-right">Imported</TableHead>
-                    <TableHead className="text-xs text-right">Failed</TableHead>
-                    <TableHead className="text-xs text-right hidden sm:table-cell">
-                      Duration
-                    </TableHead>
-                    <TableHead className="text-xs text-right">Status</TableHead>
+                    <TableHead>Entity</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Synced</TableHead>
+                    <TableHead className="text-right">Failed</TableHead>
+                    <TableHead>Message</TableHead>
+                    <TableHead className="text-right">When</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {state.entities.map((ent) => {
-                    const Icon = ENTITY_ICONS[ent.entity];
-                    const pct =
-                      ent.totalRecords > 0
-                        ? Math.round(
-                            (ent.importedRecords / ent.totalRecords) * 100
-                          )
-                        : 0;
-                    return (
-                      <TableRow key={ent.entity}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <div>
-                              <p className="font-medium text-sm leading-tight">
-                                {ent.entity}
-                              </p>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <Progress value={pct} className="h-1 w-16" />
-                                <span className="text-[11px] text-muted-foreground font-mono">
-                                  {pct}%
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="font-mono text-sm">
-                            {formatNum(ent.totalRecords)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <CounterCell
-                            value={ent.importedRecords}
-                            animate={lastFlash.has(ent.entity)}
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {ent.failedRecords > 0 ? (
-                            <span className="font-mono text-sm text-destructive font-semibold">
-                              {ent.failedRecords}
-                            </span>
+                  {!syncLog || syncLog.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                        No syncs run yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    syncLog.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="capitalize">{entry.entity}</TableCell>
+                        <TableCell><SyncStatusBadge status={entry.status} /></TableCell>
+                        <TableCell className="text-right font-mono">{entry.recordsSynced}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {entry.recordsFailed > 0 ? (
+                            <span className="text-destructive">{entry.recordsFailed}</span>
                           ) : (
-                            <span className="text-muted-foreground text-sm">—</span>
+                            <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right hidden sm:table-cell">
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {ent.durationMs ? formatMs(ent.durationMs) : "—"}
+                        <TableCell className="text-xs text-muted-foreground max-w-[240px] truncate">
+                          {entry.message ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          <span title={format(new Date(entry.syncedAt), "PPpp")}>
+                            {formatDistanceToNow(new Date(entry.syncedAt), { addSuffix: true })}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <EntityStatusBadge status={ent.status} />
-                        </TableCell>
                       </TableRow>
-                    );
-                  })}
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* ── Connection health + API config + logs ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Connection health */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-primary" />
-              Connection Health
-            </CardTitle>
-            <CardDescription>Live diagnostics</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <HealthRow
-              label="API Reachability"
-              ok={state.status !== "error"}
-              value={state.status !== "error" ? "Reachable" : "Unreachable"}
-            />
-            <HealthRow
-              label="Auth Token"
-              ok
-              value="Valid (OAuth 2.0)"
-            />
-            <HealthRow
-              label="Latency"
-              ok={state.latencyMs < 100}
-              value={formatMs(state.latencyMs)}
-            />
-            <HealthRow
-              label="Uptime"
-              ok={state.uptimePercent >= 99}
-              value={`${state.uptimePercent.toFixed(2)}%`}
-            />
-            <HealthRow
-              label="Last error"
-              ok={totalFailed === 0}
-              value={
-                totalFailed === 0
-                  ? "None"
-                  : `${totalFailed} record(s) failed`
-              }
-            />
-            <Separator />
-            <div className="pt-1">
-              <p className="text-xs text-muted-foreground">
-                Polling every{" "}
-                <span className="font-semibold text-foreground">
-                  {MOCK_API_CONFIG.syncInterval} s
-                </span>
-                . Next sync in{" "}
-                <span className="font-mono font-semibold text-primary">
-                  {countdown}s
-                </span>
-                .
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      <Separator />
+      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        Sync is one-directional (Odoo → this app) and pull-only — nothing here writes back to Odoo.
+        Your API key is encrypted at rest and never sent back to the browser.
+      </p>
 
-        {/* API Configuration */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Settings2 className="w-4 h-4 text-primary" />
-                API Configuration
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => setShowConfig((v) => !v)}
-              >
-                {showConfig ? (
-                  <ChevronUp className="w-3.5 h-3.5" />
-                ) : (
-                  <ChevronDown className="w-3.5 h-3.5" />
+      <Dialog open={isConnectFormOpen} onOpenChange={setIsConnectFormOpen}>
+        <DialogContent className="sm:max-w-[480px] bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>Connect to Odoo</DialogTitle>
+            <DialogDescription>
+              We'll test the connection before saving — nothing is stored if it fails.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmitConnection)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="url"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Odoo URL</FormLabel>
+                    <FormControl><Input placeholder="https://yourcompany.odoo.com" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </Button>
-            </div>
-            <CardDescription>Connection parameters</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <Row
-              label="Base URL"
-              value={
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="font-mono text-xs truncate max-w-[160px] block cursor-default">
-                      {state.config.baseUrl}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="font-mono text-xs">{state.config.baseUrl}</p>
-                  </TooltipContent>
-                </Tooltip>
-              }
-            />
-            <Row
-              label="Auth method"
-              value={
-                <Badge variant="outline" className="text-xs font-mono uppercase">
-                  {state.config.authMethod}
-                </Badge>
-              }
-            />
-            {showConfig && (
-              <>
-                <Row
-                  label="Batch size"
-                  value={<span className="font-mono">{state.config.batchSize}</span>}
-                />
-                <Row
-                  label="Retry attempts"
-                  value={<span className="font-mono">{state.config.retryAttempts}</span>}
-                />
-                <Row
-                  label="Timeout"
-                  value={<span className="font-mono">{formatMs(state.config.timeout)}</span>}
-                />
-              </>
-            )}
-            <Separator />
-            <div className="pt-1 text-xs text-muted-foreground">
-              Configuration is read-only in this view. Contact your ERP administrator to modify connection settings.
-            </div>
-          </CardContent>
-        </Card>
+              />
+              <FormField
+                control={form.control}
+                name="db"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Database Name</FormLabel>
+                    <FormControl><Input {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Username</FormLabel>
+                    <FormControl><Input placeholder="you@company.com" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="apiKey"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>API Key</FormLabel>
+                    <FormControl><Input type="password" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-        {/* Sync log */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" />
-              Sync Activity Log
-            </CardTitle>
-            <CardDescription>Last {visibleLogs.length} events</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-0">
-            <div className="max-h-[280px] overflow-y-auto pr-1">
-              {visibleLogs.map((entry) => (
-                <LogRow key={entry.id} entry={entry} />
-              ))}
-            </div>
-            {state.logs.length > 6 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-2 w-full text-xs text-muted-foreground"
-                onClick={() => setShowAllLogs((v) => !v)}
-              >
-                {showAllLogs
-                  ? "Show fewer"
-                  : `Show all ${state.logs.length} entries`}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-// ─── Utility layout helpers ───────────────────────────────────────────────────
-
-function Row({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="text-right text-foreground">{value}</span>
-    </div>
-  );
-}
-
-function HealthRow({
-  label,
-  ok,
-  value,
-}: {
-  label: string;
-  ok: boolean;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-1.5">
-        {ok ? (
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-        ) : (
-          <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
-        )}
-        <span className="text-muted-foreground text-sm">{label}</span>
-      </div>
-      <span
-        className={`text-sm font-medium ${
-          ok ? "text-foreground" : "text-destructive"
-        }`}
-      >
-        {value}
-      </span>
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                <Button type="button" variant="outline" onClick={() => setIsConnectFormOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={saveConnection.isPending || !form.formState.isValid}>
+                  {saveConnection.isPending ? "Testing & Saving..." : "Test & Connect"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

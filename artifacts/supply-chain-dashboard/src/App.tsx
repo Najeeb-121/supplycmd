@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
+import { Route, Switch, Router as WouterRouter, Redirect } from 'wouter';
 import { AppShell } from './components/layout/shell';
 import NotFound from '@/pages/not-found';
+import { useAuth } from '@/lib/auth';
 
+import LoginPage from './pages/login';
+import SignupPage from './pages/signup';
 import DashboardPage from './pages/dashboard';
 import InventoryPage from './pages/inventory';
 import ProductionPage from './pages/production';
@@ -19,7 +22,7 @@ import ExecutiveIntelligencePage from './pages/executive-intelligence';
 
 const queryClient = new QueryClient();
 
-function Router() {
+function AuthedApp() {
   return (
     <AppShell>
       <Switch>
@@ -37,6 +40,24 @@ function Router() {
         <Route component={NotFound} />
       </Switch>
     </AppShell>
+  );
+}
+
+function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  return (
+    <Switch>
+      <Route path="/login">
+        {isAuthenticated ? <Redirect to="/" /> : <LoginPage />}
+      </Route>
+      <Route path="/signup">
+        {isAuthenticated ? <Redirect to="/" /> : <SignupPage />}
+      </Route>
+      <Route>
+        {isLoading ? null : isAuthenticated ? <AuthedApp /> : <Redirect to="/login" />}
+      </Route>
+    </Switch>
   );
 }
 

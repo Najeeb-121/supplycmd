@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { eq, avg, sum } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, productionRunsTable } from "@workspace/db";
 import {
   CreateProductionRunBody,
@@ -26,13 +26,13 @@ export const StrictProductionBody = CreateProductionRunBody
 
 const router: IRouter = Router();
 
-router.get("/production", async (_req, res): Promise<void> => {
-  const runs = await db.select().from(productionRunsTable).orderBy(productionRunsTable.runDate);
+router.get("/production", async (req, res): Promise<void> => {
+  const runs = await db.select().from(productionRunsTable).where(eq(productionRunsTable.companyId, req.user!.companyId)).orderBy(productionRunsTable.runDate);
   res.json(runs);
 });
 
-router.get("/production/metrics/oee", async (_req, res): Promise<void> => {
-  const runs = await db.select().from(productionRunsTable);
+router.get("/production/metrics/oee", async (req, res): Promise<void> => {
+  const runs = await db.select().from(productionRunsTable).where(eq(productionRunsTable.companyId, req.user!.companyId));
   const totalRuns = runs.length;
 
   if (totalRuns === 0) {
@@ -107,7 +107,7 @@ router.post("/production", async (req, res): Promise<void> => {
   const result = validateBody(StrictProductionBody, req, res);
   if (!result.ok) return;
 
-  const [run] = await db.insert(productionRunsTable).values(result.data).returning();
+  const [run] = await db.insert(productionRunsTable).values({ ...result.data, companyId: req.user!.companyId }).returning();
   res.status(201).json(run);
 });
 
@@ -121,7 +121,7 @@ router.patch("/production/:id", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(productionRunsTable)
     .set(parsed.data)
-    .where(eq(productionRunsTable.id, params.data.id))
+    .where(and(eq(productionRunsTable.id, params.data.id), eq(productionRunsTable.companyId, req.user!.companyId)))
     .returning();
   if (!updated) { res.status(404).json({ error: "Production run not found" }); return; }
   res.json(updated);
