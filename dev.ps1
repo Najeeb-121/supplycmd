@@ -21,6 +21,19 @@ if (-not (Test-CommandExists "docker")) {
     exit 1
 }
 
+# --- Free up 8080/21927 if a previous run is still hanging around ---
+# (e.g. an old window from a failed attempt that never got closed)
+function Stop-ProcessOnPort($port) {
+    $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+    foreach ($conn in $conns) {
+        Write-Host "Port $port is already in use (PID $($conn.OwningProcess)) — stopping it..." -ForegroundColor Yellow
+        Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+}
+Stop-ProcessOnPort 8080
+Stop-ProcessOnPort 21927
+Start-Sleep -Seconds 1
+
 # --- Env vars (child windows inherit these automatically, no need to re-set them there) ---
 $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/supply_chain"
 $env:PORT = "8080"
