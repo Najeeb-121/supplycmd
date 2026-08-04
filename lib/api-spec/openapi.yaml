@@ -628,6 +628,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/OdooSyncResult"
 
+  /integrations/odoo/sync/logistics:
+    post:
+      operationId: syncOdooLogistics
+      tags: [integrations]
+      summary: Pull stock movements from Odoo into the stock_movements table
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OdooSyncResult"
+
+  /integrations/odoo/sync/production:
+    post:
+      operationId: syncOdooProduction
+      tags: [integrations]
+      summary: Pull manufacturing orders from Odoo into the production_runs table
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OdooSyncResult"
+
+  /integrations/odoo/sync/planning:
+    post:
+      operationId: syncOdooPlanning
+      tags: [integrations]
+      summary: Pull demand history from Odoo sales orders into the demand_records table
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OdooSyncResult"
+
   /integrations/odoo/sync-log:
     get:
       operationId: getOdooSyncLog

@@ -15,7 +15,7 @@ import type { Supplier } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Truck, PackageCheck, Clock, CheckCircle2, XCircle, Pencil, Trash2 } from "lucide-react";
+import { Plus, Truck, PackageCheck, Clock, CheckCircle2, XCircle, Pencil, Trash2, Info, Users, ShoppingCart } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -61,6 +61,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function LogisticsPage() {
   const [isOrderFormOpen, setIsOrderFormOpen] = useState(false);
@@ -248,8 +249,45 @@ export default function LogisticsPage() {
         </div>
       </div>
 
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertTitle>Looking for Stock Movements?</AlertTitle>
+        <AlertDescription>
+          Data synced from Odoo Logistics (Stock Movements) is displayed in the <strong>Inventory</strong> department tab, alongside your item stock levels.
+        </AlertDescription>
+      </Alert>
+
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+        <Card className="border-border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Total Suppliers</CardTitle>
+            <Users className="w-4 h-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            {suppliersLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
+              <div className="text-3xl font-mono font-bold text-foreground">
+                {suppliers?.length ?? 0}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">Active vendor scorecards</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Total POs</CardTitle>
+            <ShoppingCart className="w-4 h-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            {kpisLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
+              <div className="text-3xl font-mono font-bold text-foreground">
+                {kpis?.totalOrders ?? 0}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">Total purchase orders</p>
+          </CardContent>
+        </Card>
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Fill Rate</CardTitle>
@@ -316,7 +354,7 @@ export default function LogisticsPage() {
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between py-4 border-b border-border bg-muted/20">
             <div>
-              <CardTitle>Supplier Scorecard</CardTitle>
+              <CardTitle>Supplier Scorecard ({suppliers?.length ?? 0})</CardTitle>
               <CardDescription>Performance metrics across vendor base</CardDescription>
             </div>
             <Button onClick={openCreateSupplierForm} size="sm" className="h-8" data-testid="button-add-supplier">
@@ -401,7 +439,7 @@ export default function LogisticsPage() {
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between py-4 border-b border-border bg-muted/20">
             <div>
-              <CardTitle>Purchase Orders</CardTitle>
+              <CardTitle>Purchase Orders ({orders?.length ?? 0})</CardTitle>
               <CardDescription>Inbound shipments tracking</CardDescription>
             </div>
             <Button onClick={() => setIsOrderFormOpen(true)} size="sm" className="h-8">

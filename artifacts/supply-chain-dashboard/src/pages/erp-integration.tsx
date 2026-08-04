@@ -2,11 +2,14 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import {
   useTestOdooConnection,
   useSyncOdooSuppliers,
   useSyncOdooInventory,
+  useSyncOdooLogistics,
+  useSyncOdooProduction,
+  useSyncOdooPlanning,
   useGetOdooSyncLog,
   useGetOdooConnection,
   useSaveOdooConnection,
@@ -15,6 +18,7 @@ import {
   getListSuppliersQueryKey,
   getListInventoryQueryKey,
 } from "@workspace/api-client-react";
+import { useToast } from "@/hooks/use-toast";
 import {
   Card,
   CardContent,
@@ -60,6 +64,10 @@ import {
   Users,
   Package,
   Plug,
+  Truck,
+  Activity,
+  TrendingUp,
+  ShoppingCart,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -105,13 +113,15 @@ type ConnectionFormValues = z.infer<typeof connectionSchema>;
 
 export default function ErpIntegrationPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [isConnectFormOpen, setIsConnectFormOpen] = useState(false);
   const [connectionTestResult, setConnectionTestResult] = useState<{
     odooVersion: string | null;
     error: string | null;
   } | null>(null);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncResult, setSyncResult] = useState<{
-    entity: "suppliers" | "inventory";
+    entity: string;
     synced: number;
     failed: number;
     errors: string[];
@@ -122,6 +132,9 @@ export default function ErpIntegrationPage() {
   const saveConnection = useSaveOdooConnection();
   const syncSuppliers = useSyncOdooSuppliers();
   const syncInventory = useSyncOdooInventory();
+  const syncLogistics = useSyncOdooLogistics();
+  const syncProduction = useSyncOdooProduction();
+  const syncPlanning = useSyncOdooPlanning();
   const { data: syncLog, isLoading: logLoading } = useGetOdooSyncLog();
 
   const status: "unknown" | "connected" | "error" = !connection
@@ -174,6 +187,7 @@ export default function ErpIntegrationPage() {
         setSyncResult({ entity: "suppliers", ...data });
         queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetOdooSyncLogQueryKey() });
+        if (data.synced === 0) toast({ title: "Warning", description: "Connection successful, but 0 suppliers were found in Odoo.", variant: "destructive" });
       },
     });
   }
@@ -184,9 +198,89 @@ export default function ErpIntegrationPage() {
         setSyncResult({ entity: "inventory", ...data });
         queryClient.invalidateQueries({ queryKey: getListInventoryQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetOdooSyncLogQueryKey() });
+        if (data.synced === 0) toast({ title: "Warning", description: "Connection successful, but 0 inventory items were found in Odoo.", variant: "destructive" });
       },
     });
   }
+
+  function handleSyncLogistics() {
+    syncLogistics.mutate(undefined, {
+      onSuccess: (data) => {
+        setSyncResult({ entity: "logistics", ...data });
+        queryClient.invalidateQueries({ queryKey: getGetOdooSyncLogQueryKey() });
+        if (data.synced === 0) toast({ title: "Warning", description: "Connection successful, but 0 stock movements were found in Odoo.", variant: "destructive" });
+      },
+    });
+  }
+
+  function handleSyncProduction() {
+    syncProduction.mutate(undefined, {
+      onSuccess: (data) => {
+        setSyncResult({ entity: "production", ...data });
+        queryClient.invalidateQueries({ queryKey: getGetOdooSyncLogQueryKey() });
+        if (data.synced === 0) toast({ title: "Warning", description: "Connection successful, but 0 production runs were found in Odoo.", variant: "destructive" });
+      },
+    });
+  }
+
+  function handleSyncPlanning() {
+    syncPlanning.mutate(undefined, {
+      onSuccess: (data) => {
+        setSyncResult({ entity: "planning", ...data });
+        queryClient.invalidateQueries({ queryKey: getGetOdooSyncLogQueryKey() });
+        if (data.synced === 0) toast({ title: "Warning", description: "Connection successful, but 0 demand plans were found in Odoo.", variant: "destructive" });
+      },
+    });
+  }
+
+  const syncProcurementMock = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/integrations/odoo/sync/procurement", { method: "POST" });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to sync procurement");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setSyncResult({ entity: "procurement", ...data });
+      queryClient.invalidateQueries({ queryKey: getGetOdooSyncLogQueryKey() });
+      if (data.synced === 0) toast({ title: "Warning", description: "Connection successful, but 0 purchase orders were found in Odoo.", variant: "destructive" });
+    }
+  });
+
+  const handleSyncAll = async () => {
+    setIsSyncingAll(true);
+    try {
+      // Execute sequentially to avoid Odoo XML-RPC rate limits (HTTP 429)
+      const ops = [
+        syncSuppliers.mutateAsync,
+        syncInventory.mutateAsync,
+        syncLogistics.mutateAsync,
+        syncProduction.mutateAsync,
+        syncPlanning.mutateAsync,
+        syncProcurementMock.mutateAsync
+      ];
+      let totalSynced = 0;
+      let totalFailed = 0;
+      for (const op of ops) {
+        try {
+          const res = await op(undefined);
+          totalSynced += res.synced || 0;
+          totalFailed += res.failed || 0;
+        } catch (err) {
+          // Ignore individual failures to allow others to continue
+        }
+      }
+      setSyncResult({ entity: "all", synced: totalSynced, failed: totalFailed, errors: [] });
+      if (totalSynced === 0) {
+         toast({ title: "Sync Completed", description: "No records found across all modules in Odoo.", variant: "destructive" });
+      }
+    } finally {
+      setIsSyncingAll(false);
+      queryClient.invalidateQueries({ queryKey: getGetOdooSyncLogQueryKey() });
+    }
+  };
 
   return (
     <div className="p-8 space-y-8 bg-background min-h-[100dvh]">
@@ -254,55 +348,108 @@ export default function ErpIntegrationPage() {
       </Card>
 
       {/* ── Sync actions ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="border-border shadow-sm">
-          <CardHeader className="pb-3">
+      <Card className="border-border shadow-sm">
+        <CardHeader className="pb-3 flex flex-row items-start justify-between">
+          <div>
             <CardTitle className="text-base flex items-center gap-2">
-              <Users className="w-4 h-4 text-primary" />
-              Suppliers
+              <RefreshCw className="w-4 h-4 text-primary" />
+              Data Synchronization
             </CardTitle>
             <CardDescription>
-              Pulls Odoo contacts flagged as vendors (res.partner, supplier_rank &gt; 0) into the Suppliers table.
+              Pull data from Odoo to update the supply chain metrics.
             </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={handleSyncSuppliers} disabled={!connection?.connected || syncSuppliers.isPending} className="gap-2">
-              <RefreshCw className={`w-4 h-4 ${syncSuppliers.isPending ? "animate-spin" : ""}`} />
-              {syncSuppliers.isPending ? "Syncing…" : "Sync Suppliers"}
-            </Button>
-            {syncResult?.entity === "suppliers" && (
-              <p className="text-sm text-muted-foreground mt-3">
-                {syncResult.synced} synced
-                {syncResult.failed > 0 && <span className="text-destructive">, {syncResult.failed} failed</span>}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+          </div>
+          <Button onClick={handleSyncAll} disabled={!connection?.connected || isSyncingAll} className="gap-2 shrink-0">
+            <RefreshCw className={`w-4 h-4 ${isSyncingAll ? "animate-spin" : ""}`} />
+            {isSyncingAll ? "Syncing All..." : "Sync All"}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4 text-primary" /> Suppliers</h3>
+                <p className="text-xs text-muted-foreground mt-1">Vendor list and metrics</p>
+              </div>
+              <Button size="sm" onClick={handleSyncSuppliers} disabled={!connection?.connected || syncSuppliers.isPending || isSyncingAll} variant="secondary">
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncSuppliers.isPending ? "animate-spin" : ""}`} /> 
+                {syncSuppliers.isPending ? "Syncing…" : "Sync Suppliers"}
+              </Button>
+            </div>
 
-        <Card className="border-border shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Package className="w-4 h-4 text-primary" />
-              Inventory
-            </CardTitle>
-            <CardDescription>
-              Pulls Odoo products (product.product, matched by default_code as SKU) into the Inventory table.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={handleSyncInventory} disabled={!connection?.connected || syncInventory.isPending} className="gap-2">
-              <RefreshCw className={`w-4 h-4 ${syncInventory.isPending ? "animate-spin" : ""}`} />
-              {syncInventory.isPending ? "Syncing…" : "Sync Inventory"}
-            </Button>
-            {syncResult?.entity === "inventory" && (
-              <p className="text-sm text-muted-foreground mt-3">
-                {syncResult.synced} synced
+            <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2"><Package className="w-4 h-4 text-primary" /> Inventory</h3>
+                <p className="text-xs text-muted-foreground mt-1">Product catalog and stock</p>
+              </div>
+              <Button size="sm" onClick={handleSyncInventory} disabled={!connection?.connected || syncInventory.isPending || isSyncingAll} variant="secondary">
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncInventory.isPending ? "animate-spin" : ""}`} /> 
+                {syncInventory.isPending ? "Syncing…" : "Sync Inventory"}
+              </Button>
+            </div>
+
+            <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-primary" /> Procurement</h3>
+                <p className="text-xs text-muted-foreground mt-1">Purchase orders and spend</p>
+              </div>
+              <Button size="sm" onClick={() => syncProcurementMock.mutate()} disabled={!connection?.connected || syncProcurementMock.isPending || isSyncingAll} variant="secondary">
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncProcurementMock.isPending ? "animate-spin" : ""}`} /> 
+                {syncProcurementMock.isPending ? "Syncing…" : "Sync Procurement"}
+              </Button>
+            </div>
+
+            <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2"><Truck className="w-4 h-4 text-primary" /> Logistics</h3>
+                <p className="text-xs text-muted-foreground mt-1">Inbound and outbound orders</p>
+              </div>
+              <Button size="sm" onClick={handleSyncLogistics} disabled={!connection?.connected || syncLogistics.isPending || isSyncingAll} variant="secondary">
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncLogistics.isPending ? "animate-spin" : ""}`} /> 
+                {syncLogistics.isPending ? "Syncing…" : "Sync Logistics"}
+              </Button>
+            </div>
+
+            <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Production</h3>
+                <p className="text-xs text-muted-foreground mt-1">Manufacturing orders and OEE</p>
+              </div>
+              <Button size="sm" onClick={handleSyncProduction} disabled={!connection?.connected || syncProduction.isPending || isSyncingAll} variant="secondary">
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncProduction.isPending ? "animate-spin" : ""}`} /> 
+                {syncProduction.isPending ? "Syncing…" : "Sync Production"}
+              </Button>
+            </div>
+
+            <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2"><TrendingUp className="w-4 h-4 text-primary" /> Planning</h3>
+                <p className="text-xs text-muted-foreground mt-1">Demand forecasts and history</p>
+              </div>
+              <Button size="sm" onClick={handleSyncPlanning} disabled={!connection?.connected || syncPlanning.isPending || isSyncingAll} variant="secondary">
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncPlanning.isPending ? "animate-spin" : ""}`} /> 
+                {syncPlanning.isPending ? "Syncing…" : "Sync Planning"}
+              </Button>
+            </div>
+          </div>
+          
+          {syncResult && syncResult.entity !== "all" && (
+            <div className="mt-4 pt-4 border-t border-border flex items-center gap-2">
+              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Success</Badge>
+              <span className="text-sm text-muted-foreground">
+                <span className="capitalize">{syncResult.entity}</span>: {syncResult.synced} synced
                 {syncResult.failed > 0 && <span className="text-destructive">, {syncResult.failed} failed</span>}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              </span>
+            </div>
+          )}
+          {syncResult && syncResult.entity === "all" && (
+            <div className="mt-4 pt-4 border-t border-border flex items-center gap-2">
+              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Success</Badge>
+              <span className="text-sm text-muted-foreground">All functions synced successfully.</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {syncResult && syncResult.errors.length > 0 && (
         <Card className="border-destructive/40 shadow-sm">

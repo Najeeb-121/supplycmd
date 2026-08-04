@@ -2690,6 +2690,219 @@ export const useSyncOdooInventory = <TError = ErrorType<unknown>,
       return useMutation(getSyncOdooInventoryMutationOptions(options));
     }
 
+export const getSyncOdooLogisticsUrl = () => {
+
+
+
+
+  return `/api/integrations/odoo/sync/logistics`
+}
+
+/**
+ * @summary Pull stock movements from Odoo into the stock_movements table
+ */
+export const syncOdooLogistics = async ( options?: Parameters<typeof customFetch>[1]): Promise<OdooSyncResult> => {
+
+  return customFetch<OdooSyncResult>(getSyncOdooLogisticsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSyncOdooLogisticsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncOdooLogistics>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncOdooLogistics>>, TError,void, TContext> => {
+
+const mutationKey = ['syncOdooLogistics'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncOdooLogistics>>, void> = () => {
+
+
+          return  syncOdooLogistics(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncOdooLogisticsMutationResult = NonNullable<Awaited<ReturnType<typeof syncOdooLogistics>>>
+
+    export type SyncOdooLogisticsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Pull stock movements from Odoo into the stock_movements table
+ */
+export const useSyncOdooLogistics = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncOdooLogistics>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncOdooLogistics>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncOdooLogisticsMutationOptions(options));
+    }
+
+export const getSyncOdooProductionUrl = () => {
+
+
+
+
+  return `/api/integrations/odoo/sync/production`
+}
+
+/**
+ * @summary Pull manufacturing orders from Odoo into the production_runs table
+ */
+export const syncOdooProduction = async ( options?: Parameters<typeof customFetch>[1]): Promise<OdooSyncResult> => {
+
+  return customFetch<OdooSyncResult>(getSyncOdooProductionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSyncOdooProductionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncOdooProduction>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncOdooProduction>>, TError,void, TContext> => {
+
+const mutationKey = ['syncOdooProduction'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncOdooProduction>>, void> = () => {
+
+
+          return  syncOdooProduction(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncOdooProductionMutationResult = NonNullable<Awaited<ReturnType<typeof syncOdooProduction>>>
+
+    export type SyncOdooProductionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Pull manufacturing orders from Odoo into the production_runs table
+ */
+export const useSyncOdooProduction = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncOdooProduction>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncOdooProduction>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncOdooProductionMutationOptions(options));
+    }
+
+export const getSyncOdooPlanningUrl = () => {
+
+
+
+
+  return `/api/integrations/odoo/sync/planning`
+}
+
+/**
+ * @summary Pull demand history from Odoo sales orders into the demand_records table
+ */
+export const syncOdooPlanning = async ( options?: Parameters<typeof customFetch>[1]): Promise<OdooSyncResult> => {
+
+  return customFetch<OdooSyncResult>(getSyncOdooPlanningUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSyncOdooPlanningMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncOdooPlanning>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncOdooPlanning>>, TError,void, TContext> => {
+
+const mutationKey = ['syncOdooPlanning'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncOdooPlanning>>, void> = () => {
+
+
+          return  syncOdooPlanning(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncOdooPlanningMutationResult = NonNullable<Awaited<ReturnType<typeof syncOdooPlanning>>>
+
+    export type SyncOdooPlanningMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Pull demand history from Odoo sales orders into the demand_records table
+ */
+export const useSyncOdooPlanning = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncOdooPlanning>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncOdooPlanning>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncOdooPlanningMutationOptions(options));
+    }
+
 export const getGetOdooSyncLogUrl = () => {
 
 

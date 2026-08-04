@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, real, timestamp, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { inventoryItemsTable } from "./inventory";
@@ -9,6 +9,7 @@ export const stockMovementsTable = pgTable("stock_movements", {
   companyId: integer("company_id")
     .notNull()
     .references(() => companiesTable.id, { onDelete: "cascade" }),
+  odooId: integer("odoo_id"),
   inventoryItemId: integer("inventory_item_id")
     .notNull()
     .references(() => inventoryItemsTable.id, { onDelete: "cascade" }),
@@ -26,7 +27,9 @@ export const stockMovementsTable = pgTable("stock_movements", {
   quantityBefore: real("quantity_before").notNull(),
   quantityChanged: real("quantity_changed").notNull(),
   quantityAfter: real("quantity_after").notNull(),
-});
+}, (table) => [
+  unique().on(table.companyId, table.odooId),
+]);
 
 export const insertStockMovementSchema = createInsertSchema(stockMovementsTable).omit({
   id: true,

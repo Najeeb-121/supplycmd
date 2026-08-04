@@ -1,25 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  buildInitialConnectionState,
-  simulateSyncCycle,
-  buildSyncingState,
-  type ErpConnectionState,
-} from "@/services/erp-integration";
-import {
-  buildInitialOpsState,
-  tickOpsState,
-  type OpsIntelState,
-} from "@/services/operational-intelligence";
-import {
-  buildInitialDecisionState,
-  tickDecisionEngine,
-  buildAnalysingState,
-  updateRecommendationStatus,
-  type DecisionEngineState,
-  type RecommendationStatus,
-  type RecommendationPriority,
-  type RecommendationType,
-  type Department,
+import { useRealDecisionEngine } from "@/hooks/use-real-decision-engine";
+import type {
+  DecisionEngineState,
+  RecommendationStatus,
+  RecommendationPriority,
+  RecommendationType,
+  Department,
 } from "@/services/ai-decision-engine";
 import { RecommendationCard } from "@/components/ui/recommendation-card";
 import {
@@ -132,12 +118,8 @@ function StatCard({
 
 function ModelStatusBar({
   engine,
-  erp,
-  countdown,
 }: {
   engine: DecisionEngineState;
-  erp: ErpConnectionState;
-  countdown: number;
 }) {
   const isAnalysing = engine.analysisStatus === "analysing";
   return (
@@ -165,7 +147,7 @@ function ModelStatusBar({
           )} />
         </span>
         <Wifi className="w-3 h-3 text-muted-foreground" />
-        <span className="text-muted-foreground">{erp.system.name}</span>
+        <span className="text-muted-foreground">Odoo ERP (Live)</span>
       </div>
 
       <span className="text-border">|</span>
@@ -178,22 +160,15 @@ function ModelStatusBar({
         </span>
       </span>
 
-      <span className="text-border">|</span>
-
-      {/* Cycle */}
-      <span className="text-muted-foreground">
-        Cycle{" "}
-        <span className="font-mono text-foreground">#{engine.cycleCount}</span>
-      </span>
-
-      {/* Next sync */}
       <span className="ml-auto text-muted-foreground font-mono">
         {isAnalysing ? (
           <span className="flex items-center gap-1 text-amber-600">
             <Loader2 className="w-3 h-3 animate-spin" /> Analysing…
           </span>
         ) : (
-          <>Next in <span className="text-foreground font-semibold">{countdown}s</span></>
+          <span className="flex items-center gap-1 text-emerald-600">
+            <CheckCircle2 className="w-3 h-3" /> Live
+          </span>
         )}
       </span>
     </div>
@@ -331,76 +306,26 @@ function SectionHeader({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AiDecisionEnginePage() {
-  const initErp = buildInitialConnectionState();
-  const initOps = buildInitialOpsState(initErp);
+  const { engine, isFetching, refetchAll, setStatus } = useRealDecisionEngine();
 
-  const [erp,    setErp]    = useState<ErpConnectionState>(initErp);
-  const [ops,    setOps]    = useState<OpsIntelState>(initOps);
-  const [engine, setEngine] = useState<DecisionEngineState>(() =>
-    buildInitialDecisionState(initErp, initOps)
-  );
-  const [isSyncing, setSyncing] = useState(false);
-  const [countdown, setCD]      = useState(SYNC_INTERVAL_MS / 1000);
   const [filters,   setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [layout,    setLayout]  = useState<"grid" | "list">("grid");
   const [flashIds,  setFlash]   = useState<Set<string>>(new Set());
 
-  const syncRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const cdRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const flashAll = useCallback((ids: string[]) => {
-    setFlash(new Set(ids));
-    setTimeout(() => setFlash(new Set()), 1000);
-  }, []);
-
-  const runCycle = useCallback((curErp: ErpConnectionState, curOps: OpsIntelState, curEngine: DecisionEngineState) => {
-    setSyncing(true);
-    setErp(buildSyncingState(curErp));
-    setEngine(buildAnalysingState(curEngine));
-
-    setTimeout(() => {
-      setErp((prevErp) => {
-        const nextErp = simulateSyncCycle(prevErp);
-        setOps((prevOps) => {
-          const nextOps = tickOpsState(prevOps, nextErp);
-          setEngine((prevEngine) => {
-            const nextEngine = tickDecisionEngine(prevEngine, nextErp, nextOps);
-            flashAll(nextEngine.recommendations.map((r) => r.id));
-            return nextEngine;
-          });
-          return nextOps;
-        });
-        return nextErp;
-      });
-      setSyncing(false);
-      setCD(SYNC_INTERVAL_MS / 1000);
-    }, 1800);
-  }, [flashAll]);
-
+  // Optionally flash new recs when they arrive (not strictly necessary for live sync, but nice)
   useEffect(() => {
-    cdRef.current   = setInterval(() => setCD((c) => (c > 0 ? c - 1 : 0)), 1000);
-    syncRef.current = setInterval(() => {
-      setErp((e) => { setOps((o) => { setEngine((en) => { runCycle(e, o, en); return en; }); return o; }); return e; });
-    }, SYNC_INTERVAL_MS);
-    return () => {
-      if (syncRef.current) clearInterval(syncRef.current);
-      if (cdRef.current)   clearInterval(cdRef.current);
-    };
-  }, [runCycle]);
+    setFlash(new Set(engine.recommendations.map(r => r.id)));
+    const t = setTimeout(() => setFlash(new Set()), 1000);
+    return () => clearTimeout(t);
+  }, [engine.recommendations]);
 
   function handleRefresh() {
-    if (isSyncing) return;
-    if (syncRef.current) clearInterval(syncRef.current);
-    if (cdRef.current)   clearInterval(cdRef.current);
-    runCycle(erp, ops, engine);
-    cdRef.current   = setInterval(() => setCD((c) => (c > 0 ? c - 1 : 0)), 1000);
-    syncRef.current = setInterval(() => {
-      setErp((e) => { setOps((o) => { setEngine((en) => { runCycle(e, o, en); return en; }); return o; }); return e; });
-    }, SYNC_INTERVAL_MS);
+    if (isFetching) return;
+    refetchAll();
   }
 
   function handleStatusChange(id: string, status: RecommendationStatus) {
-    setEngine((prev) => updateRecommendationStatus(prev, id, status));
+    setStatus(id, status);
   }
 
   // ── Filtering ─────────────────────────────────────────────────────────────
@@ -455,17 +380,17 @@ export default function AiDecisionEnginePage() {
           </Button>
           <Button
             onClick={handleRefresh}
-            disabled={isSyncing}
+            disabled={isFetching}
             className="gap-2 h-9"
           >
-            <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
-            {isSyncing ? "Analysing…" : "Re-Analyse"}
+            <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
+            {isFetching ? "Analysing…" : "Re-Analyse"}
           </Button>
         </div>
       </div>
 
       {/* ── Model status bar ── */}
-      <ModelStatusBar engine={engine} erp={erp} countdown={countdown} />
+      <ModelStatusBar engine={engine} />
 
       {/* ── KPI summary strip ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

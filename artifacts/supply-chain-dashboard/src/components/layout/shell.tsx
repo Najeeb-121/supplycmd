@@ -13,12 +13,15 @@ import {
   Brain,
   Cpu,
   LineChart,
-  LogOut
+  PlayCircle,
+  LogOut,
+  ShoppingCart
 } from "lucide-react";
 
 const navItems = [
   { path: "/", label: "Executive Dashboard", icon: LayoutDashboard },
   { path: "/inventory", label: "Inventory", icon: Boxes },
+  { path: "/procurement", label: "Procurement", icon: ShoppingCart },
   { path: "/production", label: "Production", icon: Activity },
   { path: "/demand", label: "Demand Planning", icon: BarChart3 },
   { path: "/logistics", label: "Logistics", icon: Truck },
@@ -26,6 +29,7 @@ const navItems = [
   { path: "/operational-intelligence", label: "Ops Intelligence", icon: Brain },
   { path: "/ai-decision-engine", label: "AI Decision Engine", icon: Cpu },
   { path: "/executive-intelligence", label: "Executive Intelligence", icon: LineChart },
+  { path: "/what-if-simulation", label: "Simulation Engine", icon: PlayCircle },
   { path: "/import", label: "ERP Import", icon: Upload },
   { path: "/equations", label: "Equations Reference", icon: Calculator },
 ];

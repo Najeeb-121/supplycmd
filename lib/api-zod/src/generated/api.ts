@@ -758,6 +758,36 @@ export const SyncOdooInventoryResponse = zod.object({
 
 
 /**
+ * @summary Pull stock movements from Odoo into the stock_movements table
+ */
+export const SyncOdooLogisticsResponse = zod.object({
+  "synced": zod.number(),
+  "failed": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Pull manufacturing orders from Odoo into the production_runs table
+ */
+export const SyncOdooProductionResponse = zod.object({
+  "synced": zod.number(),
+  "failed": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Pull demand history from Odoo sales orders into the demand_records table
+ */
+export const SyncOdooPlanningResponse = zod.object({
+  "synced": zod.number(),
+  "failed": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+/**
  * @summary Recent Odoo sync history, newest first
  */
 export const GetOdooSyncLogResponseItem = zod.object({

@@ -6,11 +6,10 @@ import {
   type ErpConnectionState,
 } from "@/services/erp-integration";
 import {
-  buildInitialOpsState,
-  tickOpsState,
   type OpsIntelState,
   type KpiId,
 } from "@/services/operational-intelligence";
+import { useRealOpsIntel } from "@/hooks/use-real-ops-intel";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -110,16 +109,15 @@ function StatusCount({ ops }: { ops: OpsIntelState }) {
 
 // ─── Sync status pill ─────────────────────────────────────────────────────────
 
-function SyncPill({ erp, countdown }: { erp: ErpConnectionState; countdown: number }) {
-  const isSyncing = erp.status === "syncing";
+function SyncPill({ isFetching }: { isFetching: boolean }) {
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border bg-card text-xs text-muted-foreground">
       <span className="relative flex h-2 w-2">
-        <span className={cn("absolute inline-flex h-full w-full rounded-full opacity-60", isSyncing ? "animate-ping bg-amber-500" : "bg-emerald-500")} />
-        <span className={cn("relative inline-flex h-2 w-2 rounded-full", isSyncing ? "bg-amber-500" : "bg-emerald-500")} />
+        <span className={cn("absolute inline-flex h-full w-full rounded-full opacity-60", isFetching ? "animate-ping bg-amber-500" : "bg-emerald-500")} />
+        <span className={cn("relative inline-flex h-2 w-2 rounded-full", isFetching ? "bg-amber-500" : "bg-emerald-500")} />
       </span>
       <Wifi className="w-3 h-3" />
-      <span className="font-medium">{isSyncing ? "Syncing ERP…" : `Next sync ${countdown}s`}</span>
+      <span className="font-medium">{isFetching ? "Fetching real-time data…" : `Data is live`}</span>
     </div>
   );
 }
@@ -340,6 +338,7 @@ function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
       const res = await fetch(`${BASE}/api/ai/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify(payload),
         signal: abortRef.current.signal,
       });
@@ -512,60 +511,25 @@ function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
 const SYNC_INTERVAL_MS = 30_000;
 
 export default function OperationalIntelligencePage() {
-  const [erp, setErp]         = useState<ErpConnectionState>(() => buildInitialConnectionState());
-  const [ops, setOps]         = useState<OpsIntelState>(() => buildInitialOpsState(buildInitialConnectionState()));
-  const [isSyncing, setIs]    = useState(false);
-  const [countdown, setCD]    = useState(SYNC_INTERVAL_MS / 1000);
+  const { ops, isFetching, refetchAll } = useRealOpsIntel();
   const [flashedIds, setFl]   = useState<Set<KpiId>>(new Set());
 
-  const syncRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const flashAll = useCallback(() => {
-    const all = new Set<KpiId>([
-      "inventory_accuracy","production_utilization","supplier_performance",
-      "warehouse_fill_rate","purchase_lead_time","stock_turnover",
-      "late_deliveries","order_fulfillment_rate",
-    ]);
-    setFl(all);
-    setTimeout(() => setFl(new Set()), 900);
-  }, []);
-
-  const runCycle = useCallback((currentErp: ErpConnectionState) => {
-    setIs(true);
-    setErp(buildSyncingState(currentErp));
-    setTimeout(() => {
-      setErp((prevErp) => {
-        const nextErp = simulateSyncCycle(prevErp);
-        setOps((prevOps) => tickOpsState(prevOps, nextErp));
-        flashAll();
-        return nextErp;
-      });
-      setIs(false);
-      setCD(SYNC_INTERVAL_MS / 1000);
-    }, 1500);
-  }, [flashAll]);
-
+  // Flash all when ops changes significantly, or just omit flashing since data updates smoothly now.
   useEffect(() => {
-    countdownRef.current = setInterval(() => setCD((c) => (c > 0 ? c - 1 : 0)), 1000);
-    syncRef.current = setInterval(() => {
-      setErp((prev) => { runCycle(prev); return prev; });
-    }, SYNC_INTERVAL_MS);
-    return () => {
-      if (syncRef.current)      clearInterval(syncRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, [runCycle]);
+    if (!isFetching) {
+      const all = new Set<KpiId>([
+        "inventory_accuracy","production_utilization","supplier_performance",
+        "warehouse_fill_rate","purchase_lead_time","stock_turnover",
+        "late_deliveries","order_fulfillment_rate",
+      ]);
+      setFl(all);
+      setTimeout(() => setFl(new Set()), 900);
+    }
+  }, [isFetching]);
 
   function handleRefresh() {
-    if (isSyncing) return;
-    if (syncRef.current)      clearInterval(syncRef.current);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    runCycle(erp);
-    countdownRef.current = setInterval(() => setCD((c) => (c > 0 ? c - 1 : 0)), 1000);
-    syncRef.current      = setInterval(() => {
-      setErp((prev) => { runCycle(prev); return prev; });
-    }, SYNC_INTERVAL_MS);
+    if (isFetching) return;
+    refetchAll();
   }
 
   const good     = ops.kpis.filter((k) => k.status === "good").length;
@@ -588,14 +552,14 @@ export default function OperationalIntelligencePage() {
             Operations Dashboard
           </h1>
           <p className="text-muted-foreground mt-1">
-            8 KPIs fed live from the ERP integration layer · auto-refreshes every 30 s
+            8 KPIs fed live from ERP integrations · powered by real data
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <SyncPill erp={erp} countdown={countdown} />
-          <Button onClick={handleRefresh} disabled={isSyncing} className="gap-2">
-            <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
-            {isSyncing ? "Syncing…" : "Refresh"}
+          <SyncPill isFetching={isFetching} />
+          <Button onClick={handleRefresh} disabled={isFetching} className="gap-2">
+            <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
+            {isFetching ? "Fetching…" : "Refresh"}
           </Button>
         </div>
       </div>
@@ -632,10 +596,10 @@ export default function OperationalIntelligencePage() {
 
             <div className="hidden lg:flex flex-col items-end gap-1 shrink-0">
               <Badge variant="outline" className="text-xs font-mono">
-                {erp.system.name}
+                Real-Time Connection
               </Badge>
               <span className="text-[11px] text-muted-foreground">
-                Last sync {erp.lastSyncAt ? format(erp.lastSyncAt, "HH:mm:ss") : "—"}
+                Data derived directly from Odoo
               </span>
             </div>
           </div>

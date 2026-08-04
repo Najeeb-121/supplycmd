@@ -1,9 +1,13 @@
+import { useMemo } from "react";
+import { format, parseISO, subDays } from "date-fns";
 import { 
   useGetDashboardSummary, 
   useGetInventoryHealth,
   useGetLogisticsKpis,
   useGetReorderAlerts,
-  useGetOeeMetrics
+  useGetOeeMetrics,
+  useListDemandRecords,
+  useListProductionRuns
 } from "@workspace/api-client-react";
 import { 
   Card, 
@@ -28,30 +32,67 @@ import {
   Area
 } from "recharts";
 
-// Mock trend data since the API doesn't provide historical timeseries
-const MOCK_OEE_TREND = [
-  { day: "Mon", oee: 72 },
-  { day: "Tue", oee: 75 },
-  { day: "Wed", oee: 78 },
-  { day: "Thu", oee: 74 },
-  { day: "Fri", oee: 81 },
-  { day: "Sat", oee: 83 },
-  { day: "Sun", oee: 85 },
-];
-
-const MOCK_DEMAND_TREND = [
-  { month: "Jan", actual: 4000, forecast: 4200 },
-  { month: "Feb", actual: 3000, forecast: 3200 },
-  { month: "Mar", actual: 2000, forecast: 2500 },
-  { month: "Apr", actual: 2780, forecast: 2800 },
-  { month: "May", actual: 1890, forecast: 2000 },
-  { month: "Jun", actual: 2390, forecast: 2400 },
-];
-
 export default function DashboardPage() {
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: health } = useGetInventoryHealth();
   const { data: alerts } = useGetReorderAlerts();
+  const { data: demandRecords } = useListDemandRecords();
+  const { data: productionRuns } = useListProductionRuns();
+
+  const demandTrend = useMemo(() => {
+    if (!demandRecords) return [];
+    const demandByPeriod = new Map<string, { actual: number; forecast: number }>();
+    demandRecords.forEach(r => {
+      const existing = demandByPeriod.get(r.period) || { actual: 0, forecast: 0 };
+      demandByPeriod.set(r.period, {
+        actual: existing.actual + r.actualDemand,
+        forecast: existing.forecast + r.forecastedDemand,
+      });
+    });
+    return Array.from(demandByPeriod.entries())
+      .map(([period, data]) => ({
+        month: format(parseISO(`${period}-01`), "MMM"),
+        sortKey: period,
+        actual: data.actual,
+        forecast: data.forecast
+      }))
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+      .slice(-6);
+  }, [demandRecords]);
+
+  const oeeTrend = useMemo(() => {
+    if (!productionRuns) return [];
+    const today = new Date();
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = subDays(today, 6 - i);
+      return { 
+        dateStr: format(d, "yyyy-MM-dd"), 
+        display: format(d, "EEE") 
+      };
+    });
+
+    return last7Days.map(({ dateStr, display }) => {
+      const dayRuns = productionRuns.filter(r => r.runDate.startsWith(dateStr));
+      let totalAvail = 0;
+      let totalPerf = 0;
+      let totalQual = 0;
+      
+      if (dayRuns.length > 0) {
+        dayRuns.forEach(run => {
+          const avail = run.plannedTimeMin > 0 ? Math.max(0, Math.min(1, (run.actualTimeMin - run.downtimeMin) / run.plannedTimeMin)) : 0;
+          const perf = run.plannedUnits > 0 ? Math.min(1, run.actualUnits / run.plannedUnits) : 0;
+          const qual = run.actualUnits > 0 ? Math.max(0, (run.actualUnits - run.defects) / run.actualUnits) : 0;
+          totalAvail += avail;
+          totalPerf += perf;
+          totalQual += qual;
+        });
+        const n = dayRuns.length;
+        const oee = (totalAvail / n) * (totalPerf / n) * (totalQual / n) * 100;
+        return { day: display, oee: Math.round(oee * 10) / 10 };
+      }
+      return { day: display, oee: null as number | null };
+    });
+  }, [productionRuns]);
   
   if (isLoadingSummary) {
     return (
@@ -155,7 +196,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={MOCK_DEMAND_TREND} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <AreaChart data={demandTrend} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
@@ -213,7 +254,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={MOCK_OEE_TREND} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <LineChart data={oeeTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} dy={10} />
                 <YAxis domain={[60, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />

@@ -79,7 +79,7 @@ const MOVEMENT_TYPES = [
 function StatusBadge({ item }: { item: InventoryItem }) {
   const s = deriveStatus(item);
   const cfg = STATUS_CONFIG[s];
-  return <Badge variant="outline" className={`text-xs ${cfg.cls}`}>{cfg.label}</Badge>;
+  return <Badge variant="outline" className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 ${cfg.cls}`}>{cfg.label}</Badge>;
 }
 
 // ── KPI card ─────────────────────────────────────────────────────────────────
@@ -349,7 +349,7 @@ export default function InventoryPage() {
 
       {/* KPI Cards */}
       {kpis && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
           <KpiCard title="Total Value"      value={formatCurrency(kpis.totalValue)}     icon={DollarSign}   color="bg-blue-500/10 text-blue-600" />
           <KpiCard title="Total SKUs"       value={String(kpis.totalSkus)}               icon={Package}      color="bg-indigo-500/10 text-indigo-600" />
           <KpiCard title="Low Stock"        value={String(kpis.lowStockCount)}           icon={AlertTriangle} color="bg-amber-500/10 text-amber-600" sub="Below reorder point" />

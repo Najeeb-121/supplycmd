@@ -10,6 +10,7 @@ import LoginPage from './pages/login';
 import SignupPage from './pages/signup';
 import DashboardPage from './pages/dashboard';
 import InventoryPage from './pages/inventory';
+import ProcurementPage from './pages/procurement';
 import ProductionPage from './pages/production';
 import DemandPage from './pages/demand';
 import LogisticsPage from './pages/logistics';
@@ -19,6 +20,7 @@ import ErpIntegrationPage from './pages/erp-integration';
 import OperationalIntelligencePage from './pages/operational-intelligence';
 import AiDecisionEnginePage from './pages/ai-decision-engine';
 import ExecutiveIntelligencePage from './pages/executive-intelligence';
+import WhatIfSimulationPage from './pages/what-if-simulation';
 
 const queryClient = new QueryClient();
 
@@ -28,6 +30,7 @@ function AuthedApp() {
       <Switch>
         <Route path="/" component={DashboardPage} />
         <Route path="/inventory" component={InventoryPage} />
+        <Route path="/procurement" component={ProcurementPage} />
         <Route path="/production" component={ProductionPage} />
         <Route path="/demand" component={DemandPage} />
         <Route path="/logistics" component={LogisticsPage} />
@@ -37,6 +40,7 @@ function AuthedApp() {
         <Route path="/operational-intelligence" component={OperationalIntelligencePage} />
         <Route path="/ai-decision-engine" component={AiDecisionEnginePage} />
         <Route path="/executive-intelligence" component={ExecutiveIntelligencePage} />
+        <Route path="/what-if-simulation" component={WhatIfSimulationPage} />
         <Route component={NotFound} />
       </Switch>
     </AppShell>

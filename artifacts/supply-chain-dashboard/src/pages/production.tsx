@@ -248,7 +248,7 @@ export default function ProductionPage() {
       <Card className="border-border shadow-sm mt-8">
         <CardHeader className="flex flex-row items-center justify-between py-4 border-b border-border bg-muted/20">
           <div>
-            <CardTitle>Production Run Log</CardTitle>
+            <CardTitle>Production Run Log ({runs?.length ?? 0})</CardTitle>
             <CardDescription>Historical record of shifts and batches</CardDescription>
           </div>
         </CardHeader>

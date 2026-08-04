@@ -65,7 +65,7 @@ interface KpiMeta {
   warnThreshold: number;   // boundary between warning and critical
 }
 
-const KPI_META: KpiMeta[] = [
+export const KPI_META: KpiMeta[] = [
   {
     id: "inventory_accuracy",
     label: "Inventory Accuracy",
@@ -178,7 +178,7 @@ function clamp(val: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, val));
 }
 
-function resolveStatus(meta: KpiMeta, value: number): KpiStatus {
+export function resolveStatus(meta: KpiMeta, value: number): KpiStatus {
   if (meta.goodDirection === "up") {
     if (value >= meta.goodThreshold) return "good";
     if (value >= meta.warnThreshold) return "warning";
@@ -190,14 +190,14 @@ function resolveStatus(meta: KpiMeta, value: number): KpiStatus {
   }
 }
 
-function resolveTrend(current: number, prev: number): KpiTrend {
+export function resolveTrend(current: number, prev: number): KpiTrend {
   const diff = current - prev;
   if (Math.abs(diff) < 0.01) return "flat";
   return diff > 0 ? "up" : "down";
 }
 
 /** Build a plausible 10-point history ending at `current`. */
-function buildSparkline(meta: KpiMeta, current: number): number[] {
+export function buildSparkline(meta: KpiMeta, current: number): number[] {
   const points: number[] = [];
   let v = clamp(current - meta.volatility * 3, 0, 200);
   for (let i = 0; i < 9; i++) {
@@ -242,7 +242,7 @@ function erpInfluence(erp: ErpConnectionState): Record<KpiId, number> {
   };
 }
 
-function computeHealthScore(kpis: KpiMetric[]): number {
+export function computeHealthScore(kpis: KpiMetric[]): number {
   const weights: Record<KpiStatus, number> = { good: 100, warning: 55, critical: 10 };
   const total = kpis.reduce((s, k) => s + weights[k.status], 0);
   return Math.round(total / kpis.length);
