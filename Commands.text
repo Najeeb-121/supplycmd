@@ -1,0 +1,32 @@
+Legacy account credentials (for your existing data):
+
+Email: legacy-admin@supplycmd.local
+Password: Legacy-Admin-2026!
+
+
+Your Postgres and Odoo containers are already running from earlier, so you can skip straight to starting the servers. Open two terminal tabs:
+
+Terminal 1 — API server:
+
+
+cd "/Users/najeebmac/Desktop/Najeeb/Projects/Hassan /Supply-Chain-Flow"
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/supply_chain"
+export PORT=8080 NODE_ENV=development
+export AI_INTEGRATIONS_OPENAI_BASE_URL="https://api.openai.com/v1"
+export AI_INTEGRATIONS_OPENAI_API_KEY="placeholder-not-set"
+export ENCRYPTION_KEY="1fa2ea5c0921937aa643f0da750a4bd60fd81aedab06f26f622ff3ae9917a317"
+pnpm --filter @workspace/api-server run dev
+Terminal 2 — Frontend:
+
+
+cd "/Users/najeebmac/Desktop/Najeeb/Projects/Hassan /Supply-Chain-Flow"
+export PORT=21927 BASE_PATH=/
+pnpm --filter @workspace/supply-chain-dashboard run dev
+Then open http://localhost:21927 — you'll land on /login. Log in with:
+
+Email: legacy-admin@supplycmd.local
+Password: Legacy-Admin-2026!
+
+
+cd "/Users/najeebmac/Desktop/Najeeb/Projects/Hassan /Supply-Chain-Flow"
+./dev.sh
