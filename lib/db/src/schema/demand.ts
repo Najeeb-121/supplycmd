@@ -12,7 +12,7 @@ export const demandRecordsTable = pgTable("demand_records", {
   productName: text("product_name").notNull(),
   period: text("period").notNull(), // e.g. "2024-Q1", "2024-06"
   actualDemand: real("actual_demand").notNull(),
-  forecastedDemand: real("forecasted_demand").notNull(),
+  forecastedDemand: real("forecasted_demand").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique().on(table.companyId, table.odooId),

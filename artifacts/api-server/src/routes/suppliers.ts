@@ -14,10 +14,10 @@ import { validateBody } from "../lib/validate.js";
 export const StrictSupplierBody = CreateSupplierBody.extend({
   name:                z.string().min(1, "Supplier name is required"),
   country:             z.string().min(1, "Country is required"),
-  leadTimeDays:        z.number().int().min(0).max(365),
-  onTimeDeliveryRate:  z.number().min(0).max(100),
-  qualityScore:        z.number().min(0).max(100),
-  fillRate:            z.number().min(0).max(100),
+  leadTimeDays:        z.number().int().min(0).max(365).optional(),
+  onTimeDeliveryRate:  z.number().min(0).max(100).optional(),
+  qualityScore:        z.number().min(0).max(100).optional(),
+  fillRate:            z.number().min(0).max(100).optional(),
 });
 
 const StrictSupplierPatch = UpdateSupplierBody.extend({

@@ -1,3 +1,4 @@
+import SimulationsPage from './pages/simulations';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -20,7 +21,8 @@ import ErpIntegrationPage from './pages/erp-integration';
 import OperationalIntelligencePage from './pages/operational-intelligence';
 import AiDecisionEnginePage from './pages/ai-decision-engine';
 import ExecutiveIntelligencePage from './pages/executive-intelligence';
-import WhatIfSimulationPage from './pages/what-if-simulation';
+import SalesDashboardPage from './pages/sales-dashboard';
+import ManufacturingDashboardPage from './pages/manufacturing-dashboard';
 
 const queryClient = new QueryClient();
 
@@ -28,6 +30,10 @@ function AuthedApp() {
   return (
     <AppShell>
       <Switch>
+        <Route path="/ai-decision-engine" component={AiDecisionEnginePage} />
+        <Route path="/simulations" component={SimulationsPage} />
+        <Route path="/sales" component={SalesDashboardPage} />
+        <Route path="/manufacturing" component={ManufacturingDashboardPage} />
         <Route path="/" component={DashboardPage} />
         <Route path="/inventory" component={InventoryPage} />
         <Route path="/procurement" component={ProcurementPage} />
@@ -38,9 +44,7 @@ function AuthedApp() {
         <Route path="/import" component={ImportPage} />
         <Route path="/erp-integration" component={ErpIntegrationPage} />
         <Route path="/operational-intelligence" component={OperationalIntelligencePage} />
-        <Route path="/ai-decision-engine" component={AiDecisionEnginePage} />
         <Route path="/executive-intelligence" component={ExecutiveIntelligencePage} />
-        <Route path="/what-if-simulation" component={WhatIfSimulationPage} />
         <Route component={NotFound} />
       </Switch>
     </AppShell>

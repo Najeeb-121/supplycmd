@@ -13,6 +13,10 @@ vi.mock("@workspace/api-client-react", () => ({
   useListSuppliers:    () => ({ data: [], isLoading: false }),
   useListOrders:       () => ({ data: [], isLoading: false }),
   useCreateOrder:      () => ({ mutate: mockCreate, mutateAsync: vi.fn(), isPending: false }),
+  useCreateSupplier:   () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateSupplier:   () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteSupplier:   () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteOrder:      () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateOrder:      () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   getListOrdersQueryKey: () => ["orders"],
 }));

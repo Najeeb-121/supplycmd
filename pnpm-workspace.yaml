@@ -5,7 +5,9 @@ packages:
   - scripts
 
 allowBuilds:
+  '@google/genai': false
   esbuild: true
+  protobufjs: false
 
 autoInstallPeers: false
 

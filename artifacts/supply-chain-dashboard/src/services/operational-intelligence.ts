@@ -206,9 +206,9 @@ export function buildSparkline(meta: KpiMeta, current: number): number[] {
     v += (meta.baseline - v) * 0.05;
     if (meta.format === "percent") v = clamp(v, 0, 100);
     if (meta.format === "integer") v = Math.max(0, Math.round(v));
-    points.push(parseFloat(v.toFixed(2)));
+    points.push(parseFloat((v ?? 0).toFixed(2)));
   }
-  points.push(parseFloat(current.toFixed(2)));
+  points.push(parseFloat((current ?? 0).toFixed(2)));
   return points;
 }
 
@@ -258,7 +258,7 @@ export function buildInitialOpsState(erp: ErpConnectionState): OpsIntelState {
     const value = parseFloat(
       meta.format === "integer"
         ? String(Math.max(0, Math.round(raw)))
-        : raw.toFixed(meta.format === "percent" ? 1 : 2)
+        : (raw ?? 0).toFixed(meta.format === "percent" ? 1 : 2)
     );
     return {
       id: meta.id,
@@ -312,7 +312,7 @@ export function tickOpsState(
     const value = parseFloat(
       meta.format === "integer"
         ? String(Math.round(raw))
-        : raw.toFixed(meta.format === "percent" ? 1 : 2)
+        : (raw ?? 0).toFixed(meta.format === "percent" ? 1 : 2)
     );
 
     return {

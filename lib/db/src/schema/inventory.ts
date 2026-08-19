@@ -2,6 +2,7 @@ import { pgTable, serial, text, real, integer, boolean, timestamp, unique } from
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { companiesTable } from "./companies";
+import { suppliersTable } from "./suppliers";
 
 export const inventoryItemsTable = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
@@ -45,6 +46,11 @@ export const inventoryItemsTable = pgTable("inventory_items", {
   reorderPoint: real("reorder_point").notNull().default(0),
   safetyStock: real("safety_stock").notNull().default(0),
   eoq: real("eoq").notNull().default(0),
+  availableQuantity: real("available_quantity").notNull().default(0),
+  rawAvailableQuantity: real("raw_available_quantity").notNull().default(0),
+  reservationShortage: real("reservation_shortage").notNull().default(0),
+  incomingQuantity: real("incoming_quantity").notNull().default(0),
+  leadTimeSource: text("lead_time_source").notNull().default("Odoo"),
   // Lifecycle
   archived: boolean("archived").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -64,3 +70,30 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItemsTable)
 
 export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
+
+export const productSuppliersTable = pgTable("product_suppliers", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id")
+    .notNull()
+    .references(() => companiesTable.id, { onDelete: "cascade" }),
+  inventoryItemId: integer("inventory_item_id")
+    .notNull()
+    .references(() => inventoryItemsTable.id, { onDelete: "cascade" }),
+  supplierId: integer("supplier_id")
+    .notNull()
+    .references(() => suppliersTable.id, { onDelete: "cascade" }),
+  supplierSkuCode: text("supplier_sku_code"),
+  supplierUnitCost: real("supplier_unit_cost"),
+  currency: text("currency"),
+  minimumOrderQuantity: real("minimum_order_quantity"),
+  orderMultiple: real("order_multiple"),
+  leadTimeDays: real("lead_time_days"),
+  preferredSupplier: boolean("preferred_supplier").notNull().default(false),
+  source: text("source").notNull().default("Odoo"),
+  sourceEntity: text("source_entity").notNull().default("product.supplierinfo"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique().on(table.inventoryItemId, table.supplierId)
+]);
+
+export type ProductSupplier = typeof productSuppliersTable.$inferSelect;

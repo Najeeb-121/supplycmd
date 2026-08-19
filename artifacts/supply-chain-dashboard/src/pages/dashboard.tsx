@@ -149,7 +149,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-mono font-bold text-foreground">
-              {summary?.oeePercent.toFixed(1)}%
+              {(summary?.oeePercent ?? 0).toFixed(1)}%
             </div>
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
               <TrendingUp className="w-3 h-3 text-emerald-600" /> +1.2% from yesterday
@@ -164,7 +164,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-mono font-bold text-foreground">
-              {summary?.fillRate.toFixed(1)}%
+              {(summary?.fillRate ?? 0).toFixed(1)}%
             </div>
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
               <TrendingDown className="w-3 h-3 text-destructive" /> -0.5% from last week

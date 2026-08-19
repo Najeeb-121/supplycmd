@@ -296,7 +296,7 @@ export default function LogisticsPage() {
           <CardContent>
             {kpisLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
               <div className="text-3xl font-mono font-bold text-foreground">
-                {kpis?.fillRate.toFixed(1)}%
+                {(kpis?.fillRate ?? 0).toFixed(1)}%
               </div>
             )}
             <p className="text-xs text-muted-foreground mt-1">% of demand met from stock</p>
@@ -311,7 +311,7 @@ export default function LogisticsPage() {
           <CardContent>
             {kpisLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
               <div className="text-3xl font-mono font-bold text-emerald-600">
-                {kpis?.otifPercent.toFixed(1)}%
+                {(kpis?.otifPercent ?? 0).toFixed(1)}%
               </div>
             )}
             <p className="text-xs text-muted-foreground mt-1">On Time In Full deliveries</p>
@@ -326,7 +326,7 @@ export default function LogisticsPage() {
           <CardContent>
             {kpisLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
               <div className="text-3xl font-mono font-bold text-foreground">
-                {kpis?.avgLeadTimeDays.toFixed(1)} <span className="text-sm font-sans font-normal text-muted-foreground">days</span>
+                {(kpis?.avgLeadTimeDays ?? 0).toFixed(1)} <span className="text-sm font-sans font-normal text-muted-foreground">days</span>
               </div>
             )}
             <p className="text-xs text-muted-foreground mt-1">Order to receipt duration</p>
@@ -396,14 +396,14 @@ export default function LogisticsPage() {
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             <span className={s.onTimeDeliveryRate < 90 ? "text-destructive" : "text-emerald-600"}>
-                              {s.onTimeDeliveryRate.toFixed(1)}%
+                              {(s.onTimeDeliveryRate ?? 0).toFixed(1)}%
                             </span>
                           </TableCell>
                           <TableCell className="text-right font-mono">
-                            {s.qualityScore.toFixed(1)}/100
+                            {(s.qualityScore ?? 0).toFixed(1)}/100
                           </TableCell>
                           <TableCell className="text-right font-mono font-medium">
-                            {s.fillRate.toFixed(1)}%
+                            {(s.fillRate ?? 0).toFixed(1)}%
                           </TableCell>
                           <TableCell className="text-right">
                             <Button

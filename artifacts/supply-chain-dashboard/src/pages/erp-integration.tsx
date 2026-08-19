@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import {
   useTestOdooConnection,
   useSyncOdooSuppliers,
@@ -68,6 +68,8 @@ import {
   Activity,
   TrendingUp,
   ShoppingCart,
+  BarChart3,
+  Boxes,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -136,6 +138,8 @@ export default function ErpIntegrationPage() {
   const syncProduction = useSyncOdooProduction();
   const syncPlanning = useSyncOdooPlanning();
   const { data: syncLog, isLoading: logLoading } = useGetOdooSyncLog();
+
+
 
   const status: "unknown" | "connected" | "error" = !connection
     ? "unknown"
@@ -365,7 +369,7 @@ export default function ErpIntegrationPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
               <div>
                 <h3 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4 text-primary" /> Suppliers</h3>
@@ -373,7 +377,7 @@ export default function ErpIntegrationPage() {
               </div>
               <Button size="sm" onClick={handleSyncSuppliers} disabled={!connection?.connected || syncSuppliers.isPending || isSyncingAll} variant="secondary">
                 <RefreshCw className={`w-3 h-3 mr-2 ${syncSuppliers.isPending ? "animate-spin" : ""}`} /> 
-                {syncSuppliers.isPending ? "Syncing…" : "Sync Suppliers"}
+                {syncSuppliers.isPending ? "Syncing…" : "Sync"}
               </Button>
             </div>
 
@@ -384,9 +388,11 @@ export default function ErpIntegrationPage() {
               </div>
               <Button size="sm" onClick={handleSyncInventory} disabled={!connection?.connected || syncInventory.isPending || isSyncingAll} variant="secondary">
                 <RefreshCw className={`w-3 h-3 mr-2 ${syncInventory.isPending ? "animate-spin" : ""}`} /> 
-                {syncInventory.isPending ? "Syncing…" : "Sync Inventory"}
+                {syncInventory.isPending ? "Syncing…" : "Sync"}
               </Button>
             </div>
+
+
 
             <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
               <div>

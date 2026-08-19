@@ -174,7 +174,7 @@ export default function ProductionPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold">{metrics?.availabilityPercent.toFixed(1) || "0.0"}%</div>
+              <div className="text-3xl font-mono font-bold">{(metrics?.availabilityPercent ?? 0).toFixed(1)}%</div>
               <Progress value={metrics?.availabilityPercent || 0} className="h-2 mt-4" />
               <p className="text-xs text-muted-foreground mt-2">Uptime vs Planned Time</p>
             </CardContent>
@@ -188,7 +188,7 @@ export default function ProductionPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold">{metrics?.performancePercent.toFixed(1) || "0.0"}%</div>
+              <div className="text-3xl font-mono font-bold">{(metrics?.performancePercent ?? 0).toFixed(1)}%</div>
               <Progress value={metrics?.performancePercent || 0} className="h-2 mt-4" />
               <p className="text-xs text-muted-foreground mt-2">Actual vs Ideal Cycle Time</p>
             </CardContent>
@@ -202,7 +202,7 @@ export default function ProductionPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold">{metrics?.qualityPercent.toFixed(1) || "0.0"}%</div>
+              <div className="text-3xl font-mono font-bold">{(metrics?.qualityPercent ?? 0).toFixed(1)}%</div>
               <Progress value={metrics?.qualityPercent || 0} className="h-2 mt-4" />
               <p className="text-xs text-muted-foreground mt-2">Good Units vs Total Units</p>
             </CardContent>
@@ -214,7 +214,7 @@ export default function ProductionPage() {
               <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Takt Time</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-mono font-bold">{metrics?.avgTaktTimeSec.toFixed(1) || "0.0"}s</div>
+              <div className="text-2xl font-mono font-bold">{(metrics?.avgTaktTimeSec ?? 0).toFixed(1)}s</div>
               <p className="text-xs text-muted-foreground mt-1">Target pace to meet demand</p>
             </CardContent>
           </Card>
@@ -226,7 +226,7 @@ export default function ProductionPage() {
             <CardContent>
               <div className="text-2xl font-mono font-bold">
                 <span className={metrics && metrics.avgCycleTimeSec > metrics.avgTaktTimeSec ? "text-destructive" : "text-emerald-600"}>
-                  {metrics?.avgCycleTimeSec.toFixed(1) || "0.0"}s
+                  {(metrics?.avgCycleTimeSec ?? 0).toFixed(1)}s
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Actual pace of production</p>
@@ -238,7 +238,7 @@ export default function ProductionPage() {
               <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Throughput</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-mono font-bold">{metrics?.throughputPerHour.toFixed(0) || "0"} <span className="text-sm font-sans font-normal text-muted-foreground">units/hr</span></div>
+              <div className="text-2xl font-mono font-bold">{(metrics?.throughputPerHour ?? 0).toFixed(0)} <span className="text-sm font-sans font-normal text-muted-foreground">units/hr</span></div>
               <p className="text-xs text-muted-foreground mt-1">Average production rate</p>
             </CardContent>
           </Card>

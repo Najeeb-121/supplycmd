@@ -253,7 +253,7 @@ export const RecommendationCard = memo(function RecommendationCard({
               Est. Savings
             </p>
             <p className="text-base font-mono font-bold text-emerald-600">
-              ${rec.estimatedSavings.toLocaleString()}
+              {rec.estimatedSavings === "UNKNOWN" ? "UNKNOWN" : `$${(rec.estimatedSavings as number).toLocaleString()}`}
             </p>
           </div>
           <div className="rounded-md bg-muted/50 px-2.5 py-2 space-y-0.5">

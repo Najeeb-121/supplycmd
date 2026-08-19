@@ -1,6 +1,5 @@
 /**
  * AI Decision Engine Types
- *
  * Types used across the AI Decision Engine real-time evaluation.
  */
 
@@ -12,7 +11,8 @@ export type RecommendationType =
   | "reduce_safety_stock"
   | "flag_slow_moving"
   | "supplier_delay_detected"
-  | "predict_stockout";
+  | "predict_stockout"
+  | string;
 
 export type RecommendationPriority = "critical" | "high" | "medium" | "low";
 
@@ -47,8 +47,8 @@ export interface Recommendation {
   recommendation: string;
   /** Narrative explaining the operational impact */
   businessImpact: string;
-  estimatedSavings: number;       // USD
-  confidenceScore: number;        // 0–100
+  estimatedSavings: number | "UNKNOWN";       // USD or UNKNOWN
+  confidenceScore: number;        // 0-100
   /** Chain-of-thought reasoning bullet string */
   reasoning: string;
   affectedDepartment: Department;
@@ -60,11 +60,42 @@ export interface Recommendation {
   dataPoints: DataPoint[];
 }
 
+export interface DeterministicAIContext {
+  baselineRiskDetected: boolean;
+  baselineExposures: Array<{
+    riskId: string;
+    productId: number;
+    severity: string;
+    type: string;
+    exposureType?: string;
+    financialImpact?: number | "UNKNOWN";
+  }>;
+  candidateMitigations: Array<{
+    id: string;
+    targetRiskId: string;
+    type: string;
+    description: string;
+    estimatedCost: number | "UNKNOWN";
+    estimatedRecoveryTime: number | "UNKNOWN";
+    affectedOrders: number[];
+  }>;
+  portfolioResult: {
+    totalProcurementCostDelta: number | "UNKNOWN";
+    deduplicatedRevenueDelta: number | "UNKNOWN";
+    netROI: number | "UNKNOWN";
+  } | null;
+  provenance: {
+    mitigationGeneration: "DETERMINISTIC";
+    financialSimulation: "DETERMINISTIC";
+  };
+}
+
 export interface DecisionEngineState {
   recommendations: Recommendation[];
   lastAnalysedAt: Date;
   cycleCount: number;
-  totalEstimatedSavings: number;
+  totalEstimatedSavings: number | "UNKNOWN";
   modelVersion: string;
   analysisStatus: "idle" | "analysing" | "complete";
+  deterministicContext: DeterministicAIContext | null;
 }

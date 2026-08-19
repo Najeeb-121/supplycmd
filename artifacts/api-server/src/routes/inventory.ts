@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, lte, and, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db, inventoryItemsTable, stockMovementsTable } from "@workspace/db";
+import { db, inventoryItemsTable, stockMovementsTable, productSuppliersTable, purchaseOrderLinesTable, suppliersTable } from "@workspace/db";
 import {
   CreateInventoryItemBody,
   UpdateInventoryItemBody,
@@ -80,6 +80,90 @@ function deriveStatus(item: { currentStock: number; safetyStock: number; reorder
   if (item.maxStock != null && item.currentStock > item.maxStock) return "overstock";
   return "healthy";
 }
+
+// ── GET /inventory/relationships ──────────────────────────────────────────────
+router.get("/inventory/relationships", async (req: Request, res: Response): Promise<void> => {
+  const companyId = req.user!.companyId;
+
+  const productSuppliers = await db
+    .select({
+      supplierId: productSuppliersTable.supplierId,
+      supplierOdooId: suppliersTable.odooId,
+      supplierName: suppliersTable.name,
+      productId: productSuppliersTable.inventoryItemId,
+      productOdooId: inventoryItemsTable.odooId,
+      productName: inventoryItemsTable.name,
+      sku: inventoryItemsTable.sku,
+    })
+    .from(productSuppliersTable)
+    .innerJoin(suppliersTable, eq(productSuppliersTable.supplierId, suppliersTable.id))
+    .innerJoin(inventoryItemsTable, eq(productSuppliersTable.inventoryItemId, inventoryItemsTable.id))
+    .where(eq(productSuppliersTable.companyId, companyId));
+
+  const poLines = await db
+    .select({
+      supplierId: purchaseOrderLinesTable.supplierId,
+      supplierOdooId: suppliersTable.odooId,
+      supplierName: suppliersTable.name,
+      productId: purchaseOrderLinesTable.inventoryItemId,
+      productOdooId: inventoryItemsTable.odooId,
+      productName: inventoryItemsTable.name,
+      sku: inventoryItemsTable.sku,
+      remainingQuantity: purchaseOrderLinesTable.remainingQuantity,
+      status: purchaseOrderLinesTable.status,
+    })
+    .from(purchaseOrderLinesTable)
+    .innerJoin(suppliersTable, eq(purchaseOrderLinesTable.supplierId, suppliersTable.id))
+    .innerJoin(inventoryItemsTable, eq(purchaseOrderLinesTable.inventoryItemId, inventoryItemsTable.id))
+    .where(eq(purchaseOrderLinesTable.companyId, companyId));
+
+  const map = new Map<string, any>();
+
+  for (const ps of productSuppliers) {
+    const key = `${ps.supplierId}-${ps.productId}`;
+    map.set(key, {
+      ...ps,
+      activePoCount: 0,
+      inboundQty: 0,
+      hasActivePo: false,
+      relationshipSource: "product_supplier"
+    });
+  }
+
+  for (const po of poLines) {
+    if (po.supplierId === null || po.productId === null) continue;
+    
+    // Only count POs that are active (pending) and have remaining quantity
+    const isActivePo = po.status === 'pending' && (po.remainingQuantity || 0) > 0;
+    if (!isActivePo) continue;
+
+    const key = `${po.supplierId}-${po.productId}`;
+    const existing = map.get(key);
+    
+    if (existing) {
+      existing.activePoCount += 1;
+      existing.inboundQty += Number(po.remainingQuantity || 0);
+      existing.hasActivePo = true;
+      existing.relationshipSource = existing.relationshipSource === "product_supplier" ? "both" : "purchase_order_line";
+    } else {
+      map.set(key, {
+        supplierId: po.supplierId,
+        supplierOdooId: po.supplierOdooId,
+        supplierName: po.supplierName,
+        productId: po.productId,
+        productOdooId: po.productOdooId,
+        productName: po.productName,
+        sku: po.sku,
+        activePoCount: 1,
+        inboundQty: Number(po.remainingQuantity || 0),
+        hasActivePo: true,
+        relationshipSource: "purchase_order_line"
+      });
+    }
+  }
+
+  res.json(Array.from(map.values()));
+});
 
 // ── GET /inventory ─────────────────────────────────────────────────────────────
 router.get("/inventory", async (req: Request, res: Response): Promise<void> => {

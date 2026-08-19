@@ -633,7 +633,7 @@ export default function OperationalIntelligencePage() {
               {ops.kpis.filter((k) => k.status === "critical").map((k) => (
                 <Badge key={k.id} variant="destructive" className="gap-1.5 font-normal">
                   {KPI_ICONS[k.id]}
-                  {k.label} — <span className="font-mono">{k.value.toFixed(k.format === "integer" ? 0 : 1)}{k.unit}</span>
+                  {k.label} — <span className="font-mono">{(k.value || 0).toFixed(k.format === "integer" ? 0 : 1)}{k.unit}</span>
                 </Badge>
               ))}
             </div>
@@ -655,7 +655,7 @@ export default function OperationalIntelligencePage() {
               {ops.kpis.filter((k) => k.status === "warning").map((k) => (
                 <Badge key={k.id} variant="secondary" className="gap-1.5 font-normal bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
                   {KPI_ICONS[k.id]}
-                  {k.label} — <span className="font-mono">{k.value.toFixed(k.format === "integer" ? 0 : 1)}{k.unit}</span>
+                  {k.label} — <span className="font-mono">{(k.value || 0).toFixed(k.format === "integer" ? 0 : 1)}{k.unit}</span>
                 </Badge>
               ))}
             </div>

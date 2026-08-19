@@ -416,7 +416,7 @@ export default function AiDecisionEnginePage() {
         />
         <StatCard
           label="Est. Total Savings"
-          value={`$${engine.totalEstimatedSavings.toLocaleString()}`}
+          value={engine.totalEstimatedSavings === "UNKNOWN" ? "UNKNOWN" : `$${(engine.totalEstimatedSavings as number).toLocaleString()}`}
           sub="If all open recs applied"
           icon={<DollarSign className="w-4 h-4" />}
           highlight="green"

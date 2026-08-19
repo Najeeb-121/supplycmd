@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRealOpsIntel } from "@/hooks/use-real-ops-intel";
 import { useRealDecisionEngine } from "@/hooks/use-real-decision-engine";
-import { useListOrders } from "@workspace/api-client-react";
+import { useListOrders, useGetOdooSyncLog, getGetOdooSyncLogQueryKey } from "@workspace/api-client-react";
 import {
   computeExecState,
   type ExecState,
@@ -16,6 +16,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
   LineChart, Line, ComposedChart, CartesianGrid,
@@ -61,11 +68,11 @@ const DEPT_COLORS: Record<string, string> = {
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
-const fmt$ = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+const fmt$ = (n: number | "UNKNOWN") =>
+  n === "UNKNOWN" ? "UNKNOWN" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n as number);
 
-const fmtK = (n: number) =>
-  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `$${(n / 1_000).toFixed(0)}K` : `$${n}`;
+const fmtK = (n: number | "UNKNOWN") =>
+  n === "UNKNOWN" ? "UNKNOWN" : (n as number) >= 1_000_000 ? `$${((n as number) / 1_000_000).toFixed(1)}M` : (n as number) >= 1_000 ? `$${((n as number) / 1_000).toFixed(0)}K` : `$${n}`;
 
 function TrendIcon({ trend, size = "sm" }: { trend: "up" | "down" | "flat"; size?: "sm" | "xs" }) {
   const cls = size === "xs" ? "w-3 h-3" : "w-3.5 h-3.5";
@@ -109,7 +116,14 @@ function SummaryCard({
 
 // ─── Risk score ring ──────────────────────────────────────────────────────────
 
-function RiskRing({ score }: { score: number }) {
+function RiskRing({ score }: { score: number | "UNKNOWN" }) {
+  if (score === "UNKNOWN") {
+    return (
+      <svg width="64" height="64" className="-rotate-90">
+        <circle cx="32" cy="32" r="22" fill="none" stroke="hsl(var(--muted))" strokeWidth="5" />
+      </svg>
+    );
+  }
   const r = 22, circ = 2 * Math.PI * r;
   const dash = ((100 - score) / 100) * circ; // inverse: low risk = full green ring
   const color = score >= 60 ? "hsl(var(--destructive))" : score >= 35 ? "#f59e0b" : "#10b981";
@@ -165,19 +179,20 @@ function RiskRow({ risk, rank }: { risk: RiskItem; rank: number }) {
 // ─── Efficiency gauge strip ───────────────────────────────────────────────────
 
 function EfficiencyStrip({ metric }: { metric: EfficiencyMetric }) {
-  const pct = Math.min(100, (metric.value / (metric.unit === "/100" ? 100 : Math.max(metric.target * 1.2, metric.value))) * 100);
+  const pct = metric.value === "UNKNOWN" || metric.target === "UNKNOWN" ? 0 : Math.min(100, ((metric.value as number) / (metric.unit === "/100" ? 100 : Math.max((metric.target as number) * 1.2, metric.value as number))) * 100);
   const color =
     metric.status === "good" ? "bg-emerald-500" :
-    metric.status === "warning" ? "bg-amber-500" : "bg-destructive";
+    metric.status === "warning" ? "bg-amber-500" :
+    metric.status === "critical" ? "bg-destructive" : "bg-muted";
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
         <span className="text-xs text-muted-foreground">{metric.label}</span>
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-mono font-bold text-foreground">
-            {metric.value.toFixed(metric.unit === "×" ? 1 : 1)}{metric.unit}
+            {metric.value === "UNKNOWN" ? "UNKNOWN" : (metric.value as number).toFixed(metric.unit === "×" ? 1 : 1)}{metric.unit}
           </span>
-          <span className="text-[10px] text-muted-foreground">/ {metric.target}{metric.unit}</span>
+          <span className="text-[10px] text-muted-foreground">/ {metric.target === "UNKNOWN" ? "UNKNOWN" : metric.target}{metric.unit}</span>
         </div>
       </div>
       <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -192,8 +207,8 @@ function EfficiencyStrip({ metric }: { metric: EfficiencyMetric }) {
 
 function DeptRow({ dept }: { dept: DeptScore }) {
   const color = DEPT_COLORS[dept.department] ?? "hsl(var(--primary))";
-  const scoreColor = dept.score >= 80 ? "text-emerald-600" : dept.score >= 60 ? "text-amber-600" : "text-destructive";
-  const delta = dept.score - dept.prevScore;
+  const scoreColor = dept.score === "UNKNOWN" ? "text-muted-foreground" : dept.score >= 80 ? "text-emerald-600" : dept.score >= 60 ? "text-amber-600" : "text-destructive";
+  const delta = dept.score === "UNKNOWN" || dept.prevScore === "UNKNOWN" ? 0 : dept.score - dept.prevScore;
   return (
     <div className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0">
       <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
@@ -204,11 +219,11 @@ function DeptRow({ dept }: { dept: DeptScore }) {
       <div className="flex-1">
         <div className="h-2 rounded-full bg-muted overflow-hidden">
           <div className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${dept.score}%`, backgroundColor: color }} />
+            style={{ width: `${dept.score === "UNKNOWN" ? 0 : dept.score}%`, backgroundColor: dept.score === "UNKNOWN" ? "var(--muted)" : color }} />
         </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
-        <span className={cn("text-sm font-mono font-bold w-8 text-right", scoreColor)}>{dept.score}</span>
+        <span className={cn("text-sm font-mono font-bold w-12 text-right", scoreColor)}>{dept.score}</span>
         <div className="flex items-center gap-0.5">
           {delta > 0 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> :
            delta < 0 ? <TrendingDown className="w-3 h-3 text-destructive" /> :
@@ -265,7 +280,7 @@ function ChartTooltip({ active, payload, label, unit = "" }: {
             <span className="text-muted-foreground">{p.name}</span>
           </div>
           <span className="font-mono font-semibold text-foreground ml-4">
-            {typeof p.value === "number" && unit === "$" ? fmtK(p.value) : `${p.value}${unit}`}
+            {typeof p.value === "number" && unit === "$" ? fmtK(p.value) : p.value + unit}
           </span>
         </div>
       ))}
@@ -279,7 +294,12 @@ export default function ExecutiveIntelligencePage() {
   const { ops, isFetching: opsFetching, refetchAll: refetchOps } = useRealOpsIntel();
   const { engine, isFetching: engFetching, refetchAll: refetchEng } = useRealDecisionEngine();
   const ordersQuery = useListOrders();
-  const isFetching = opsFetching || engFetching || ordersQuery.isFetching;
+
+  const { data: syncLog, isFetching: isSyncLogFetching } = useGetOdooSyncLog({
+    query: { queryKey: getGetOdooSyncLogQueryKey(), refetchInterval: SYNC_MS }
+  });
+
+  const isFetching = opsFetching || engFetching || ordersQuery.isFetching || isSyncLogFetching;
 
   const [showAllRisks, setShowAllRisks] = useState(false);
 
@@ -300,8 +320,8 @@ export default function ExecutiveIntelligencePage() {
   );
 
   const visibleRisks = showAllRisks ? exec.todaysRisks : exec.todaysRisks.slice(0, 5);
-  const riskColor    = exec.riskScore >= 60 ? "red" : exec.riskScore >= 35 ? "amber" : "green";
-  const effColor     = exec.efficiencyIndex >= 80 ? "green" : exec.efficiencyIndex >= 60 ? "amber" : "red";
+  const riskColor    = exec.riskScore === "UNKNOWN" ? "blue" : exec.riskScore >= 60 ? "red" : exec.riskScore >= 35 ? "amber" : "green";
+  const effColor     = exec.efficiencyIndex === "UNKNOWN" ? "blue" : exec.efficiencyIndex >= 80 ? "green" : exec.efficiencyIndex >= 60 ? "amber" : "red";
 
   return (
     <div className="p-4 lg:p-8 bg-background min-h-[100dvh] flex flex-col gap-6 max-w-[1800px] mx-auto font-sans">
@@ -349,12 +369,12 @@ export default function ExecutiveIntelligencePage() {
             <div className="relative shrink-0">
               <RiskRing score={exec.riskScore} />
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-sm font-mono font-bold">{exec.riskScore}</span>
+                <span className={cn("font-mono font-bold", exec.riskScore === "UNKNOWN" ? "text-[9px]" : "text-sm")}>{exec.riskScore}</span>
               </div>
             </div>
             <div>
               <div className="text-2xl font-mono font-extrabold tracking-tight leading-none">
-                {exec.riskScore >= 60 ? "Critical" : exec.riskScore >= 35 ? "Elevated" : "Nominal"}
+                {exec.riskScore === "UNKNOWN" ? "Unknown" : exec.riskScore >= 60 ? "Critical" : exec.riskScore >= 35 ? "Elevated" : "Nominal"}
               </div>
               <div className="text-xs text-muted-foreground mt-1">{exec.activeIssues} active systemic issues</div>
             </div>
@@ -398,8 +418,8 @@ export default function ExecutiveIntelligencePage() {
             {fmtK(exec.financialSummary.spendYTD)}
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <Progress value={Math.min(exec.financialSummary.achievementPct, 100)} className="h-1.5 flex-1" />
-            <span className="text-xs font-mono font-semibold text-muted-foreground">{exec.financialSummary.achievementPct}% budget</span>
+            <Progress value={exec.financialSummary.achievementPct === "UNKNOWN" ? 0 : Math.min(exec.financialSummary.achievementPct, 100)} className="h-1.5 flex-1" />
+            <span className="text-xs font-mono font-semibold text-muted-foreground">{exec.financialSummary.achievementPct === "UNKNOWN" ? "UNKNOWN" : `${exec.financialSummary.achievementPct}%`} budget</span>
           </div>
         </div>
       </div>
@@ -483,7 +503,7 @@ export default function ExecutiveIntelligencePage() {
               <p className="text-xs text-muted-foreground mt-1">Live critical issues and top priorities requiring executive intervention</p>
             </div>
             <Badge variant="destructive" className="font-mono text-xs shadow-sm">
-              {fmtK(exec.top5Issues.reduce((s, r) => s + r.financialExposure, 0))} Exposure
+              {fmtK(exec.top5Issues.some(r => r.financialExposure === "UNKNOWN") ? "UNKNOWN" : exec.top5Issues.reduce((s, r) => s + (r.financialExposure as number), 0))} Exposure
             </Badge>
           </div>
           <div className="flex-1 overflow-y-auto pr-2 space-y-2">
@@ -496,7 +516,7 @@ export default function ExecutiveIntelligencePage() {
             ) : (
               <>
                 {Array.from(new Map([...exec.todaysRisks, ...exec.top5Issues].map(item => [item.id, item])).values())
-                  .sort((a, b) => b.financialExposure - a.financialExposure)
+                  .sort((a, b) => (a.financialExposure === "UNKNOWN" ? 0 : a.financialExposure) - (b.financialExposure === "UNKNOWN" ? 0 : b.financialExposure))
                   .map((issue, i) => (
                     <RiskRow key={issue.id} risk={issue} rank={i + 1} />
                   ))}
@@ -526,6 +546,78 @@ export default function ExecutiveIntelligencePage() {
               {exec.deptPerformance.map((d) => <DeptRow key={d.department} dept={d} />)}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Sync History UI */}
+      <div className="mx-0 lg:mx-0 mb-6 rounded-2xl border border-border/50 bg-card shadow-sm p-5 w-full">
+        <div className="mb-4 pb-4 border-b border-border/50 flex justify-between items-center">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <RefreshCw className={cn("w-4 h-4 text-primary", isSyncLogFetching && "animate-spin")} />
+              Integration Sync History
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">Recent ERP synchronization logs</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-muted-foreground bg-muted/50">
+              <tr>
+                <th className="px-4 py-2 font-medium">Time</th>
+                <th className="px-4 py-2 font-medium">Entity</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium">Synced</th>
+                <th className="px-4 py-2 font-medium">Failed</th>
+                <th className="px-4 py-2 font-medium">Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {syncLog?.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-4 text-muted-foreground">No sync history available.</td></tr>
+              ) : (
+                syncLog?.slice(0, 5).map((log: any) => (
+                  <tr key={log.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3 whitespace-nowrap text-muted-foreground font-mono text-xs">{format(new Date(log.syncedAt!), "MMM dd, HH:mm:ss")}</td>
+                    <td className="px-4 py-3 font-medium capitalize">{log.entity}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline" className={cn(
+                        "text-[10px]",
+                        log.status === "success" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
+                        log.status === "partial" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" : 
+                        "bg-destructive/10 text-destructive border-destructive/20"
+                      )}>
+                        {log.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-emerald-500">{log.recordsSynced}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-destructive">{log.recordsFailed}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {log.message ? (
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-xs truncate max-w-[200px] justify-start font-normal text-muted-foreground hover:text-foreground">
+                              {log.message}
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Sync Message Details</DialogTitle>
+                            </DialogHeader>
+                            <div className="text-sm mt-4 text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                              {log.message}
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

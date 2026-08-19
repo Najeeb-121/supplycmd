@@ -136,14 +136,14 @@ export default function DemandPage() {
                         <TableCell className="font-medium text-foreground">{f.productName}</TableCell>
                         <TableCell className="text-right font-mono">
                           <span className={f.mape > 20 ? "text-destructive" : f.mape > 10 ? "text-amber-600" : "text-emerald-600"}>
-                            {f.mape.toFixed(1)}%
+                            {(f.mape ?? 0).toFixed(1)}%
                           </span>
                         </TableCell>
                         <TableCell className="text-right font-mono text-muted-foreground">
-                          {f.mad.toFixed(1)}
+                          {(f.mad ?? 0).toFixed(1)}
                         </TableCell>
                         <TableCell className="text-right font-mono font-medium">
-                          {f.forecastAccuracy.toFixed(1)}%
+                          {(f.forecastAccuracy ?? 0).toFixed(1)}%
                         </TableCell>
                         <TableCell className="text-right font-mono font-bold text-accent">
                           {Math.round(f.nextPeriodForecast)}
