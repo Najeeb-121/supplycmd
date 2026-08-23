@@ -421,127 +421,83 @@ export default function SimulationsPage() {
                     </CardContent>
                   </Card>
 
-                  {/* SECTION 3: DETERMINISTIC SUPPLY RISK OR KPI CARDS */}
-                  {result.result.simulationStatus !== "NOT_EXECUTED" && result.result.supplyRisk ? (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-bold">Deterministic Supply Risk Profile</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                        <Card className={result.result.supplyRisk.severity === "CRITICAL" || result.result.supplyRisk.severity === "HIGH" ? "border-red-500 border-2" : ""}>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Risk Severity</p>
-                            <p className={`text-xl font-bold mt-1 ${result.result.supplyRisk.severity === 'CRITICAL' || result.result.supplyRisk.severity === 'HIGH' ? 'text-red-500' : ''}`}>{result.result.supplyRisk.severity}</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Scenario Type</p>
-                            <p className="text-sm font-bold mt-2">{result.result.supplyRisk.scenarioType.replace(/_/g, " ")}</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Exposure</p>
-                            <p className="text-lg font-bold mt-1 leading-tight">
-                              {result.result.supplyRisk.affectedQuantity === 0 ? "Zero Immediate Exposure" : `${result.result.supplyRisk.affectedQuantity.toLocaleString()} Units`}
-                            </p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Residual Shortage</p>
-                            <p className="text-xl font-bold mt-1">{result.result.supplyRisk.residualShortage.toLocaleString()}</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Inventory Coverage</p>
-                            <p className="text-xl font-bold mt-1">{result.result.supplyRisk.inventoryCoverage.toLocaleString()} Units</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Inbound Quantity</p>
-                            <p className="text-xl font-bold mt-1">{result.result.supplyRisk.currentlyInboundQuantity.toLocaleString()}</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Single Supplier</p>
-                            <p className="text-xl font-bold mt-1">{result.result.supplyRisk.singleSupplierDependency ? "Yes" : "No"}</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Alternate Available</p>
-                            <p className="text-xl font-bold mt-1">{result.result.supplyRisk.alternateSupplierAvailable ? "Yes" : "No"}</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Lead Time Verified</p>
-                            <p className="text-xl font-bold mt-1">{result.result.supplyRisk.leadTimeVerified ? "Yes" : "No"}</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Capacity Risk</p>
-                            <p className="text-xl font-bold mt-1">{result.result.supplyRisk.capacityRisk}</p>
-                          </CardContent>
-                        </Card>
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-2 border-l-2 pl-3">
-                        <strong>Reason:</strong> {result.result.supplyRisk.exposureReason}
-                      </div>
-                    </div>
-                  ) : result.result.simulationStatus !== "NOT_EXECUTED" && (
+                  {/* SECTION 3: DETERMINISTIC KPI CARDS */}
+                  {result.result.simulationStatus !== "NOT_EXECUTED" && (
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                       <Card>
                         <CardContent className="p-4">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">First Stockout</p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                            First Stockout
+                          </p>
                           <p className="text-xl font-bold mt-1">
-                            {result.result.metrics.firstStockoutDay !== null ? `Day ${result.result.metrics.firstStockoutDay}` : "None"}
+                            {result.result.metrics.firstStockoutDay !== null
+                              ? `Day ${result.result.metrics.firstStockoutDay}`
+                              : "None"}
                           </p>
                         </CardContent>
                       </Card>
+
                       <Card>
                         <CardContent className="p-4">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Units at Risk</p>
-                          <p className="text-xl font-bold mt-1">{result.result.metrics.totalUnmetDemand.toLocaleString()}</p>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-4">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Revenue at Risk</p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                            Units at Risk
+                          </p>
                           <p className="text-xl font-bold mt-1">
-                            {result.result.financials.revenueAtRisk.status === "VERIFIED"
-                              ? `$${result.result.financials.revenueAtRisk.value?.toLocaleString()}`
-                              : "MISSING"}
+                            {result.result.metrics.totalUnmetDemand.toLocaleString()}
                           </p>
                         </CardContent>
                       </Card>
+
                       <Card>
                         <CardContent className="p-4">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Days of Supply</p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                            Revenue at Risk
+                          </p>
                           <p className="text-xl font-bold mt-1">
-                            {typeof result.result.metrics.coverageDays === "number" ? result.result.metrics.coverageDays.toFixed(1) + "d" : result.result.metrics.coverageDays}
+                            {result.result.financials.revenueAtRisk.status === "VERIFIED" &&
+                              result.result.financials.revenueAtRisk.value != null
+                              ? `$${result.result.financials.revenueAtRisk.value.toLocaleString()}`
+                              : "NOT DETERMINABLE"}
                           </p>
                         </CardContent>
                       </Card>
+
                       <Card>
                         <CardContent className="p-4">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Recovery Date</p>
-                          <p className="text-xl font-bold mt-1 text-sm">{result.result.metrics.recoveryDate || "None"}</p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                            Days of Supply
+                          </p>
+                          <p className="text-xl font-bold mt-1">
+                            {typeof result.result.metrics.coverageDays === "number"
+                              ? `${result.result.metrics.coverageDays.toFixed(1)}d`
+                              : result.result.metrics.coverageDays}
+                          </p>
                         </CardContent>
                       </Card>
+
                       <Card>
                         <CardContent className="p-4">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Max Shortage</p>
-                          <p className="text-xl font-bold mt-1">{result.result.metrics.maxShortageUnits.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                            Recovery Date
+                          </p>
+                          <p className="text-sm font-bold mt-1">
+                            {result.result.metrics.recoveryDate || "None"}
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardContent className="p-4">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                            Max Shortage
+                          </p>
+                          <p className="text-xl font-bold mt-1">
+                            {result.result.metrics.maxShortageUnits.toLocaleString()}
+                          </p>
                         </CardContent>
                       </Card>
                     </div>
                   )}
-
                   {/* SECTION 4: ANALYTICAL TABLES */}
                   {result.result.simulationStatus !== "NOT_EXECUTED" && (
                     <Tabs defaultValue="timing" className="w-full">
@@ -550,7 +506,9 @@ export default function SimulationsPage() {
                         <TabsTrigger value="trace">Inventory Trace</TabsTrigger>
                         <TabsTrigger value="financials">Financial Impact</TabsTrigger>
                         <TabsTrigger value="mitigations">Mitigations</TabsTrigger>
-                        {result.result.sr4Impact && <TabsTrigger value="whatif" className="text-indigo-600 dark:text-indigo-400 font-bold">What-If Analysis (SR-4)</TabsTrigger>}
+                        <TabsTrigger value="whatif">
+                          What-If Analysis
+                        </TabsTrigger>
                       </TabsList>
                       <TabsContent value="timing">
                         <Card>
@@ -610,179 +568,136 @@ export default function SimulationsPage() {
                         <Card>
                           <CardContent className="p-6">
                             <p className="text-muted-foreground mb-4">Financial impact derived from strict ERP valuation rules.</p>
-                            <div className="grid grid-cols-2 gap-4 max-w-lg">
-                              <div className="font-semibold">Gross Margin at Risk:</div>
-                              <div>
-                                {result.result.financials.grossMarginAtRisk.status === "VERIFIED"
-                                  ? `$${result.result.financials.grossMarginAtRisk.value?.toLocaleString()}`
-                                  : "NOT DETERMINABLE"}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+                              <div className="border rounded-lg p-4">
+                                <div className="font-semibold">Revenue at Risk</div>
+                                <div className="text-lg font-mono mt-1">
+                                  {result.result.financials.revenueAtRisk.status === "VERIFIED"
+                                    ? `$${result.result.financials.revenueAtRisk.value?.toLocaleString()}`
+                                    : "NOT DETERMINABLE"}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-2">
+                                  {result.result.financials.revenueAtRisk.status} · {result.result.financials.revenueAtRisk.confidence}
+                                </div>
                               </div>
 
-                              <div className="font-semibold">Data Confidence:</div>
-                              <div>{result.result.financials.grossMarginAtRisk.confidence}</div>
-                            </div>
-                          </CardContent>
+                              <div className="border rounded-lg p-4">
+                                <div className="font-semibold">Gross Margin at Risk</div>
+                                <div className="text-lg font-mono mt-1">
+                                  {result.result.financials.grossMarginAtRisk.status === "VERIFIED"
+                                    ? `$${result.result.financials.grossMarginAtRisk.value?.toLocaleString()}`
+                                    : "NOT DETERMINABLE"}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-2">
+                                  {result.result.financials.grossMarginAtRisk.status} · {result.result.financials.grossMarginAtRisk.confidence}
+                                </div>
+                              </div>
+
+                              <div className="border rounded-lg p-4">
+                                <div className="font-semibold">Incremental Procurement Cost</div>
+                                <div className="text-lg font-mono mt-1">
+                                  {result.result.financials.incrementalCost?.value != null
+                                    ? `$${result.result.financials.incrementalCost.value.toLocaleString()}`
+                                    : "NOT DETERMINABLE"}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-2">
+                                  {result.result.financials.incrementalCost
+                                    ? `${result.result.financials.incrementalCost.status} · ${result.result.financials.incrementalCost.confidence}`
+                                    : "NOT AVAILABLE"}
+                                </div>
+                              </div>
+
+                              <div className="border rounded-lg p-4">
+                                <div className="font-semibold">Inventory Carrying Cost</div>
+                                <div className="text-lg font-mono mt-1">
+                                  {result.result.financials.inventoryCarryingCost?.value != null
+                                    ? `$${result.result.financials.inventoryCarryingCost.value.toLocaleString()}`
+                                    : "NOT DETERMINABLE"}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-2">
+                                  {result.result.financials.inventoryCarryingCost
+                                    ? `${result.result.financials.inventoryCarryingCost.status} · ${result.result.financials.inventoryCarryingCost.confidence}`
+                                    : "NOT AVAILABLE"}
+                                </div>
+                              </div>
+                            </div>                        </CardContent>
                         </Card>
                       </TabsContent>
 
                       <TabsContent value="mitigations">
-                        <div className="grid grid-cols-1 gap-4">
-                          {result.result.supplyRisk?.mitigationResult?.actions ? (
-                            result.result.supplyRisk.mitigationResult.actions.map((action: any, i: number) => (
-                              <Card key={i} className="border-primary">
-                                <CardHeader className="pb-2">
-                                  <div className="flex items-center justify-between">
-                                    <CardTitle className="text-lg">{action.title}</CardTitle>
-                                    <Badge variant={action.feasible ? "default" : "destructive"}>
-                                      {action.feasible ? "FEASIBLE" : "NOT FEASIBLE"}
-                                    </Badge>
-                                  </div>
-                                </CardHeader>
-                                <CardContent>
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm border-b pb-4">
-                                    <div>
-                                      <p className="text-muted-foreground font-semibold">Affected Qty</p>
-                                      <p>{action.affectedQuantity.toLocaleString()}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground font-semibold">Available Qty</p>
-                                      <p>{action.availableQuantity !== undefined ? action.availableQuantity.toLocaleString() : "N/A"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground font-semibold">Cost</p>
-                                      <p>{action.mitigationCostProvenance === "UNKNOWN" ? "Unknown" : `$${action.mitigationCost?.toLocaleString()}`}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground font-semibold">Date</p>
-                                      <p>{action.mitigationDateProvenance === "UNKNOWN" ? "Unknown" : action.mitigationDate}</p>
-                                    </div>
-                                  </div>
+                        <Card>
+                          <CardContent className="p-6">
+                            {result.result.mitigations.length > 0 ? (
+                              <div className="grid grid-cols-1 gap-4">
+                                {result.result.mitigations.map((opt: any, i: number) => (
+                                  <Card key={i}>
+                                    <CardHeader className="pb-2">
+                                      <div className="flex items-center justify-between">
+                                        <CardTitle className="text-lg">{opt.title}</CardTitle>
+                                        <Badge variant="secondary">
+                                          {opt.eligibility ?? "CANDIDATE"}
+                                        </Badge>
+                                      </div>
+                                    </CardHeader>
 
-                                  <div className="space-y-2 text-sm">
-                                    <p><strong>Action Type:</strong> {action.type}</p>
-                                    <p><strong>Why:</strong> {action.reason}</p>
-                                    {action.targetSupplierName && <p><strong>Target Supplier:</strong> {action.targetSupplierName} (ID: {action.targetSupplierId})</p>}
-                                    {action.targetProductId !== undefined && <p><strong>Target Product ID:</strong> {action.targetProductId}</p>}
-                                    <p className="text-xs text-muted-foreground mt-2">Cost Provenance: {action.mitigationCostProvenance} | Date Provenance: {action.mitigationDateProvenance}</p>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))
-                          ) : (
-                            result.result.mitigations.map((opt: any, i: number) => (
-                              <Card key={i} className={i === 0 ? "border-primary" : ""}>
-                                <CardHeader className="pb-2">
-                                  <div className="flex items-center justify-between">
-                                    <CardTitle className="text-lg">{opt.title}</CardTitle>
-                                    <Badge variant={i === 0 ? "default" : "secondary"}>
-                                      {i === 0 ? "AI RECOMMENDED" : opt.eligibility}
-                                    </Badge>
-                                  </div>
-                                </CardHeader>
-                                <CardContent>
-                                  <div className="grid grid-cols-4 gap-4 mb-4 text-sm border-b pb-4">
-                                    <div>
-                                      <p className="text-muted-foreground font-semibold">Recovery Day</p>
-                                      <p>{opt.recoveryDay || "N/A"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground font-semibold">Added Cost</p>
-                                      <p>{opt.addedCost?.status === "VERIFIED" ? `$${opt.addedCost.value?.toLocaleString()}` : "UNKNOWN"}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground font-semibold">Units Covered</p>
-                                      <p>{opt.unitsCovered?.toLocaleString()}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-muted-foreground font-semibold">Lead Time</p>
-                                      <p>{opt.leadTimeDays ? `${opt.leadTimeDays}d` : "N/A"}</p>
-                                    </div>
-                                  </div>
+                                    <CardContent>
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm border-b pb-4">
+                                        <div>
+                                          <p className="text-muted-foreground font-semibold">Recovery Day</p>
+                                          <p>{opt.recoveryDay ?? "N/A"}</p>
+                                        </div>
 
-                                  {opt.explanation && (
-                                    <div className="space-y-2 text-sm">
-                                      <p><strong>Action:</strong> {opt.explanation.action}</p>
-                                      <p><strong>Why:</strong> {opt.explanation.reason}</p>
-                                      <p><strong>Trade-off:</strong> {opt.explanation.tradeoff}</p>
-                                      <p className="text-xs text-muted-foreground mt-2">Source: {opt.explanation.dataSource}</p>
-                                    </div>
-                                  )}
-                                </CardContent>
-                              </Card>
-                            ))
-                          )}
-                        </div>
+                                        <div>
+                                          <p className="text-muted-foreground font-semibold">Added Cost</p>
+                                          <p>
+                                            {opt.addedCost?.value != null
+                                              ? `$${opt.addedCost.value.toLocaleString()}`
+                                              : "UNKNOWN"}
+                                          </p>
+                                        </div>
+
+                                        <div>
+                                          <p className="text-muted-foreground font-semibold">Units Covered</p>
+                                          <p>{opt.unitsCovered?.toLocaleString() ?? "N/A"}</p>
+                                        </div>
+
+                                        <div>
+                                          <p className="text-muted-foreground font-semibold">Lead Time</p>
+                                          <p>{opt.leadTimeDays != null ? `${opt.leadTimeDays}d` : "N/A"}</p>
+                                        </div>
+                                      </div>
+
+                                      {opt.explanation && (
+                                        <div className="space-y-2 text-sm">
+                                          <p><strong>Action:</strong> {opt.explanation.action}</p>
+                                          <p><strong>Why:</strong> {opt.explanation.reason}</p>
+                                          <p><strong>Trade-off:</strong> {opt.explanation.tradeoff}</p>
+                                          <p className="text-xs text-muted-foreground mt-2">
+                                            Source: {opt.explanation.dataSource}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                No deterministic mitigation candidates were returned for this simulation.
+                              </p>
+                            )}
+                          </CardContent>
+                        </Card>
                       </TabsContent>
 
                       <TabsContent value="whatif">
-                        {result.result.sr4Impact && (
-                          <div className="space-y-6">
-                            <Card className="border-indigo-200 bg-indigo-50/30 dark:bg-indigo-900/10">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-lg text-indigo-800 dark:text-indigo-300">Downstream Impact (Deterministic)</CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                  <div>
-                                    <p className="text-muted-foreground font-semibold text-xs uppercase tracking-wider">Baseline Shortage</p>
-                                    <p className="text-lg font-bold">{result.result.sr4Impact.baselineShortage.toLocaleString()}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground font-semibold text-xs uppercase tracking-wider">Scenario Shortage</p>
-                                    <p className="text-lg font-bold">{result.result.sr4Impact.scenarioShortage.toLocaleString()}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground font-semibold text-xs uppercase tracking-wider">Shortage Delta</p>
-                                    <p className="text-lg font-bold text-green-600">{result.result.sr4Impact.shortageDelta.toLocaleString()}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground font-semibold text-xs uppercase tracking-wider">Supplier Capacity</p>
-                                    <p className="text-sm font-bold mt-1">{result.result.sr4Impact.supplierCapacityStatus}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground font-semibold text-xs uppercase tracking-wider">Baseline Rev Exposure</p>
-                                    <p className="text-lg font-bold">
-                                      {result.result.sr4Impact.baselineRevenueAtRisk === "UNKNOWN" ? "UNKNOWN" : `$${result.result.sr4Impact.baselineRevenueAtRisk.toLocaleString()}`}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground font-semibold text-xs uppercase tracking-wider">Scenario Rev Exposure</p>
-                                    <p className="text-lg font-bold">
-                                      {result.result.sr4Impact.scenarioRevenueAtRisk === "UNKNOWN" ? "UNKNOWN" : `$${result.result.sr4Impact.scenarioRevenueAtRisk.toLocaleString()}`}
-                                    </p>
-                                  </div>
-                                  <div className="col-span-2">
-                                    <p className="text-muted-foreground font-semibold text-xs uppercase tracking-wider">Revenue Delta</p>
-                                    <p className="text-xl font-bold text-indigo-700 dark:text-indigo-400">
-                                      {result.result.sr4Impact.revenueDelta === "UNKNOWN" ? "UNKNOWN" : `$${result.result.sr4Impact.revenueDelta.toLocaleString()}`}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div className="mt-4 pt-4 border-t border-indigo-100 dark:border-indigo-800">
-                                  <h4 className="text-sm font-bold mb-2">Affected Sales Orders</h4>
-                                  {result.result.sr4Impact.affectedSalesOrders.length > 0 ? (
-                                    <div className="flex flex-wrap gap-2">
-                                      {result.result.sr4Impact.affectedSalesOrders.map((so: any) => (
-                                        <Badge key={so.salesOrderId} variant="outline" className="border-indigo-300 text-indigo-700 bg-white dark:bg-black">
-                                          SO: {so.salesOrderId} (Missed: {so.missedQuantity}) <span className="ml-1 text-[9px] text-muted-foreground">[{so.provenance}]</span>
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground">No downstream sales orders impacted.</p>
-                                  )}
-                                </div>
-
-                                <div className="mt-4 pt-4 border-t border-indigo-100 dark:border-indigo-800 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                                  <div><strong>Revenue Prov:</strong> {result.result.sr4Impact.provenance.revenue}</div>
-                                  <div><strong>Allocation Prov:</strong> {result.result.sr4Impact.provenance.allocation}</div>
-                                  <div><strong>Assumptions:</strong> {result.result.sr4Impact.scenarioAssumptions.join(", ") || "None"}</div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </div>
-                        )}
+                        <Card>
+                          <CardContent className="p-6">
+                            <p className="text-sm text-muted-foreground">
+                              What-If downstream impact is not available from the current single-scenario simulation endpoint.
+                            </p>
+                          </CardContent>
+                        </Card>
                       </TabsContent>
                     </Tabs>
                   )}
