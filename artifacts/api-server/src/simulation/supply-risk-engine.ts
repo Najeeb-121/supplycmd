@@ -3,19 +3,19 @@ import { calculateDeterministicProductionDelay, BOMNode } from "./bom-propagatio
 
 export function calculateRiskSeverity(exposure: Omit<RiskExposure, 'severity'>): RiskExposure["severity"] {
   if (exposure.residualShortage > 0) {
-    const hasDownstreamImpact = 
+    const hasDownstreamImpact =
       exposure.downstreamImpacts.dependentProducts.length > 0 ||
       exposure.downstreamImpacts.delayedMOs.length > 0 ||
       exposure.downstreamImpacts.affectedSalesOrders.length > 0;
-      
+
     if (hasDownstreamImpact) return "CRITICAL";
     return "HIGH";
   }
-  
+
   if (exposure.affectedQuantity > 0 && exposure.canAbsorbWithBuffer) {
     return "MEDIUM";
   }
-  
+
   if (exposure.affectedQuantity === 0) {
     return "LOW";
   }
@@ -34,7 +34,7 @@ function extractGeneralRiskFactors(snapshot: SupplyRiskSnapshot, productId: numb
   const alternateSupplierAvailable = targetSupplierId !== undefined
     ? product.suppliers.some(s => s.supplierId !== targetSupplierId)
     : false;
-  
+
   // Lead time is verified if ANY supplier has ODOO_VERIFIED lead time.
   const leadTimeVerified = product.leadTimeDays.source === "ODOO_VERIFIED" || product.suppliers.some(s => s.leadTimeDays.source === "ODOO_VERIFIED");
 
@@ -56,15 +56,15 @@ export function traceDownstreamImpacts(snapshot: SupplyRiskSnapshot, targetProdu
   // Note: Odoo IDs vs Internal IDs. The bomGraph uses parentSkuId and childSkuId.
   let currentSearch = new Set<number>([targetProductId]);
   let newFound = true;
-  
+
   while (newFound) {
     newFound = false;
     const nextSearch = new Set<number>();
-    
+
     for (const [parentIdStr, bomNode] of Object.entries(snapshot.boms)) {
       const parentId = parseInt(parentIdStr, 10);
       if (currentSearch.has(parentId)) continue; // already found
-      
+
       for (const line of bomNode.lines) {
         if (currentSearch.has(line.childSkuId)) {
           dependentProducts.add(parentId);
@@ -74,14 +74,18 @@ export function traceDownstreamImpacts(snapshot: SupplyRiskSnapshot, targetProdu
         }
       }
     }
-    
+
     for (const id of nextSearch) currentSearch.add(id);
   }
 
   // Find MOs
   for (const mo of snapshot.productionRuns) {
     // If MO's product is in our dependent products, or is the target product itself
-    if (mo.productOdooId && currentSearch.has(mo.productOdooId)) {
+    if (
+      mo.moState === "confirmed" &&
+      mo.productOdooId &&
+      currentSearch.has(mo.productOdooId)
+    ) {
       delayedMOs.add(mo.id || mo.odooId);
     }
   }
@@ -157,7 +161,7 @@ export function analyzeSupplierFailure(
 
   const inboundForSupplier = product.inboundPOs.filter(po => po.supplierId === targetSupplierId && po.currentlyInbound);
   const currentlyInboundQuantity = inboundForSupplier.reduce((sum, po) => sum + po.remainingQuantity, 0);
-  
+
   const affectedQuantity = currentlyInboundQuantity;
   const inventoryCoverage = Math.min(affectedQuantity, product.availableStock);
   const residualShortage = Math.max(affectedQuantity - product.availableStock, 0);
@@ -203,9 +207,9 @@ export function analyzeSupplierDelay(
 
   const inboundForSupplier = product.inboundPOs.filter(po => po.supplierId === targetSupplierId && po.currentlyInbound);
   const currentlyInboundQuantity = inboundForSupplier.reduce((sum, po) => sum + po.remainingQuantity, 0);
-  
+
   // For delay, the affected quantity is the delayed inbound quantity. 
-  const affectedQuantity = currentlyInboundQuantity; 
+  const affectedQuantity = currentlyInboundQuantity;
 
   // To preserve Phase 3-5 exactly:
   // We mock the inventory record for calculateDeterministicProductionDelay
@@ -214,10 +218,10 @@ export function analyzeSupplierDelay(
     // Note: calculateDeterministicProductionDelay uses onHand historically, 
     // but SR-1.7 dictates risk engine uses availableStock for its math.
     // However, we pass physicalStock here because Phase 3-5 relies on it internally for its specific math.
-    inventoryMock[p.productId] = { onHand: p.physicalStock }; 
+    inventoryMock[p.productId] = { onHand: p.physicalStock };
     if (p.odooId) inventoryMock[p.odooId] = { onHand: p.physicalStock };
   }
-  
+
   // Need raw POs to pass to calculateDeterministicProductionDelay (it expects some Odoo IDs etc)
   const rawPOs = inboundForSupplier.map(po => ({
     id: po.poId,
@@ -240,15 +244,15 @@ export function analyzeSupplierDelay(
   // We map the Phase 3-5 output into RiskExposure:
   const residualShortage = delaySchedule.p1270.netShortage;
   const inventoryCoverage = Math.max(0, delaySchedule.p1270.grossRequirement - residualShortage);
-  
+
   // NOTE: If the scenario doesn't have bom dependencies (not Hydro), we fall back to generic deterministic calculation
   // Let's use the standard SR-1.7 fallback if hasBomDependencies is false.
-  
+
   let finalResidualShortage = residualShortage;
   let finalInventoryCoverage = inventoryCoverage;
   let finalAffectedQuantity = affectedQuantity;
   let finalDownstream = traceDownstreamImpacts(snapshot, targetProductId);
-  
+
   if (!delaySchedule.hasBomDependencies) {
     finalAffectedQuantity = affectedQuantity;
     finalInventoryCoverage = Math.min(affectedQuantity, product.availableStock);
@@ -335,7 +339,7 @@ export function analyzeDiagnosticRisk(
 
   // Severity override for diagnostics
   let severity: RiskExposure["severity"] = "LOW";
-  
+
   if (scenarioType === "UNVERIFIED_LEAD_TIME" && !factors.leadTimeVerified) {
     severity = "UNKNOWN";
   } else if (scenarioType === "CAPACITY_CONSTRAINT") {

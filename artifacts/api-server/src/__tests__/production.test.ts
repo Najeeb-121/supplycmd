@@ -38,7 +38,12 @@ const validBody = {
 };
 
 const fakeRun = { id: 1, ...validBody };
-
+function postProduction(body: object) {
+  return request(app)
+    .post("/api/production")
+    .set("x-e2e-test-company-id", "1")
+    .send(body);
+}
 describe("POST /api/production", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -48,8 +53,7 @@ describe("POST /api/production", () => {
   it("201 – creates production run with a valid body", async () => {
     mocks.mockReturning.mockResolvedValueOnce([fakeRun]);
 
-    const res = await request(app).post("/api/production").send(validBody);
-
+    const res = await postProduction(validBody);
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ id: 1, productName: "Widget Alpha" });
   });
@@ -57,7 +61,7 @@ describe("POST /api/production", () => {
   // ── Required field validation ─────────────────────────────────────────────
   it("400 – rejects when productName is missing", async () => {
     const { productName: _, ...body } = validBody;
-    const res = await request(app).post("/api/production").send(body);
+    const res = await postProduction(body);
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("errors");
@@ -66,7 +70,7 @@ describe("POST /api/production", () => {
 
   it("400 – rejects when runDate is missing", async () => {
     const { runDate: _, ...body } = validBody;
-    const res = await request(app).post("/api/production").send(body);
+    const res = await postProduction(body);
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("errors");
@@ -74,36 +78,31 @@ describe("POST /api/production", () => {
   });
 
   it("400 – rejects when plannedUnits is negative", async () => {
-    const res = await request(app)
-      .post("/api/production")
-      .send({ ...validBody, plannedUnits: -1 });
+    const res = await postProduction({ ...validBody, plannedUnits: -1 });
 
     expect(res.status).toBe(400);
     expect(res.body.errors).toHaveProperty("plannedUnits");
   });
 
   it("400 – rejects when actualUnits is negative", async () => {
-    const res = await request(app)
-      .post("/api/production")
-      .send({ ...validBody, actualUnits: -1 });
+    // actualUnits negative
+    const res = await postProduction({ ...validBody, actualUnits: -1 });
 
     expect(res.status).toBe(400);
     expect(res.body.errors).toHaveProperty("actualUnits");
   });
 
   it("400 – rejects when defects is negative", async () => {
-    const res = await request(app)
-      .post("/api/production")
-      .send({ ...validBody, defects: -1 });
+    // defects negative
+    const res = await postProduction({ ...validBody, defects: -1 });
 
     expect(res.status).toBe(400);
     expect(res.body.errors).toHaveProperty("defects");
   });
 
   it("400 – rejects when plannedTimeMin is negative", async () => {
-    const res = await request(app)
-      .post("/api/production")
-      .send({ ...validBody, plannedTimeMin: -1 });
+    // plannedTimeMin negative
+    const res = await postProduction({ ...validBody, plannedTimeMin: -1 });
 
     expect(res.status).toBe(400);
     expect(res.body.errors).toHaveProperty("plannedTimeMin");
@@ -111,9 +110,8 @@ describe("POST /api/production", () => {
 
   // ── Cross-field constraint ─────────────────────────────────────────────────
   it("400 – rejects when defects exceed actualUnits", async () => {
-    const res = await request(app)
-      .post("/api/production")
-      .send({ ...validBody, actualUnits: 10, defects: 11 });
+    // defects exceed actualUnits
+    const res = await postProduction({ ...validBody, actualUnits: 10, defects: 11 });
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("errors");
@@ -126,9 +124,8 @@ describe("POST /api/production", () => {
   it("201 – accepts when defects equal actualUnits (boundary)", async () => {
     mocks.mockReturning.mockResolvedValueOnce([fakeRun]);
 
-    const res = await request(app)
-      .post("/api/production")
-      .send({ ...validBody, actualUnits: 10, defects: 10 });
+    // defects equal actualUnits
+    const res = await postProduction({ ...validBody, actualUnits: 10, defects: 10 });
 
     expect(res.status).toBe(201);
   });
@@ -136,9 +133,8 @@ describe("POST /api/production", () => {
   it("201 – accepts when defects are zero", async () => {
     mocks.mockReturning.mockResolvedValueOnce([fakeRun]);
 
-    const res = await request(app)
-      .post("/api/production")
-      .send({ ...validBody, defects: 0 });
+    // defects are zero
+    const res = await postProduction({ ...validBody, defects: 0 });
 
     expect(res.status).toBe(201);
   });

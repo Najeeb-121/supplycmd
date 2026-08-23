@@ -33,6 +33,7 @@ export interface ERPSnapshot {
 }
 
 export interface DependentDemand {
+  componentProductLocalId: number;
   componentProductOdooId: number;
   requiredQuantity: number;
   requiredDate: string | null;
@@ -55,22 +56,22 @@ export interface ScenarioModifiers {
   // Shift PO arrivals
   poDateShifts?: Record<number, number>; // PO ID -> delay in days
   poRemoveSupplier?: number; // Remove all POs from this supplier (Single Source Failure)
-  
+
   // Quality
   qualityRejectionRate?: number; // 0.0 to 1.0
   qualitySupplierId?: number;
-  
+
   // Price
   priceShockMultiplier?: number;
   priceShockSupplierId?: number;
-  
+
   // MOs
   moLineDowntime?: { lineId: number; startDay: number; endDay: number };
-  
+
   // Demand
   demandMultiplier?: number;
   demandMultiplierCustomer?: number; // Only apply to specific customer
-  
+
   seasonality?: Record<number, number>; // Month -> multiplier
 }
 
@@ -81,7 +82,7 @@ export function runDailyLoop(
   startDate: Date = new Date()
 ): DayRecord[] {
   const records: DayRecord[] = [];
-  
+
   let currentStock = snapshot.openingStock;
 
   for (let day = 0; day <= horizonDays; day++) {
@@ -101,14 +102,14 @@ export function runDailyLoop(
 
       // Apply PO date shift
       const shiftDays = modifiers.poDateShifts?.[po.id] || 0;
-      
+
       const expected = new Date(po.expectedDate);
       expected.setDate(expected.getDate() + shiftDays);
       const expectedStr = expected.toISOString().split("T")[0];
 
       if (expectedStr === dateStr) {
         let usableQty = po.qty;
-        
+
         // Quality Loss
         if (modifiers.qualityRejectionRate && modifiers.qualitySupplierId === po.supplierId) {
           const rejectedQty = po.qty * modifiers.qualityRejectionRate;
@@ -128,14 +129,14 @@ export function runDailyLoop(
       const completionDate = mo.dateDeadline !== undefined ? mo.dateDeadline : mo.scheduledDate;
       if (completionDate && completionDate.startsWith(dateStr)) {
         let produces = true;
-        
+
         // Line failure
         if (modifiers.moLineDowntime && mo.lineId === modifiers.moLineDowntime.lineId) {
           if (day >= modifiers.moLineDowntime.startDay && day <= modifiers.moLineDowntime.endDay) {
             produces = false;
           }
         }
-        
+
         if (produces) {
           moOutput += mo.qty;
         }
@@ -144,20 +145,20 @@ export function runDailyLoop(
 
     // 3. Calculate Consumption
     let consumption = 0;
-    
+
     const hasSalesOrders = snapshot.salesOrders && snapshot.salesOrders.length > 0;
     const hasDependentDemands = snapshot.dependentDemands && snapshot.dependentDemands.length > 0;
-    
+
     if (hasSalesOrders || hasDependentDemands) {
       let baseConsumption = 0;
       let customerTotal = 0;
       let targetCustomerTotal = 0;
-      
+
       if (hasSalesOrders) {
         for (const so of snapshot.salesOrders) {
           if (so.demandDate === dateStr) {
             baseConsumption += so.remainingQty;
-            
+
             if (modifiers.demandMultiplierCustomer && so.customerId === modifiers.demandMultiplierCustomer) {
               targetCustomerTotal += so.remainingQty;
             }
@@ -168,18 +169,19 @@ export function runDailyLoop(
       if (hasDependentDemands) {
         for (const dd of snapshot.dependentDemands!) {
           if (
-            dd.requiredDate === dateStr && 
-            dd.status !== "MISSING_BOM" && 
-            dd.status !== "CIRCULAR_BOM_DETECTED" && 
+            dd.componentProductLocalId === snapshot.productId &&
+            dd.requiredDate === dateStr &&
+            dd.status !== "MISSING_BOM" &&
+            dd.status !== "CIRCULAR_BOM_DETECTED" &&
             dd.status !== "INSUFFICIENT_PRODUCTION_TIMING_DATA"
           ) {
             baseConsumption += dd.requiredQuantity;
           }
         }
       }
-      
+
       consumption = baseConsumption;
-      
+
       // Apply demand multiplier specifically to the affected customer, or globally
       if (modifiers.demandMultiplier !== undefined) {
         if (modifiers.demandMultiplierCustomer) {
@@ -196,21 +198,21 @@ export function runDailyLoop(
         consumption *= modifiers.demandMultiplier;
       }
     }
-    
+
     // Seasonality
     if (modifiers.seasonality) {
       const month = currentDate.getMonth() + 1; // 1-12
-      if (modifiers.seasonality[month]) {
+      if (modifiers.seasonality[month] != null) {
         consumption *= modifiers.seasonality[month];
       }
     }
 
     // 4. Closing Stock
     let closingStock = openingStock + inbound + moOutput - Math.round(consumption);
-    
+
     let shortageUnits = 0;
     let isStockout = false;
-    
+
     if (closingStock < 0) {
       shortageUnits = Math.abs(closingStock);
       closingStock = 0;
@@ -228,7 +230,7 @@ export function runDailyLoop(
       closingStock,
       shortageUnits,
       isStockout,
-      sourceType: "SIMULATION_ASSUMPTION"
+      sourceType: "DERIVED"
     });
   }
 
@@ -247,14 +249,14 @@ export function extractLoopMetrics(records: DayRecord[], snapshot: ERPSnapshot) 
 
   for (let i = 0; i < records.length; i++) {
     const rec = records[i];
-    
+
     totalDemand += rec.consumption;
-    
+
     if (rec.isStockout) {
       if (firstStockoutDay === null) firstStockoutDay = rec.day;
       stockoutDuration++;
       totalUnmetDemand += rec.shortageUnits;
-      
+
       if (rec.shortageUnits > maxShortageUnits) {
         maxShortageUnits = rec.shortageUnits;
       }
@@ -264,7 +266,7 @@ export function extractLoopMetrics(records: DayRecord[], snapshot: ERPSnapshot) 
         recoveryDate = rec.date;
       }
     }
-    
+
     if (rec.closingStock > peakInventoryValue) {
       peakInventoryValue = rec.closingStock;
       peakInventoryDay = rec.day;

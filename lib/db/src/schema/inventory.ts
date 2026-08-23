@@ -14,6 +14,7 @@ export const inventoryItemsTable = pgTable("inventory_items", {
   // Unique per company, not globally — two companies' Odoo databases can
   // both have a product with the same internal id.
   odooId: integer("odoo_id"),
+  odooProductTemplateId: integer("odoo_product_template_id"),
   // Core identification
   name: text("name").notNull(),
   sku: text("sku").notNull(),

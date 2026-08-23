@@ -16,7 +16,7 @@ export const productionRunsTable = pgTable("production_runs", {
   actualTimeMin: real("actual_time_min").notNull().default(0),
   defects: real("defects").notNull().default(0),
   downtimeMin: real("downtime_min").notNull().default(0),
-  runDate: date("run_date", { mode: "string" }).notNull(),
+  runDate: date("run_date", { mode: "string" }),
   bomId: integer("bom_id"),
   dateDeadline: date("date_deadline", { mode: "string" }),
   moState: text("mo_state").notNull().default("draft"),

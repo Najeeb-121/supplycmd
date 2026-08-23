@@ -22,18 +22,22 @@ export interface InventoryStatus {
 
 export function buildBOMGraph(boms: any[], bomLines: any[]): Record<number, BOMNode> {
   const graph: Record<number, BOMNode> = {};
-  
+
   for (const bom of boms) {
     if (!bom.isActive) continue;
     if (!bom.parentSkuId) continue; // safety
-    
+
     // Use Odoo IDs if available, else fallback to internal IDs
-    const parentId = bom.parentSkuId; 
-    
+    const parentId = bom.parentSkuId;
+
+    if (graph[parentId]) {
+      throw new Error(`MULTIPLE_ACTIVE_BOMS_FOR_PARENT:${parentId}`);
+    }
+
     graph[parentId] = {
       odooBomId: bom.odooBomId || bom.id,
       parentSkuId: parentId,
-      parentBomQty: bom.parentBomQty || 1,
+      parentBomQty: bom.parentBomQty ?? 1,
       lines: []
     };
   }
@@ -42,14 +46,14 @@ export function buildBOMGraph(boms: any[], bomLines: any[]): Record<number, BOMN
     if (line.isDeleted) continue;
     const bom = boms.find(b => b.id === line.bomId);
     if (!bom || !bom.parentSkuId) continue;
-    
+
     const parentId = bom.parentSkuId;
-    
+
     if (graph[parentId]) {
       graph[parentId].lines.push({
         odooLineId: line.odooLineId || line.id,
         childSkuId: line.childSkuId,
-        componentQty: line.componentQty || 1
+        componentQty: line.componentQty ?? 1
       });
     }
   }
@@ -61,33 +65,37 @@ export function propagateDemand(
   salesOrders: any[],
   bomGraph: Record<number, BOMNode>,
   initialInventory: InventoryStatus,
-  productionRuns: any[] = []
+  productionRuns: any[] = [],
+  inventoryOdooIdByLocalId: Map<number, number> = new Map()
 ): { dependentDemands: DependentDemand[], warnings: string[] } {
   const dependentDemands: DependentDemand[] = [];
   const warnings: string[] = [];
-  
+
   // Clone inventory to track consumption
   const inventory: InventoryStatus = JSON.parse(JSON.stringify(initialInventory));
-  
+
   // Sort sales orders chronologically so earlier demands consume inventory first
   const sortedOrders = [...salesOrders].sort((a, b) => {
     return new Date(a.demandDate).getTime() - new Date(b.demandDate).getTime();
   });
-  
+
   for (const so of sortedOrders) {
     // Only process valid demand
     if (so.remainingQty <= 0) continue;
-    
+
     explodeDemand(
       so.productId,
       so.remainingQty,
       so.demandDate,
       {
-        sourceFinishedProductOdooId: so.productId,
+        sourceFinishedProductOdooId:
+          inventoryOdooIdByLocalId.get(so.productId) ?? so.productId,
         sourceDemandDate: so.demandDate,
         sourceDemandQuantity: so.remainingQty,
-        sourceSalesOrderOdooId: so.salesOrderId,
-        sourceSalesLineOdooId: so.salesOrderLineId
+        sourceSalesOrderOdooId:
+          so.salesOrderOdooId ?? so.salesOrderId,
+        sourceSalesLineOdooId:
+          so.salesOrderLineOdooId ?? so.salesOrderLineId
       },
       1,
       new Set<number>(),
@@ -95,10 +103,11 @@ export function propagateDemand(
       inventory,
       dependentDemands,
       warnings,
-      productionRuns
+      productionRuns,
+      inventoryOdooIdByLocalId
     );
   }
-  
+
   return { dependentDemands, warnings };
 }
 
@@ -119,7 +128,8 @@ function explodeDemand(
   inventory: InventoryStatus,
   results: DependentDemand[],
   warnings: string[],
-  productionRuns: any[] = []
+  productionRuns: any[] = [],
+  inventoryOdooIdByLocalId: Map<number, number> = new Map()
 ) {
   // 1. Consume existing inventory for this product
   let netQty = requiredQty;
@@ -128,22 +138,24 @@ function explodeDemand(
     inventory[productId].onHand -= consumed;
     netQty -= consumed;
   }
-  
+
   if (netQty <= 0) return; // Fully satisfied from stock
-  
+
   // 2. Check for BOM
   const bom = bomGraph[productId];
   if (!bom) {
     // If no BOM exists but we need more, we just stop exploding
     return;
   }
-  
+
   // 3. Circular dependency check
   if (visitedProducts.has(productId)) {
     warnings.push(`Circular BOM detected for product ` + productId);
     results.push({
       ...provenance,
-      componentProductOdooId: productId,
+      componentProductLocalId: productId,
+      componentProductOdooId:
+        inventoryOdooIdByLocalId.get(productId) ?? productId,
       requiredQuantity: netQty,
       requiredDate,
       bomOdooId: bom.odooBomId,
@@ -152,18 +164,16 @@ function explodeDemand(
     });
     return;
   }
-  
+
   const newVisited = new Set(visitedProducts);
   newVisited.add(productId);
-  
+
   // 4. Explode down to components
   const bomMultiplier = netQty / bom.parentBomQty;
-  
+
   // Step 3: Find relevant parent MO for timing
-  const parentMo = productionRuns.find(m => 
-    (m.bomId && m.bomId === bom.odooBomId) ||
-    (m.productOdooId && m.productOdooId === productId) ||
-    (m.productName && (m.productName.includes("Mountain Dew") && productId === 16 || m.productName.includes("Printed Can") && productId === 15))
+  const parentMo = productionRuns.find(m =>
+    m.bomId && m.bomId === bom.odooBomId
   );
 
   let childRequiredDate: string | null = null;
@@ -174,16 +184,18 @@ function explodeDemand(
   if (dateStart) {
     childRequiredDate = dateStart.split(" ")[0];
     timingStatus = "VERIFIED_MO_TIMING";
-    timingSource = "TEST_FIXTURE";
+    timingSource = "ODOO_PRODUCTION_RUN";
   }
 
   for (const line of bom.lines) {
     const componentQtyNeeded = line.componentQty * bomMultiplier;
-    
+
     // Add demand record for this component
     results.push({
       ...provenance,
-      componentProductOdooId: line.childSkuId,
+      componentProductLocalId: line.childSkuId,
+      componentProductOdooId:
+        inventoryOdooIdByLocalId.get(line.childSkuId) ?? line.childSkuId,
       requiredQuantity: componentQtyNeeded,
       requiredDate: childRequiredDate,
       bomOdooId: bom.odooBomId,
@@ -194,7 +206,7 @@ function explodeDemand(
         status: timingStatus
       }
     });
-    
+
     // Recursively explode for the component
     explodeDemand(
       line.childSkuId,
@@ -207,7 +219,8 @@ function explodeDemand(
       inventory,
       results,
       warnings,
-      productionRuns
+      productionRuns,
+      inventoryOdooIdByLocalId
     );
   }
 }
@@ -287,7 +300,7 @@ export function calculateDeterministicProductionDelay(
   const hydroPo = pos.find(p => p.id === 523 || p.odooId === 21 || (p.supplierId === 380) || p.expectedDate?.includes("2026-08-23")) || {
     expectedDate: "2026-08-23", qty: 2950
   };
-  
+
   let basePoDate = (hydroPo.expectedDate?.split(" ")[0] || "2026-08-23");
   if (poShiftDays !== 0) {
     basePoDate = addDays(basePoDate, poShiftDays);

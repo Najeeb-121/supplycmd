@@ -1,8 +1,26 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { buildBOMGraph, propagateDemand } from "../simulation/bom-propagation";
 import { eq, and, or, inArray } from "drizzle-orm";
-import { db, suppliersTable, inventoryItemsTable, ordersTable, purchaseOrderLinesTable, odooConnectionsTable, productSuppliersTable } from "@workspace/db";
+import {
+  db,
+  suppliersTable,
+  inventoryItemsTable,
+  ordersTable,
+  purchaseOrderLinesTable,
+  salesOrdersTable,
+  salesOrderLinesTable,
+  odooConnectionsTable,
+  productSuppliersTable,
+  bomsTable,
+  bomLinesTable,
+  productionRunsTable,
+  type SimulationResult,
+  type ScenarioDef,
+} from "@workspace/db";
 import { OdooClient, decryptSecret } from "@workspace/integrations-odoo-server";
 import { logger } from "../lib/logger";
+import { runDailyLoop, extractLoopMetrics, type ERPSnapshot } from "../simulation/core";
+import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
 
 const router: IRouter = Router();
 
@@ -59,8 +77,8 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
       const configuredSuppliers = await db.select({
         name: suppliersTable.name
       }).from(productSuppliersTable)
-      .innerJoin(suppliersTable, eq(productSuppliersTable.supplierId, suppliersTable.id))
-      .where(inArray(productSuppliersTable.inventoryItemId, configuredItemIds));
+        .innerJoin(suppliersTable, eq(productSuppliersTable.supplierId, suppliersTable.id))
+        .where(inArray(productSuppliersTable.inventoryItemId, configuredItemIds));
       configuredSupplierNames = new Set(configuredSuppliers.map(s => s.name).filter(Boolean));
     }
 
@@ -72,21 +90,21 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
     const historicalSupplierIds = new Set(relatedOrders.filter(o => o.status === "delivered" || o.status === "cancelled").map(o => o.supplierId));
 
     const allSuppliers = await db.select().from(suppliersTable).where(eq(suppliersTable.companyId, req.user!.companyId));
-    
+
     for (const altSupplier of allSuppliers) {
       if (supplier && altSupplier.id === supplier.id) continue;
 
       const isConfigured = configuredSupplierNames.has(altSupplier.name);
       const isActive = activeSupplierIds.has(altSupplier.id);
       const isHistorical = historicalSupplierIds.has(altSupplier.id);
-      
+
       let classification = "NO_VERIFIED_RELATIONSHIP";
       if (isConfigured) classification = "CONFIGURED_VENDOR";
       else if (isActive) classification = "ACTIVE_PROCUREMENT_RELATIONSHIP";
       else if (isHistorical) classification = "HISTORICAL_PROCUREMENT_RELATIONSHIP";
 
       if (altSupplier.name.includes("Novelis") && product.name.includes("Coil") && classification === "NO_VERIFIED_RELATIONSHIP") {
-         classification = "ACTIVE_PROCUREMENT_RELATIONSHIP";
+        classification = "ACTIVE_PROCUREMENT_RELATIONSHIP";
       }
 
       if (classification !== "NO_VERIFIED_RELATIONSHIP") {
@@ -131,10 +149,10 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
   }
 
   const supplierRelationship = (supplier && product) ? "VERIFIED" : "UNVERIFIED";
-  const alternateSupplierData = alternateSuppliers.length > 0 
+  const alternateSupplierData = alternateSuppliers.length > 0
     ? (alternateSuppliers.some(a => a.status === "VERIFIED") ? "VERIFIED" : "CANDIDATE")
     : "NONE";
-  
+
   let overallConfidence: "HIGH" | "MEDIUM" | "LOW" = "LOW";
   if (supplierRelationship === "VERIFIED" && inventoryDataStatus === "VERIFIED" && consumptionStatus === "VERIFIED") {
     overallConfidence = "HIGH";
@@ -180,7 +198,7 @@ router.post("/simulation/snapshot", async (req: Request, res: Response): Promise
 
   try {
     const [configRow] = await db.select().from(odooConnectionsTable).where(eq(odooConnectionsTable.companyId, companyId));
-    
+
     let localProduct = null;
     if (inventoryItemId) {
       const [found] = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.id, inventoryItemId), eq(inventoryItemsTable.companyId, companyId)));
@@ -224,8 +242,8 @@ router.post("/simulation/snapshot", async (req: Request, res: Response): Promise
       snapshot.product.available.provenance = "COMPUTED";
       snapshot.product.unitCost = makeVerified(localProduct.unitCost, "Local DB (Inventory)");
       snapshot.product.sellingPrice = localProduct.sellingPrice ? makeVerified(localProduct.sellingPrice, "Local DB (Inventory)") : makeUnknown();
-      
-      const dailyDemand = localProduct.annualDemand ? localProduct.annualDemand / 365 : 10; 
+
+      const dailyDemand = localProduct.annualDemand ? localProduct.annualDemand / 365 : 10;
       snapshot.product.dailyConsumption = {
         value: dailyDemand,
         source: localProduct.annualDemand ? "Local DB (Inventory)" : "Fallback Assumption",
@@ -251,50 +269,50 @@ router.post("/simulation/snapshot", async (req: Request, res: Response): Promise
       try {
         const odooConfig = { url: configRow.url, db: configRow.db, username: configRow.username, apiKey: decryptSecret(configRow.apiKeyEncrypted) };
         const client = new OdooClient(odooConfig);
-        
+
         const odooProductId = localProduct?.odooId;
         if (odooProductId) {
           const odooProducts = await client.searchRead<Record<string, any>>("product.product", [["id", "=", odooProductId]], ["qty_available", "standard_price", "list_price", "currency_id"]);
           if (odooProducts.length > 0) {
-             const op = odooProducts[0];
-             snapshot.product.onHand = makeVerified(Number(op.qty_available), "Odoo (product.product.qty_available)");
-             snapshot.product.unitCost = makeVerified(Number(op.standard_price), "Odoo (product.product.standard_price)");
-             snapshot.product.sellingPrice = makeVerified(Number(op.list_price), "Odoo (product.product.list_price)");
-             if (op.currency_id) {
-               const currTuple = op.currency_id as [number, string] | false;
-               if (currTuple) snapshot.product.currency = makeVerified(currTuple[1], "Odoo (product.product.currency_id)");
-             }
+            const op = odooProducts[0];
+            snapshot.product.onHand = makeVerified(Number(op.qty_available), "Odoo (product.product.qty_available)");
+            snapshot.product.unitCost = makeVerified(Number(op.standard_price), "Odoo (product.product.standard_price)");
+            snapshot.product.sellingPrice = makeVerified(Number(op.list_price), "Odoo (product.product.list_price)");
+            if (op.currency_id) {
+              const currTuple = op.currency_id as [number, string] | false;
+              if (currTuple) snapshot.product.currency = makeVerified(currTuple[1], "Odoo (product.product.currency_id)");
+            }
           }
 
           const supplierInfos = await client.searchRead<Record<string, any>>("product.supplierinfo", [["product_tmpl_id", "=", odooProductId]], ["partner_id", "delay", "price", "min_qty", "currency_id"]);
-          
+
           const alts = [];
           for (const si of supplierInfos) {
-             const partnerTuple = si.partner_id as [number, string] | false;
-             if (partnerTuple) {
-               const sOdooId = partnerTuple[0];
-               const sName = partnerTuple[1];
-               const currTuple = si.currency_id as [number, string] | false;
-               const currencyName = currTuple ? currTuple[1] : null;
-               
-               if (localSupplier && (localSupplier.odooId === sOdooId || localSupplier.name === sName)) {
-                 snapshot.supplier.leadTimeDays = makeVerified(Number(si.delay), "Odoo (product.supplierinfo)");
-                 snapshot.supplier.price = makeVerified(Number(si.price), "Odoo (product.supplierinfo)");
-                 snapshot.supplier.minQuantity = makeVerified(Number(si.min_qty), "Odoo (product.supplierinfo)");
-                 if (currencyName) snapshot.supplier.currency = makeVerified(currencyName, "Odoo (product.supplierinfo)");
-                 continue;
-               }
-               
-               alts.push({
-                 odooId: makeVerified(sOdooId, "Odoo (product.supplierinfo)"),
-                 name: makeVerified(sName, "Odoo (product.supplierinfo)"),
-                 leadTimeDays: makeVerified(Number(si.delay), "Odoo (product.supplierinfo.delay)"),
-                 price: makeVerified(Number(si.price), "Odoo (product.supplierinfo.price)"),
-                 minQuantity: makeVerified(Number(si.min_qty), "Odoo (product.supplierinfo.min_qty)"),
-                 currency: currencyName ? makeVerified(currencyName, "Odoo (product.supplierinfo)") : makeUnknown(),
-                 relationship: makeVerified("CONFIGURED_VENDOR", "Odoo (product.supplierinfo)")
-               });
-             }
+            const partnerTuple = si.partner_id as [number, string] | false;
+            if (partnerTuple) {
+              const sOdooId = partnerTuple[0];
+              const sName = partnerTuple[1];
+              const currTuple = si.currency_id as [number, string] | false;
+              const currencyName = currTuple ? currTuple[1] : null;
+
+              if (localSupplier && (localSupplier.odooId === sOdooId || localSupplier.name === sName)) {
+                snapshot.supplier.leadTimeDays = makeVerified(Number(si.delay), "Odoo (product.supplierinfo)");
+                snapshot.supplier.price = makeVerified(Number(si.price), "Odoo (product.supplierinfo)");
+                snapshot.supplier.minQuantity = makeVerified(Number(si.min_qty), "Odoo (product.supplierinfo)");
+                if (currencyName) snapshot.supplier.currency = makeVerified(currencyName, "Odoo (product.supplierinfo)");
+                continue;
+              }
+
+              alts.push({
+                odooId: makeVerified(sOdooId, "Odoo (product.supplierinfo)"),
+                name: makeVerified(sName, "Odoo (product.supplierinfo)"),
+                leadTimeDays: makeVerified(Number(si.delay), "Odoo (product.supplierinfo.delay)"),
+                price: makeVerified(Number(si.price), "Odoo (product.supplierinfo.price)"),
+                minQuantity: makeVerified(Number(si.min_qty), "Odoo (product.supplierinfo.min_qty)"),
+                currency: currencyName ? makeVerified(currencyName, "Odoo (product.supplierinfo)") : makeUnknown(),
+                relationship: makeVerified("CONFIGURED_VENDOR", "Odoo (product.supplierinfo)")
+              });
+            }
           }
           snapshot.alternateSuppliers = alts;
 
@@ -302,34 +320,34 @@ router.post("/simulation/snapshot", async (req: Request, res: Response): Promise
           const poList = [];
           const historicalPurchases = [];
           for (const pol of poLines) {
-             const orderTuple = pol.order_id as [number, string] | false;
-             const partnerTuple = pol.partner_id as [number, string] | false;
-             if (orderTuple && partnerTuple) {
-               const state = pol.state;
-               
-               if (state === "done" || state === "purchase") {
-                 historicalPurchases.push({
-                   supplierOdooId: partnerTuple[0],
-                   supplierName: partnerTuple[1],
-                   quantity: Number(pol.product_qty),
-                   spend: Number(pol.price_total || 0)
-                 });
-               }
+            const orderTuple = pol.order_id as [number, string] | false;
+            const partnerTuple = pol.partner_id as [number, string] | false;
+            if (orderTuple && partnerTuple) {
+              const state = pol.state;
 
-               if (state === "purchase") {
-                 const remainingQty = Number(pol.product_qty) - Number(pol.qty_received);
-                 if (remainingQty > 0) {
-                   poList.push({
-                     odooId: makeVerified(orderTuple[0], "Odoo (purchase.order.line)"),
-                     orderName: makeVerified(orderTuple[1], "Odoo (purchase.order.line)"),
-                     supplierName: makeVerified(partnerTuple[1], "Odoo (purchase.order.line)"),
-                     remainingQty: makeVerified(remainingQty, "Odoo (purchase.order.line) Computed"),
-                     expectedDate: makeVerified(pol.date_planned as string, "Odoo (purchase.order.line)"),
-                     unitPrice: makeVerified(Number(pol.price_unit), "Odoo (purchase.order.line)")
-                   });
-                 }
-               }
-             }
+              if (state === "done" || state === "purchase") {
+                historicalPurchases.push({
+                  supplierOdooId: partnerTuple[0],
+                  supplierName: partnerTuple[1],
+                  quantity: Number(pol.product_qty),
+                  spend: Number(pol.price_total || 0)
+                });
+              }
+
+              if (state === "purchase") {
+                const remainingQty = Number(pol.product_qty) - Number(pol.qty_received);
+                if (remainingQty > 0) {
+                  poList.push({
+                    odooId: makeVerified(orderTuple[0], "Odoo (purchase.order.line)"),
+                    orderName: makeVerified(orderTuple[1], "Odoo (purchase.order.line)"),
+                    supplierName: makeVerified(partnerTuple[1], "Odoo (purchase.order.line)"),
+                    remainingQty: makeVerified(remainingQty, "Odoo (purchase.order.line) Computed"),
+                    expectedDate: makeVerified(pol.date_planned as string, "Odoo (purchase.order.line)"),
+                    unitPrice: makeVerified(Number(pol.price_unit), "Odoo (purchase.order.line)")
+                  });
+                }
+              }
+            }
           }
           snapshot.purchaseOrders = poList;
           snapshot.historicalPurchases = historicalPurchases.map(hp => ({
@@ -347,6 +365,422 @@ router.post("/simulation/snapshot", async (req: Request, res: Response): Promise
     res.json(snapshot);
   } catch (error: any) {
     logger.error({ error }, "Error building ERP snapshot");
+    res.status(500).json({ error: error.message });
+  }
+});
+router.post("/simulation/run", async (req: Request, res: Response): Promise<void> => {
+  const companyId = req.user!.companyId;
+  const scenario = req.body?.scenario as ScenarioDef | undefined;
+
+  if (!scenario) {
+    res.status(400).json({ error: "Missing scenario" });
+    return;
+  }
+
+  const productId = scenario.parameters.productId;
+  const supplierId = scenario.parameters.supplierId;
+
+  if (!productId) {
+    res.status(400).json({ error: "Missing productId" });
+    return;
+  }
+
+  try {
+    const [product] = await db
+      .select({
+        id: inventoryItemsTable.id,
+        name: inventoryItemsTable.name,
+        currentStock: inventoryItemsTable.currentStock,
+        sellingPrice: inventoryItemsTable.sellingPrice,
+        unitCost: inventoryItemsTable.unitCost,
+        safetyStock: inventoryItemsTable.safetyStock,
+        reorderPoint: inventoryItemsTable.reorderPoint,
+      })
+      .from(inventoryItemsTable)
+      .where(and(
+        eq(inventoryItemsTable.id, productId),
+        eq(inventoryItemsTable.companyId, companyId)
+      ));
+
+    if (!product) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+
+    const poLines = await db
+      .select()
+      .from(purchaseOrderLinesTable)
+      .where(and(
+        eq(purchaseOrderLinesTable.companyId, companyId),
+        eq(purchaseOrderLinesTable.inventoryItemId, productId)
+      ));
+
+    const inboundPOs: ERPSnapshot["inboundPOs"] = poLines
+      .filter(po =>
+        po.expectedDate &&
+        po.remainingQuantity > 0 &&
+        po.status !== "done" &&
+        po.status !== "cancel"
+      )
+      .map(po => ({
+        id: po.id,
+        expectedDate: po.expectedDate!,
+        qty: po.remainingQuantity,
+        supplierId: po.supplierId,
+        status: po.status,
+      }));
+
+    const salesRows = await db
+      .select({
+        line: salesOrderLinesTable,
+        order: salesOrdersTable,
+      })
+      .from(salesOrderLinesTable)
+      .innerJoin(
+        salesOrdersTable,
+        eq(salesOrderLinesTable.orderId, salesOrdersTable.id)
+      )
+      .where(and(
+        eq(salesOrderLinesTable.companyId, companyId),
+        eq(salesOrderLinesTable.inventoryItemId, productId)
+      ));
+    const allSalesRows = await db
+      .select({
+        line: salesOrderLinesTable,
+        order: salesOrdersTable,
+      })
+      .from(salesOrderLinesTable)
+      .innerJoin(
+        salesOrdersTable,
+        eq(salesOrderLinesTable.orderId, salesOrdersTable.id)
+      )
+      .where(eq(salesOrderLinesTable.companyId, companyId));
+
+    const salesOrders: ERPSnapshot["salesOrders"] = salesRows
+      .map(({ line, order }) => {
+        const demandDate =
+          line.effectiveDeliveryDate ||
+          line.expectedDate ||
+          order.effectiveDeliveryDate ||
+          order.expectedDate;
+
+        if (!demandDate) return null;
+
+        return {
+          salesOrderId: order.id,
+          salesOrderLineId: line.id,
+          customerId: order.customerId ?? null,
+          demandDate,
+          orderedQty: line.orderedQuantity,
+          deliveredQty: line.deliveredQuantity,
+          remainingQty: line.remainingQuantity,
+          unitPrice: line.unitPrice ?? 0,
+          currency: line.currency || order.currency || "UNKNOWN",
+          status: line.status,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    const demandSeeds = allSalesRows
+      .map(({ line, order }) => {
+        const demandDate =
+          line.effectiveDeliveryDate ||
+          line.expectedDate ||
+          order.effectiveDeliveryDate ||
+          order.expectedDate;
+
+        if (!demandDate || !line.inventoryItemId || line.remainingQuantity <= 0) {
+          return null;
+        }
+
+        return {
+          salesOrderId: order.id,
+          salesOrderLineId: line.id,
+          salesOrderOdooId: order.odooId ?? undefined,
+          salesOrderLineOdooId: line.odooId ?? undefined,
+          productId: line.inventoryItemId,
+          demandDate,
+          remainingQty: line.remainingQuantity,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    const bomRows = await db
+      .select()
+      .from(bomsTable)
+      .where(eq(bomsTable.companyId, companyId));
+
+    const bomLineRows = await db
+      .select()
+      .from(bomLinesTable)
+      .where(eq(bomLinesTable.companyId, companyId));
+
+    const productionRuns = await db
+      .select()
+      .from(productionRunsTable)
+      .where(eq(productionRunsTable.companyId, companyId));
+    const confirmedProductionRuns = productionRuns.filter(
+      run => run.moState === "confirmed" && run.bomId != null
+    );
+
+    const confirmedBomOdooIds = new Set(
+      confirmedProductionRuns.map(run => run.bomId as number)
+    );
+
+    const selectedBomRows = bomRows.filter(
+      bom => bom.odooBomId != null && confirmedBomOdooIds.has(bom.odooBomId)
+    );
+
+    const selectedBomLocalIds = new Set(
+      selectedBomRows.map(bom => bom.id)
+    );
+
+    const selectedBomLineRows = bomLineRows.filter(
+      line => selectedBomLocalIds.has(line.bomId)
+    );
+    const inventoryRows = await db
+      .select({
+        id: inventoryItemsTable.id,
+        odooId: inventoryItemsTable.odooId,
+        currentStock: inventoryItemsTable.currentStock,
+        leadTimeDays: inventoryItemsTable.leadTimeDays,
+      })
+      .from(inventoryItemsTable)
+      .where(eq(inventoryItemsTable.companyId, companyId));
+    const inventoryOdooIdByLocalId = new Map(
+      inventoryRows
+        .filter(item => item.odooId != null)
+        .map(item => [item.id, item.odooId as number])
+    );
+
+    const initialInventory = Object.fromEntries(
+      inventoryRows.map(item => [
+        item.id,
+        {
+          onHand: item.currentStock,
+          leadTimeDays: item.leadTimeDays ?? undefined,
+        },
+      ])
+    );
+    let dependentDemands: ERPSnapshot["dependentDemands"] = [];
+    const bomViolations: string[] = [];
+
+    try {
+      const bomGraph = buildBOMGraph(selectedBomRows, selectedBomLineRows);
+
+      const propagated = propagateDemand(
+        demandSeeds,
+        bomGraph,
+        initialInventory,
+        confirmedProductionRuns,
+        inventoryOdooIdByLocalId
+      );
+
+      dependentDemands = propagated.dependentDemands;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "BOM_GRAPH_INVALID";
+
+      if (message.startsWith("MULTIPLE_ACTIVE_BOMS_FOR_PARENT:")) {
+        bomViolations.push(message);
+      } else {
+        throw error;
+      }
+    }
+    const snapshot: ERPSnapshot = {
+      productId,
+      openingStock: product.currentStock,
+      dailyDemandRate: 0,
+      safetyStock: product.safetyStock,
+      inboundPOs,
+      scheduledMOs: [],
+      salesOrders,
+      dependentDemands,
+    };
+    if (
+      scenario.type === "PRODUCTION_LINE_FAILURE" &&
+      snapshot.scheduledMOs.length === 0
+    ) {
+      res.status(422).json({
+        error: "INSUFFICIENT_PRODUCTION_LINE_DATA",
+        message:
+          "No scheduled manufacturing orders with production line data are available for this scenario.",
+      });
+      return;
+    }
+    const startCandidates = [
+      ...snapshot.inboundPOs.map(po => po.expectedDate),
+      ...snapshot.salesOrders.map(so => so.demandDate),
+      ...(snapshot.dependentDemands ?? [])
+        .map(dd => dd.requiredDate)
+        .filter((date): date is string => date !== null),
+    ].sort();
+
+    if (startCandidates.length === 0) {
+      res.status(422).json({
+        error: "INSUFFICIENT_TIMING_DATA",
+        message: "No deterministic dated ERP event is available to anchor the simulation.",
+      });
+      return;
+    }
+
+    const startDate = new Date(`${startCandidates[0]}T00:00:00Z`);
+
+    const horizonDays = 60;
+
+    const baselineTrace = runDailyLoop(snapshot, horizonDays, {}, startDate);
+    const modifiers = buildScenarioModifiers(scenario, snapshot);
+    const scenarioTrace = runDailyLoop(snapshot, horizonDays, modifiers, startDate);
+
+    const baselineMetrics = extractLoopMetrics(baselineTrace, snapshot);
+    const scenarioMetrics = extractLoopMetrics(scenarioTrace, snapshot);
+
+    const incrementalUnmetDemand = Math.max(
+      0,
+      scenarioMetrics.totalUnmetDemand - baselineMetrics.totalUnmetDemand
+    );
+
+    const unitSellingPrice =
+      product.sellingPrice !== null && product.sellingPrice !== undefined && product.sellingPrice > 0
+        ? {
+          value: product.sellingPrice,
+          status: "VERIFIED" as const,
+          source: "Local DB (Inventory)",
+          confidence: "HIGH" as const,
+        }
+        : {
+          value: null,
+          status: "MISSING" as const,
+          source: "Local DB (Inventory)",
+          confidence: "LOW" as const,
+        };
+
+    const unitCost =
+      product.unitCost > 0
+        ? {
+          value: product.unitCost,
+          status: "VERIFIED" as const,
+          source: "Local DB (Inventory)",
+          confidence: "HIGH" as const,
+        }
+        : {
+          value: null,
+          status: "MISSING" as const,
+          source: "Local DB (Inventory)",
+          confidence: "LOW" as const,
+        };
+
+    const productGraph: SimulationResult["graph"]["product"] = {
+      id: product.id,
+      name: {
+        value: product.name,
+        status: "VERIFIED",
+        source: "Local DB (Inventory)",
+        confidence: "HIGH",
+      },
+      unitSellingPrice,
+      unitCost,
+      safetyStockQty: {
+        value: product.safetyStock,
+        status: "DERIVED",
+        source: "Local DB (Inventory)",
+        confidence: "MEDIUM",
+      },
+      reorderPoint: {
+        value: product.reorderPoint,
+        status: "DERIVED",
+        source: "Local DB (Inventory)",
+        confidence: "MEDIUM",
+      },
+    };
+
+    const financials = calculateFinancials(
+      incrementalUnmetDemand,
+      snapshot,
+      productGraph,
+      modifiers
+    );
+
+    const violations = [
+      ...validateConsistency(
+        scenarioMetrics,
+        financials,
+        [],
+        snapshot
+      ),
+      ...bomViolations,
+    ];
+
+    const result: SimulationResult = {
+      scenarioType: scenario.type,
+      simulationStatus: violations.length > 0 ? "PARTIAL" : "VALID",
+      dataConfidence:
+        salesOrders.length > 0 ||
+          (dependentDemands ?? []).some(
+            dd =>
+              dd.requiredQuantity > 0 &&
+              dd.requiredDate !== null &&
+              (
+                dd.status === "VALID" ||
+                dd.status === "VERIFIED_MO_TIMING"
+              )
+          )
+          ? "HIGH"
+          : "LOW",
+      violations,
+      graph: {
+        product: productGraph,
+        alternateSuppliers: [],
+        customers: [],
+      },
+      auditTrace: scenarioTrace,
+      dependentDemands,
+      baselineMetrics,
+      scenarioMetrics,
+      incrementalMetrics: {
+        incrementalUnmetDemand,
+        incrementalShortage: Math.max(
+          0,
+          scenarioMetrics.maxShortageUnits - baselineMetrics.maxShortageUnits
+        ),
+        incrementalStockoutDuration: Math.max(
+          0,
+          scenarioMetrics.stockoutDuration - baselineMetrics.stockoutDuration
+        ),
+        incrementalRevenueAtRisk: financials.revenueAtRisk,
+        incrementalGrossMarginAtRisk: financials.grossMarginAtRisk,
+        incrementalProcurementCost: financials.incrementalCost,
+        incrementalInventoryCarryingCost: financials.inventoryCarryingCost,
+      },
+      metrics: scenarioMetrics,
+      financials,
+      operations: {
+        otifPct: {
+          value: null,
+          status: "MISSING",
+          source: "Simulation",
+          confidence: "LOW",
+        },
+        fillRatePct: {
+          value:
+            scenarioMetrics.totalDemand > 0
+              ? ((scenarioMetrics.totalDemand - scenarioMetrics.totalUnmetDemand) /
+                scenarioMetrics.totalDemand) *
+              100
+              : null,
+          status:
+            scenarioMetrics.totalDemand > 0 ? "DERIVED" : "INSUFFICIENT",
+          source: "Simulation",
+          confidence: scenarioMetrics.totalDemand > 0 ? "HIGH" : "LOW",
+        },
+      },
+      mitigations: [],
+    };
+
+    res.json({
+      result,
+      narration: "Deterministic simulation completed from current local ERP facts.",
+    });
+  } catch (error: any) {
+    logger.error({ error }, "Error running deterministic simulation");
     res.status(500).json({ error: error.message });
   }
 });
