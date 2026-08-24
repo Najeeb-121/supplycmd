@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { format, parseISO, subDays } from "date-fns";
-import { 
-  useGetDashboardSummary, 
+import {
+  useGetDashboardSummary,
   useGetInventoryHealth,
   useGetLogisticsKpis,
   useGetReorderAlerts,
@@ -9,22 +9,22 @@ import {
   useListDemandRecords,
   useListProductionRuns
 } from "@workspace/api-client-react";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
+import {
+  Card,
+  CardContent,
+  CardHeader,
   CardTitle,
   CardDescription
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, TrendingUp, TrendingDown, Package, Activity, Truck, AlertOctagon } from "lucide-react";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   LineChart,
   Line,
@@ -41,12 +41,27 @@ export default function DashboardPage() {
 
   const demandTrend = useMemo(() => {
     if (!demandRecords) return [];
-    const demandByPeriod = new Map<string, { actual: number; forecast: number }>();
-    demandRecords.forEach(r => {
-      const existing = demandByPeriod.get(r.period) || { actual: 0, forecast: 0 };
+    const demandByPeriod = new Map<
+      string,
+      { actual: number | null; forecast: number | null }
+    >();
+
+    demandRecords.forEach((r) => {
+      const existing = demandByPeriod.get(r.period) || {
+        actual: null,
+        forecast: null,
+      };
+
       demandByPeriod.set(r.period, {
-        actual: existing.actual + r.actualDemand,
-        forecast: existing.forecast + r.forecastedDemand,
+        actual:
+          r.actualDemand == null
+            ? existing.actual
+            : (existing.actual ?? 0) + r.actualDemand,
+
+        forecast:
+          r.forecastedDemand == null
+            ? existing.forecast
+            : (existing.forecast ?? 0) + r.forecastedDemand,
       });
     });
     return Array.from(demandByPeriod.entries())
@@ -65,9 +80,9 @@ export default function DashboardPage() {
     const today = new Date();
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const d = subDays(today, 6 - i);
-      return { 
-        dateStr: format(d, "yyyy-MM-dd"), 
-        display: format(d, "EEE") 
+      return {
+        dateStr: format(d, "yyyy-MM-dd"),
+        display: format(d, "EEE")
       };
     });
 
@@ -76,7 +91,7 @@ export default function DashboardPage() {
       let totalAvail = 0;
       let totalPerf = 0;
       let totalQual = 0;
-      
+
       if (dayRuns.length > 0) {
         dayRuns.forEach(run => {
           const avail = run.plannedTimeMin > 0 ? Math.max(0, Math.min(1, (run.actualTimeMin - run.downtimeMin) / run.plannedTimeMin)) : 0;
@@ -93,13 +108,13 @@ export default function DashboardPage() {
       return { day: display, oee: null as number | null };
     });
   }, [productionRuns]);
-  
+
   if (isLoadingSummary) {
     return (
       <div className="p-8 space-y-6 animate-pulse">
         <div className="h-10 w-64 bg-muted rounded"></div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1,2,3,4].map(i => <div key={i} className="h-32 bg-muted rounded-lg border border-border"></div>)}
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-muted rounded-lg border border-border"></div>)}
         </div>
       </div>
     );
@@ -199,18 +214,18 @@ export default function DashboardPage() {
               <AreaChart data={demandTrend} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} dx={-10} />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '4px' }}
                   itemStyle={{ fontFamily: 'var(--font-mono)' }}
                 />
@@ -233,7 +248,7 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="hsl(var(--border))" />
                   <XAxis type="number" hide />
                   <YAxis dataKey="category" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} />
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ fill: 'hsl(var(--muted))' }}
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
                     formatter={(val: number) => formatCurrency(val)}
@@ -258,7 +273,7 @@ export default function DashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} dy={10} />
                 <YAxis domain={[60, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
                   itemStyle={{ fontFamily: 'var(--font-mono)' }}
                   formatter={(val: number) => [`${val}%`, 'OEE']}
@@ -306,8 +321,8 @@ export default function DashboardPage() {
                       <td className="px-6 py-3">
                         <Badge variant="outline" className={
                           alert.urgency === 'critical' ? 'bg-destructive/10 text-destructive border-destructive/20' :
-                          alert.urgency === 'warning' ? 'bg-amber-500/10 text-amber-700 border-amber-500/20' :
-                          'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
+                            alert.urgency === 'warning' ? 'bg-amber-500/10 text-amber-700 border-amber-500/20' :
+                              'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
                         }>
                           {alert.urgency.toUpperCase()}
                         </Badge>

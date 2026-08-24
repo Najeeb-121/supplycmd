@@ -188,7 +188,7 @@ router.post(
           if (!name || !sku) { errors.push(`Row ${i + 2}: name and sku are required`); continue; }
           const annualDemand = num(get(r, "annualDemand", "annual_demand", "annualdemand"));
           const orderingCost = num(get(r, "orderingCost", "ordering_cost", "orderingcost"));
-          const unitCost     = num(get(r, "unitCost", "unit_cost", "unitcost"));
+          const unitCost = num(get(r, "unitCost", "unit_cost", "unitcost"));
           const holdingCostRate = num(get(r, "holdingCostRate", "holding_cost_rate", "holdingcostrate")) || 0.25;
           const leadTimeDays = num(get(r, "leadTimeDays", "lead_time_days", "leadtimedays")) || 7;
           const currentStock = num(get(r, "currentStock", "current_stock", "currentstock"));
@@ -274,7 +274,12 @@ router.post(
           };
           const validated = validateRow(StrictDemandBody, candidate);
           if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
-          await db.insert(demandRecordsTable).values({ ...validated.data, companyId: req.user!.companyId });
+          await db.insert(demandRecordsTable).values({
+            ...validated.data,
+            companyId: req.user!.companyId,
+            source: "CSV_IMPORT",
+            replenishmentQty: null,
+          });
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }

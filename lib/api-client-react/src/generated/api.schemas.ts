@@ -262,8 +262,13 @@ export interface DemandRecord {
   id: number;
   productName: string;
   period: string;
-  actualDemand: number;
-  forecastedDemand: number;
+  source: string;
+  /** @nullable */
+  actualDemand?: number | null;
+  /** @nullable */
+  forecastedDemand?: number | null;
+  /** @nullable */
+  replenishmentQty?: number | null;
   createdAt: string;
 }
 

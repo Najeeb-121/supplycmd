@@ -10,9 +10,11 @@ export const demandRecordsTable = pgTable("demand_records", {
     .references(() => companiesTable.id, { onDelete: "cascade" }),
   odooId: integer("odoo_id"),
   productName: text("product_name").notNull(),
-  period: text("period").notNull(), // e.g. "2024-Q1", "2024-06"
-  actualDemand: real("actual_demand").notNull(),
-  forecastedDemand: real("forecasted_demand").notNull().default(0),
+  period: text("period").notNull(), // YYYY-MM
+  source: text("source").notNull(),
+  actualDemand: real("actual_demand"),
+  forecastedDemand: real("forecasted_demand"),
+  replenishmentQty: real("replenishment_qty"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique().on(table.companyId, table.odooId),

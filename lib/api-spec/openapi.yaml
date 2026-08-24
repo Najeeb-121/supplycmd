@@ -995,16 +995,18 @@ components:
         throughputPerHour:    { type: number }
         totalRuns:            { type: number }
 
-    # --- Demand ---
+        # --- Demand ---
     DemandRecord:
       type: object
-      required: [id, productName, period, actualDemand, forecastedDemand, createdAt]
+      required: [id, productName, period, source, createdAt]
       properties:
         id:                { type: number }
         productName:       { type: string }
         period:            { type: string }
-        actualDemand:      { type: number }
-        forecastedDemand:  { type: number }
+        source:            { type: string }
+        actualDemand:      { type: [number, "null"] }
+        forecastedDemand:  { type: [number, "null"] }
+        replenishmentQty:  { type: [number, "null"] }
         createdAt:         { type: string }
 
     DemandRecordInput:

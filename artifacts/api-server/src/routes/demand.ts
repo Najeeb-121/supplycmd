@@ -7,8 +7,8 @@ import { validateBody } from "../lib/validate.js";
 
 // ── Stricter demand schema ─────────────────────────────────────────────────────
 export const StrictDemandBody = CreateDemandRecordBody.extend({
-  period:           z.string().regex(/^\d{4}-\d{2}$/, "Period must match YYYY-MM format (e.g. 2026-07)"),
-  actualDemand:     z.number().min(0),
+  period: z.string().regex(/^\d{4}-\d{2}$/, "Period must match YYYY-MM format (e.g. 2026-07)"),
+  actualDemand: z.number().min(0),
   forecastedDemand: z.number().min(0),
 });
 
@@ -30,34 +30,65 @@ router.get("/demand/forecast", async (req, res): Promise<void> => {
   }
 
   const results = Array.from(byProduct.entries()).map(([productName, recs]) => {
-    const n = recs.length;
-    if (n === 0) return null;
+    // Forecast accuracy is valid only when both actual demand
+    // and a historical forecast exist on the same record.
+    const validPairs = recs.filter(
+      (r) => r.actualDemand !== null && r.forecastedDemand !== null
+    );
 
-    // MAPE = (1/n) * Σ |actual - forecast| / actual * 100
-    const mape = recs.reduce((sum, r) => {
-      if (r.actualDemand === 0) return sum;
-      return sum + Math.abs(r.actualDemand - r.forecastedDemand) / r.actualDemand;
-    }, 0) / n * 100;
+    if (validPairs.length === 0) return null;
 
-    // MAD = (1/n) * Σ |actual - forecast|
-    const mad = recs.reduce((sum, r) => sum + Math.abs(r.actualDemand - r.forecastedDemand), 0) / n;
+    // MAPE is undefined when actual demand is zero,
+    // so zero-actual rows are excluded from the denominator.
+    const mapePairs = validPairs.filter(
+      (r) => r.actualDemand !== null && r.actualDemand > 0
+    );
+
+    if (mapePairs.length === 0) return null;
+
+    const mape =
+      (mapePairs.reduce((sum, r) => {
+        const actual = r.actualDemand!;
+        const forecast = r.forecastedDemand!;
+        return sum + Math.abs(actual - forecast) / actual;
+      }, 0) /
+        mapePairs.length) *
+      100;
+
+    const mad =
+      validPairs.reduce((sum, r) => {
+        const actual = r.actualDemand!;
+        const forecast = r.forecastedDemand!;
+        return sum + Math.abs(actual - forecast);
+      }, 0) / validPairs.length;
 
     const forecastAccuracy = Math.max(0, 100 - mape);
 
-    // Next period forecast using exponential smoothing (α = 0.3)
+    // Deterministic exponential smoothing using only valid pairs.
     const alpha = 0.3;
-    let smoothed = recs[0].forecastedDemand;
-    for (const r of recs) {
-      smoothed = alpha * r.actualDemand + (1 - alpha) * smoothed;
+    let smoothed = validPairs[0].forecastedDemand!;
+
+    for (const r of validPairs) {
+      smoothed =
+        alpha * r.actualDemand! +
+        (1 - alpha) * smoothed;
     }
+
     const nextPeriodForecast = Math.round(smoothed * 10) / 10;
 
-    // Trend: compare last 2 actuals
+    // Trend uses only valid actual-demand observations.
     let trend: "up" | "down" | "stable" = "stable";
-    if (n >= 2) {
-      const diff = recs[n - 1].actualDemand - recs[n - 2].actualDemand;
-      if (diff > recs[n - 2].actualDemand * 0.05) trend = "up";
-      else if (diff < -recs[n - 2].actualDemand * 0.05) trend = "down";
+
+    if (validPairs.length >= 2) {
+      const previousActual = validPairs[validPairs.length - 2].actualDemand!;
+      const latestActual = validPairs[validPairs.length - 1].actualDemand!;
+      const diff = latestActual - previousActual;
+
+      if (diff > previousActual * 0.05) {
+        trend = "up";
+      } else if (diff < -previousActual * 0.05) {
+        trend = "down";
+      }
     }
 
     return {
@@ -77,7 +108,15 @@ router.post("/demand", async (req, res): Promise<void> => {
   const result = validateBody(StrictDemandBody, req, res);
   if (!result.ok) return;
 
-  const [record] = await db.insert(demandRecordsTable).values({ ...result.data, companyId: req.user!.companyId }).returning();
+  const [record] = await db
+    .insert(demandRecordsTable)
+    .values({
+      ...result.data,
+      companyId: req.user!.companyId,
+      source: "MANUAL",
+      replenishmentQty: null,
+    })
+    .returning();
   res.status(201).json(record);
 });
 

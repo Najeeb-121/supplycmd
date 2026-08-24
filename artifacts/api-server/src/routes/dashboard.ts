@@ -48,14 +48,25 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   }
 
   // Forecast accuracy (avg MAPE)
-  let forecastAccuracy = 0;
-  if (demandRecords.length > 0) {
-    const mapeSum = demandRecords.reduce((s, r) => {
-      if (r.actualDemand === 0) return s;
-      return s + Math.abs(r.actualDemand - r.forecastedDemand) / r.actualDemand;
+  let forecastAccuracy: number | null = null;
+
+  const validDemandPairs = demandRecords.filter(
+    (r) =>
+      r.actualDemand !== null &&
+      r.forecastedDemand !== null &&
+      r.actualDemand > 0
+  );
+
+  if (validDemandPairs.length > 0) {
+    const mapeSum = validDemandPairs.reduce((s, r) => {
+      const actual = r.actualDemand!;
+      const forecast = r.forecastedDemand!;
+      return s + Math.abs(actual - forecast) / actual;
     }, 0);
-    const mape = (mapeSum / demandRecords.length) * 100;
-    forecastAccuracy = Math.round(Math.max(0, 100 - mape) * 10) / 10;
+
+    const mape = (mapeSum / validDemandPairs.length) * 100;
+    forecastAccuracy =
+      Math.round(Math.max(0, 100 - mape) * 10) / 10;
   }
 
   // Fill rate & OTIF from suppliers (both already stored on a 0-100 scale)
@@ -85,16 +96,16 @@ router.get("/dashboard/inventory-health", async (req, res): Promise<void> => {
 
   const avgTurnoverRate = items.length > 0
     ? items.reduce((s, i) => {
-        const avgInventory = i.currentStock;
-        return s + (avgInventory > 0 ? i.annualDemand / avgInventory : 0);
-      }, 0) / items.length
+      const avgInventory = i.currentStock;
+      return s + (avgInventory > 0 ? i.annualDemand / avgInventory : 0);
+    }, 0) / items.length
     : 0;
 
   const avgDaysOfSupply = items.length > 0
     ? items.reduce((s, i) => {
-        const dailyDemand = i.annualDemand / 365;
-        return s + (dailyDemand > 0 ? i.currentStock / dailyDemand : 0);
-      }, 0) / items.length
+      const dailyDemand = i.annualDemand / 365;
+      return s + (dailyDemand > 0 ? i.currentStock / dailyDemand : 0);
+    }, 0) / items.length
     : 0;
 
   const overstockCount = items.filter((i) => {

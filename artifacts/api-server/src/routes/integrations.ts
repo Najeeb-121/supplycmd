@@ -992,20 +992,42 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
           const productId = scheduleToProduct.get(scheduleId);
           const productName = many2oneLabel(productId, "Unknown Product");
 
-          let period = "2024-01";
           const dateVal = line.date || line.create_date;
-          if (typeof dateVal === "string" && dateVal.length >= 7) period = dateVal.substring(0, 7);
 
-          const targetQty = num(line.forecast_qty) || 0;
-          const actualQty = num(line.replenish_qty) || 0;
+          if (typeof dateVal !== "string" || dateVal.length < 7) {
+            failed++;
+            errors.push(`MPS Forecast #${odooId}: missing valid date`);
+            continue;
+          }
+
+          const period = dateVal.substring(0, 7);
+
+          const targetQty =
+            line.forecast_qty == null ? null : num(line.forecast_qty);
+
+          const replenishmentQty =
+            line.replenish_qty == null ? null : num(line.replenish_qty);
 
           try {
             await db.insert(demandRecordsTable).values({
-              companyId, odooId, productName, period,
-              actualDemand: actualQty, forecastedDemand: targetQty,
+              companyId,
+              odooId,
+              productName,
+              period,
+              source: "ODOO_MPS",
+              actualDemand: sql`NULL`,
+              forecastedDemand: targetQty ?? sql`NULL`,
+              replenishmentQty: replenishmentQty ?? sql`NULL`,
             }).onConflictDoUpdate({
               target: [demandRecordsTable.companyId, demandRecordsTable.odooId],
-              set: { forecastedDemand: targetQty, actualDemand: actualQty }
+              set: {
+                productName,
+                period,
+                source: "ODOO_MPS",
+                actualDemand: sql`NULL`,
+                forecastedDemand: targetQty ?? sql`NULL`,
+                replenishmentQty: replenishmentQty ?? sql`NULL`,
+              }
             });
             synced++;
           } catch (err) { failed++; errors.push(`MPS Forecast #${odooId}: ${(err as Error).message}`); }
@@ -1025,16 +1047,35 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
       for (const line of lines) {
         const odooId = line.id as number;
         const productName = many2oneLabel(line.product_id, "Unknown Product");
-        let period = "2024-01";
-        if (typeof line.create_date === "string" && line.create_date.length >= 7) period = line.create_date.substring(0, 7);
+        if (typeof line.create_date !== "string" || line.create_date.length < 7) {
+          failed++;
+          errors.push(`SO Line #${odooId}: missing valid create_date`);
+          continue;
+        }
+
+        const period = line.create_date.substring(0, 7);
+        const actualDemand = num(line.product_uom_qty);
 
         try {
           await db.insert(demandRecordsTable).values({
-            companyId, odooId, productName, period,
-            actualDemand: num(line.product_uom_qty), forecastedDemand: 0,
+            companyId,
+            odooId,
+            productName,
+            period,
+            source: "ODOO_SALES_ORDER",
+            actualDemand,
+            forecastedDemand: sql`NULL`,
+            replenishmentQty: sql`NULL`,
           }).onConflictDoUpdate({
             target: [demandRecordsTable.companyId, demandRecordsTable.odooId],
-            set: { actualDemand: num(line.product_uom_qty) }
+            set: {
+              productName,
+              period,
+              source: "ODOO_SALES_ORDER",
+              actualDemand,
+              forecastedDemand: sql`NULL`,
+              replenishmentQty: sql`NULL`,
+            }
           });
           synced++;
         } catch (err) { failed++; errors.push(`SO Line #${odooId}: ${(err as Error).message}`); }

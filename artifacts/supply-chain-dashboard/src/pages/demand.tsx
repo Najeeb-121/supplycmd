@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
-import { 
-  useListDemandRecords, 
+import {
+  useListDemandRecords,
   useCreateDemandRecord,
   useGetDemandForecast,
   getListDemandRecordsQueryKey,
@@ -12,13 +12,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,13 +44,13 @@ import { demandSchema as formSchema, type DemandFormValues as FormValues } from 
 
 export default function DemandPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   const { data: records, isLoading: recordsLoading } = useListDemandRecords();
   const { data: forecasts, isLoading: forecastLoading } = useGetDemandForecast();
-  
+
   const createMutationRef = useRef(useCreateDemandRecord().mutate);
   const createMutation = useCreateDemandRecord();
   createMutationRef.current = createMutation.mutate;
@@ -59,7 +59,7 @@ export default function DemandPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       productName: "",
-      period: "2024-01",
+      period: new Date().toISOString().slice(0, 7),
       actualDemand: 0,
       forecastedDemand: 0,
     },
@@ -92,7 +92,9 @@ export default function DemandPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Demand Planning</h1>
-          <p className="text-muted-foreground mt-1">Forecast accuracy tracking and predictive modeling.</p>
+          <p className="text-muted-foreground mt-1">
+            Demand history, forecast accuracy, and deterministic trend analysis.
+          </p>
         </div>
         <Button onClick={() => setIsFormOpen(true)} className="font-semibold bg-primary text-primary-foreground hover:bg-primary/90">
           <Plus className="w-4 h-4 mr-2" />
@@ -104,12 +106,14 @@ export default function DemandPage() {
         <CardHeader className="py-4 border-b border-border bg-muted/20">
           <div>
             <CardTitle>Forecast Accuracy</CardTitle>
-            <CardDescription>Product-level error metrics (MAPE, MAD) and next period predictions</CardDescription>
+            <CardDescription>
+              Product-level forecast error metrics and deterministic next-period estimates
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {forecastLoading ? (
-            <div className="p-8 text-center text-muted-foreground animate-pulse">Running forecast models...</div>
+            <div className="p-8 text-center text-muted-foreground animate-pulse">Calculating forecast metrics...</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -127,7 +131,7 @@ export default function DemandPage() {
                   {!forecasts || forecasts.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                        Not enough data to generate forecasts.
+                        Not enough valid forecast-vs-actual data to calculate metrics.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -135,18 +139,33 @@ export default function DemandPage() {
                       <TableRow key={i} className="hover:bg-muted/10">
                         <TableCell className="font-medium text-foreground">{f.productName}</TableCell>
                         <TableCell className="text-right font-mono">
-                          <span className={f.mape > 20 ? "text-destructive" : f.mape > 10 ? "text-amber-600" : "text-emerald-600"}>
-                            {(f.mape ?? 0).toFixed(1)}%
+                          <span className={
+                            f.mape == null
+                              ? "text-muted-foreground"
+                              : f.mape > 20
+                                ? "text-destructive"
+                                : f.mape > 10
+                                  ? "text-amber-600"
+                                  : "text-emerald-600"
+                          }>
+                            {f.mape != null ? `${f.mape.toFixed(1)}%` : "N/A"}
                           </span>
                         </TableCell>
+
                         <TableCell className="text-right font-mono text-muted-foreground">
-                          {(f.mad ?? 0).toFixed(1)}
+                          {f.mad != null ? f.mad.toFixed(1) : "N/A"}
                         </TableCell>
+
                         <TableCell className="text-right font-mono font-medium">
-                          {(f.forecastAccuracy ?? 0).toFixed(1)}%
+                          {f.forecastAccuracy != null
+                            ? `${f.forecastAccuracy.toFixed(1)}%`
+                            : "N/A"}
                         </TableCell>
+
                         <TableCell className="text-right font-mono font-bold text-accent">
-                          {Math.round(f.nextPeriodForecast)}
+                          {f.nextPeriodForecast != null
+                            ? Math.round(f.nextPeriodForecast).toLocaleString()
+                            : "N/A"}
                         </TableCell>
                         <TableCell className="text-center">
                           {f.trend === 'up' && <TrendingUp className="w-5 h-5 mx-auto text-emerald-600" />}
@@ -167,7 +186,9 @@ export default function DemandPage() {
         <CardHeader className="flex flex-row items-center justify-between py-4 border-b border-border bg-muted/20">
           <div>
             <CardTitle>Historical Demand Records</CardTitle>
-            <CardDescription>Raw actual vs forecasted demand log</CardDescription>
+            <CardDescription>
+              ERP and manual demand records with source provenance and planning quantities.
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -180,35 +201,80 @@ export default function DemandPage() {
                   <TableRow>
                     <TableHead>Period</TableHead>
                     <TableHead>Product</TableHead>
+                    <TableHead>Source</TableHead>
                     <TableHead className="text-right">Forecasted</TableHead>
                     <TableHead className="text-right">Actual</TableHead>
+                    <TableHead className="text-right">Replenishment</TableHead>
                     <TableHead className="text-right">Variance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {!records || records.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                         No demand records logged yet.
                       </TableCell>
                     </TableRow>
                   ) : (
                     records.map((r) => {
-                      const variance = r.actualDemand - r.forecastedDemand;
-                      const variancePercent = r.forecastedDemand ? (variance / r.forecastedDemand) * 100 : 0;
+                      const hasActual = r.actualDemand != null;
+                      const hasForecast = r.forecastedDemand != null;
+
+                      const variance =
+                        hasActual && hasForecast
+                          ? r.actualDemand! - r.forecastedDemand!
+                          : null;
+
+                      const variancePercent =
+                        variance != null && r.forecastedDemand != null && r.forecastedDemand !== 0
+                          ? (variance / r.forecastedDemand) * 100
+                          : null;
+
                       return (
                         <TableRow key={r.id} className="hover:bg-muted/10">
                           <TableCell className="font-mono text-sm">{r.period}</TableCell>
                           <TableCell className="font-medium">{r.productName}</TableCell>
-                          <TableCell className="text-right font-mono text-muted-foreground">{r.forecastedDemand}</TableCell>
-                          <TableCell className="text-right font-mono font-medium">{r.actualDemand}</TableCell>
-                          <TableCell className="text-right font-mono">
-                            <Badge variant="outline" className={
-                              Math.abs(variancePercent) > 15 ? "bg-destructive/10 text-destructive border-destructive/20" : 
-                              "bg-muted border-border"
-                            }>
-                              {variance > 0 ? "+" : ""}{variance} ({variancePercent.toFixed(1)}%)
+                          <TableCell>
+                            <Badge variant="outline">
+                              {r.source ?? "UNKNOWN"}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">
+                            {r.forecastedDemand != null
+                              ? r.forecastedDemand.toLocaleString()
+                              : "N/A"}
+                          </TableCell>
+
+                          <TableCell className="text-right font-mono font-medium">
+                            {r.actualDemand != null
+                              ? r.actualDemand.toLocaleString()
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">
+                            {r.replenishmentQty != null
+                              ? r.replenishmentQty.toLocaleString()
+                              : "N/A"}
+                          </TableCell>
+
+                          <TableCell className="text-right font-mono">
+                            {variance != null ? (
+                              <Badge
+                                variant="outline"
+                                className={
+                                  variancePercent != null && Math.abs(variancePercent) > 15
+                                    ? "bg-destructive/10 text-destructive border-destructive/20"
+                                    : "bg-muted border-border"
+                                }
+                              >
+                                {variance > 0 ? "+" : ""}
+                                {variance.toLocaleString()}
+                                {variancePercent != null
+                                  ? ` (${variancePercent.toFixed(1)}%)`
+                                  : ""}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">N/A</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -229,7 +295,7 @@ export default function DemandPage() {
               Enter historical demand vs forecast for accuracy modeling.
             </DialogDescription>
           </DialogHeader>
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -286,7 +352,7 @@ export default function DemandPage() {
                   )}
                 />
               </div>
-              
+
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={createMutation.isPending || !form.formState.isValid}>

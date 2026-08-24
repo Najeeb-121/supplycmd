@@ -567,8 +567,10 @@ export const ListDemandRecordsResponseItem = zod.object({
   "id": zod.number(),
   "productName": zod.string(),
   "period": zod.string(),
-  "actualDemand": zod.number(),
-  "forecastedDemand": zod.number(),
+  "source": zod.string(),
+  "actualDemand": zod.number().nullish(),
+  "forecastedDemand": zod.number().nullish(),
+  "replenishmentQty": zod.number().nullish(),
   "createdAt": zod.string()
 })
 export const ListDemandRecordsResponse = zod.array(ListDemandRecordsResponseItem)
@@ -588,8 +590,10 @@ export const CreateDemandRecordResponse = zod.object({
   "id": zod.number(),
   "productName": zod.string(),
   "period": zod.string(),
-  "actualDemand": zod.number(),
-  "forecastedDemand": zod.number(),
+  "source": zod.string(),
+  "actualDemand": zod.number().nullish(),
+  "forecastedDemand": zod.number().nullish(),
+  "replenishmentQty": zod.number().nullish(),
   "createdAt": zod.string()
 })
 
