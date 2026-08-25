@@ -758,7 +758,7 @@ components:
     # --- Inventory ---
     InventoryItem:
       type: object
-      required: [id, name, sku, category, unitOfMeasure, currentStock, reservedQuantity, minStock, reorderPoint, safetyStock, eoq, leadTimeDays, unitCost, annualDemand, holdingCostRate, orderingCost, archived, createdAt]
+      required: [id, name, sku, category, unitOfMeasure, currentStock, reservedQuantity, availableQuantity, rawAvailableQuantity, reservationShortage, incomingQuantity, minStock, reorderPoint, safetyStock, eoq, leadTimeDays, leadTimeSource, unitCost, annualDemand, holdingCostRate, orderingCost, archived, createdAt]    
       properties:
         id:               { type: number }
         name:             { type: string }
@@ -776,12 +776,17 @@ components:
         sellingPrice:     { type: number }
         currentStock:     { type: number }
         reservedQuantity: { type: number }
+        availableQuantity:    { type: number }
+        rawAvailableQuantity: { type: number }
+        reservationShortage:  { type: number }
+        incomingQuantity:     { type: number }
         minStock:         { type: number }
         maxStock:         { type: number }
         annualDemand:     { type: number }
         holdingCostRate:  { type: number }
         orderingCost:     { type: number }
         leadTimeDays:     { type: number }
+        leadTimeSource: { type: string }
         reorderPoint:     { type: number }
         safetyStock:      { type: number }
         eoq:              { type: number }

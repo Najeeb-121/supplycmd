@@ -51,19 +51,32 @@ const formatNum = (v: number) => fmtNum.format(v);
 type StockStatus = "healthy" | "low_stock" | "critical" | "out_of_stock" | "overstock";
 
 function deriveStatus(item: InventoryItem): StockStatus {
-  if (item.currentStock === 0) return "out_of_stock";
-  if (item.currentStock <= item.safetyStock) return "critical";
-  if (item.currentStock <= item.reorderPoint) return "low_stock";
-  if (item.maxStock != null && item.currentStock > item.maxStock) return "overstock";
+  if (item.reservationShortage > 0) return "critical";
+
+  if (item.availableQuantity <= 0) return "out_of_stock";
+
+  if (item.safetyStock > 0 && item.availableQuantity <= item.safetyStock) {
+    return "critical";
+  }
+
+  if (item.reorderPoint > 0 && item.availableQuantity <= item.reorderPoint) {
+    return "low_stock";
+  }
+
+  if (item.maxStock != null && item.currentStock > item.maxStock) {
+    return "overstock";
+  }
+
   return "healthy";
 }
 
+
 const STATUS_CONFIG: Record<StockStatus, { label: string; cls: string }> = {
-  healthy:      { label: "Healthy",      cls: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" },
-  low_stock:    { label: "Low Stock",    cls: "bg-amber-500/10 text-amber-700 border-amber-500/20" },
-  critical:     { label: "Critical",     cls: "bg-red-500/10 text-red-700 border-red-500/20" },
+  healthy: { label: "Healthy", cls: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" },
+  low_stock: { label: "Low Stock", cls: "bg-amber-500/10 text-amber-700 border-amber-500/20" },
+  critical: { label: "Critical", cls: "bg-red-500/10 text-red-700 border-red-500/20" },
   out_of_stock: { label: "Out of Stock", cls: "bg-zinc-500/10 text-zinc-700 border-zinc-500/20" },
-  overstock:    { label: "Overstock",    cls: "bg-blue-500/10 text-blue-700 border-blue-500/20" },
+  overstock: { label: "Overstock", cls: "bg-blue-500/10 text-blue-700 border-blue-500/20" },
 };
 
 const MOVEMENT_TYPES = [
@@ -119,21 +132,21 @@ export default function InventoryPage() {
   const { toast } = useToast();
 
   // ── state ──────────────────────────────────────────────────────────────────
-  const [search, setSearch]             = useState("");
+  const [search, setSearch] = useState("");
   const [filterCategory, setFilterCat] = useState("all");
-  const [filterWarehouse, setFilterWh]  = useState("all");
-  const [filterSupplier, setFilterSup]  = useState("all");
-  const [filterStatus, setFilterSt]     = useState("all");
+  const [filterWarehouse, setFilterWh] = useState("all");
+  const [filterSupplier, setFilterSup] = useState("all");
+  const [filterStatus, setFilterSt] = useState("all");
   const [showArchived, setShowArchived] = useState(false);
-  const [sortCol, setSortCol]           = useState<keyof InventoryItem | "status">("name");
-  const [sortDir, setSortDir]           = useState<"asc" | "desc">("asc");
-  const [page, setPage]                 = useState(1);
-  const [showFilters, setShowFilters]   = useState(false);
+  const [sortCol, setSortCol] = useState<keyof InventoryItem | "status">("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const [showFilters, setShowFilters] = useState(false);
 
   // dialogs
-  const [itemDialog, setItemDialog]       = useState<{ open: boolean; item: InventoryItem | null }>({ open: false, item: null });
-  const [deleteId, setDeleteId]           = useState<number | null>(null);
-  const [movementDialog, setMovDialog]    = useState<{ open: boolean; item: InventoryItem | null }>({ open: false, item: null });
+  const [itemDialog, setItemDialog] = useState<{ open: boolean; item: InventoryItem | null }>({ open: false, item: null });
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [movementDialog, setMovDialog] = useState<{ open: boolean; item: InventoryItem | null }>({ open: false, item: null });
 
   // ── queries ────────────────────────────────────────────────────────────────
   const { data: allItems = [], isLoading } = useListInventory({ archived: showArchived ? "true" : undefined });
@@ -153,10 +166,10 @@ export default function InventoryPage() {
     ]);
   }, [qc]);
 
-  const createMut  = useCreateInventoryItem();
-  const updateMut  = useUpdateInventoryItem();
-  const deleteMut  = useDeleteInventoryItem();
-  const moveMut    = useCreateStockMovement();
+  const createMut = useCreateInventoryItem();
+  const updateMut = useUpdateInventoryItem();
+  const deleteMut = useDeleteInventoryItem();
+  const moveMut = useCreateStockMovement();
 
   // ── forms ──────────────────────────────────────────────────────────────────
   const itemForm = useForm<ItemForm>({
@@ -171,9 +184,9 @@ export default function InventoryPage() {
   });
 
   // ── derived filter options ──────────────────────────────────────────────────
-  const categories  = useMemo(() => ["all", ...Array.from(new Set(allItems.map(i => i.category))).sort()], [allItems]);
-  const warehouses  = useMemo(() => ["all", ...Array.from(new Set(allItems.map(i => i.warehouse ?? "").filter(Boolean))).sort()], [allItems]);
-  const suppliers   = useMemo(() => ["all", ...Array.from(new Set(allItems.map(i => i.supplierName ?? "").filter(Boolean))).sort()], [allItems]);
+  const categories = useMemo(() => ["all", ...Array.from(new Set(allItems.map(i => i.category))).sort()], [allItems]);
+  const warehouses = useMemo(() => ["all", ...Array.from(new Set(allItems.map(i => i.warehouse ?? "").filter(Boolean))).sort()], [allItems]);
+  const suppliers = useMemo(() => ["all", ...Array.from(new Set(allItems.map(i => i.supplierName ?? "").filter(Boolean))).sort()], [allItems]);
 
   // ── filtered + sorted ──────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -191,8 +204,8 @@ export default function InventoryPage() {
     }
     if (filterCategory !== "all") items = items.filter(i => i.category === filterCategory);
     if (filterWarehouse !== "all") items = items.filter(i => (i.warehouse ?? "") === filterWarehouse);
-    if (filterSupplier  !== "all") items = items.filter(i => (i.supplierName ?? "") === filterSupplier);
-    if (filterStatus    !== "all") items = items.filter(i => deriveStatus(i) === filterStatus);
+    if (filterSupplier !== "all") items = items.filter(i => (i.supplierName ?? "") === filterSupplier);
+    if (filterStatus !== "all") items = items.filter(i => deriveStatus(i) === filterStatus);
 
     // sort
     items = [...items].sort((a, b) => {
@@ -208,7 +221,7 @@ export default function InventoryPage() {
   }, [allItems, search, filterCategory, filterWarehouse, filterSupplier, filterStatus, sortCol, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const activeFilters = [
     filterCategory !== "all" && `Category: ${filterCategory}`,
@@ -297,15 +310,15 @@ export default function InventoryPage() {
 
   // ── exports ─────────────────────────────────────────────────────────────────
   const exportInventory = () => {
-    const headers = ["SKU","Name","Category","Warehouse","Supplier","Current Stock","Unit Cost","Total Value","Status","Safety Stock","Reorder Point","EOQ"];
+    const headers = ["SKU", "Name", "Category", "Warehouse", "Supplier", "Current Stock", "Unit Cost", "Total Value", "Status", "Safety Stock", "Reorder Point", "EOQ"];
     const rows = filtered.map(i => [i.sku, i.name, i.category, i.warehouse ?? "", i.supplierName ?? "", i.currentStock, i.unitCost, (i.currentStock * i.unitCost).toFixed(2), deriveStatus(i), Math.round(i.safetyStock), Math.round(i.reorderPoint), Math.round(i.eoq)].map(String));
-    exportCSV(`inventory-${new Date().toISOString().slice(0,10)}.csv`, rows, headers);
+    exportCSV(`inventory-${new Date().toISOString().slice(0, 10)}.csv`, rows, headers);
   };
 
   const exportMovements = () => {
-    const headers = ["Date","Item","SKU","Type","Action","Reference","Qty Before","Qty Changed","Qty After","Warehouse","User"];
+    const headers = ["Date", "Item", "SKU", "Type", "Action", "Reference", "Qty Before", "Qty Changed", "Qty After", "Warehouse", "User"];
     const rows = movements.map((m: any) => [m.movedAt ? new Date(m.movedAt).toLocaleString() : "", m.itemName ?? "", m.itemSku ?? "", m.movementType, m.action, m.referenceNumber ?? "", m.quantityBefore, m.quantityChanged, m.quantityAfter, m.warehouse ?? "", m.user].map(String));
-    exportCSV(`movements-${new Date().toISOString().slice(0,10)}.csv`, rows, headers);
+    exportCSV(`movements-${new Date().toISOString().slice(0, 10)}.csv`, rows, headers);
   };
 
   // ── warehouse grouping ──────────────────────────────────────────────────────
@@ -350,13 +363,13 @@ export default function InventoryPage() {
       {/* KPI Cards */}
       {kpis && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-          <KpiCard title="Total Value"      value={formatCurrency(kpis.totalValue)}     icon={DollarSign}   color="bg-blue-500/10 text-blue-600" />
-          <KpiCard title="Total SKUs"       value={String(kpis.totalSkus)}               icon={Package}      color="bg-indigo-500/10 text-indigo-600" />
-          <KpiCard title="Low Stock"        value={String(kpis.lowStockCount)}           icon={AlertTriangle} color="bg-amber-500/10 text-amber-600" sub="Below reorder point" />
-          <KpiCard title="Critical"         value={String(kpis.criticalCount)}           icon={TrendingDown}  color="bg-red-500/10 text-red-600"    sub="Below safety stock" />
-          <KpiCard title="Out of Stock"     value={String(kpis.outOfStockCount)}         icon={X}             color="bg-zinc-500/10 text-zinc-600" />
-          <KpiCard title="Avg Turnover"     value={`${formatNum(kpis.avgTurnoverRate)}×`} icon={TrendingUp}    color="bg-emerald-500/10 text-emerald-600" sub="Inventory turns/yr" />
-          <KpiCard title="Avg Days on Hand" value={`${Math.round(kpis.avgDaysOnHand)}d`} icon={Clock}         color="bg-violet-500/10 text-violet-600" sub="Days of supply" />
+          <KpiCard title="Total Value" value={formatCurrency(kpis.totalValue)} icon={DollarSign} color="bg-blue-500/10 text-blue-600" />
+          <KpiCard title="Total SKUs" value={String(kpis.totalSkus)} icon={Package} color="bg-indigo-500/10 text-indigo-600" />
+          <KpiCard title="Low Stock" value={String(kpis.lowStockCount)} icon={AlertTriangle} color="bg-amber-500/10 text-amber-600" sub="Below reorder point" />
+          <KpiCard title="Critical" value={String(kpis.criticalCount)} icon={TrendingDown} color="bg-red-500/10 text-red-600" sub="Below safety stock" />
+          <KpiCard title="Out of Stock" value={String(kpis.outOfStockCount)} icon={X} color="bg-zinc-500/10 text-zinc-600" />
+          <KpiCard title="Avg Turnover" value={`${formatNum(kpis.avgTurnoverRate)}×`} icon={TrendingUp} color="bg-emerald-500/10 text-emerald-600" sub="Inventory turns/yr" />
+          <KpiCard title="Avg Days on Hand" value={`${Math.round(kpis.avgDaysOnHand)}d`} icon={Clock} color="bg-violet-500/10 text-violet-600" sub="Days of supply" />
         </div>
       )}
 
@@ -460,13 +473,13 @@ export default function InventoryPage() {
                   <Table>
                     <TableHeader className="bg-muted/30 sticky top-0">
                       <TableRow>
-                        <SortHeader col="name"         label="Item / SKU" />
-                        <SortHeader col="category"     label="Category" />
+                        <SortHeader col="name" label="Item / SKU" />
+                        <SortHeader col="category" label="Category" />
                         <TableHead className="hidden md:table-cell">Warehouse</TableHead>
                         <TableHead className="hidden lg:table-cell">Supplier</TableHead>
                         <SortHeader col="currentStock" label="Stock" />
                         <TableHead className="hidden md:table-cell text-right">Available</TableHead>
-                        <SortHeader col="unitCost"     label="Unit Cost" />
+                        <SortHeader col="unitCost" label="Unit Cost" />
                         <TableHead className="text-right hidden lg:table-cell">Total Value</TableHead>
                         <TableHead className="hidden xl:table-cell text-right">Safety Stock</TableHead>
                         <TableHead className="hidden xl:table-cell text-right">ROP</TableHead>
@@ -648,9 +661,9 @@ export default function InventoryPage() {
                         <TableCell className="text-right font-mono font-bold text-primary">{s.recommendedOrderQty}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={
-                            s.priority === "high"   ? "bg-red-500/10 text-red-700 border-red-500/20" :
-                            s.priority === "medium" ? "bg-amber-500/10 text-amber-700 border-amber-500/20" :
-                                                      "bg-blue-500/10 text-blue-700 border-blue-500/20"
+                            s.priority === "high" ? "bg-red-500/10 text-red-700 border-red-500/20" :
+                              s.priority === "medium" ? "bg-amber-500/10 text-amber-700 border-amber-500/20" :
+                                "bg-blue-500/10 text-blue-700 border-blue-500/20"
                           }>{s.priority.charAt(0).toUpperCase() + s.priority.slice(1)}</Badge>
                         </TableCell>
                       </TableRow>
@@ -786,7 +799,7 @@ export default function InventoryPage() {
                 )}
                 <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => {
                   const low = allItems.filter(i => deriveStatus(i) !== "healthy" && deriveStatus(i) !== "overstock");
-                  exportCSV("low-stock-report.csv", low.map(i => [i.sku, i.name, i.category, String(i.currentStock), String(Math.round(i.reorderPoint)), String(Math.round(i.safetyStock)), deriveStatus(i)]), ["SKU","Name","Category","Current Stock","Reorder Point","Safety Stock","Status"]);
+                  exportCSV("low-stock-report.csv", low.map(i => [i.sku, i.name, i.category, String(i.currentStock), String(Math.round(i.reorderPoint)), String(Math.round(i.safetyStock)), deriveStatus(i)]), ["SKU", "Name", "Category", "Current Stock", "Reorder Point", "Safety Stock", "Status"]);
                 }}><Download className="w-3.5 h-3.5 mr-1.5" /> Export</Button>
               </CardContent>
             </Card>
@@ -815,7 +828,7 @@ export default function InventoryPage() {
                 )}
                 <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => {
                   const over = allItems.filter(i => deriveStatus(i) === "overstock" || i.annualDemand === 0);
-                  exportCSV("overstock-report.csv", over.map(i => [i.sku, i.name, i.category, String(i.currentStock), String(i.maxStock ?? "N/A"), String((i.currentStock * i.unitCost).toFixed(2)), deriveStatus(i)]), ["SKU","Name","Category","Current Stock","Max Stock","Value","Status"]);
+                  exportCSV("overstock-report.csv", over.map(i => [i.sku, i.name, i.category, String(i.currentStock), String(i.maxStock ?? "N/A"), String((i.currentStock * i.unitCost).toFixed(2)), deriveStatus(i)]), ["SKU", "Name", "Category", "Current Stock", "Max Stock", "Value", "Status"]);
                 }}><Download className="w-3.5 h-3.5 mr-1.5" /> Export</Button>
               </CardContent>
             </Card>
@@ -869,7 +882,7 @@ export default function InventoryPage() {
                 </div>
                 <Button variant="outline" size="sm" className="mt-4" onClick={() => {
                   const sorted = [...allItems].sort((a, b) => b.annualDemand - a.annualDemand);
-                  exportCSV("movers-report.csv", sorted.map(i => [i.sku, i.name, i.category, String(i.annualDemand), String(i.currentStock), String((i.currentStock * i.unitCost).toFixed(2))]), ["SKU","Name","Category","Annual Demand","Current Stock","Inventory Value"]);
+                  exportCSV("movers-report.csv", sorted.map(i => [i.sku, i.name, i.category, String(i.annualDemand), String(i.currentStock), String((i.currentStock * i.unitCost).toFixed(2))]), ["SKU", "Name", "Category", "Annual Demand", "Current Stock", "Inventory Value"]);
                 }}><Download className="w-3.5 h-3.5 mr-1.5" /> Export Full Report</Button>
               </CardContent>
             </Card>

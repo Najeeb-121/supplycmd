@@ -23,12 +23,17 @@ export interface InventoryItem {
   sellingPrice?: number;
   currentStock: number;
   reservedQuantity: number;
+  availableQuantity: number;
+  rawAvailableQuantity: number;
+  reservationShortage: number;
+  incomingQuantity: number;
   minStock: number;
   maxStock?: number;
   annualDemand: number;
   holdingCostRate: number;
   orderingCost: number;
   leadTimeDays: number;
+  leadTimeSource: string;
   reorderPoint: number;
   safetyStock: number;
   eoq: number;
