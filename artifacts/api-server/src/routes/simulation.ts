@@ -368,6 +368,12 @@ router.post("/simulation/snapshot", async (req: Request, res: Response): Promise
     res.status(500).json({ error: error.message });
   }
 });
+export const isFirmDemand = (
+  lineStatus: string,
+  orderStatus: string
+): boolean =>
+  (lineStatus === "sale" || lineStatus === "done") &&
+  (orderStatus === "sale" || orderStatus === "done");
 router.post("/simulation/run", async (req: Request, res: Response): Promise<void> => {
   const companyId = req.user!.companyId;
   const scenario = req.body?.scenario as ScenarioDef | undefined;
@@ -456,7 +462,9 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       )
       .where(eq(salesOrderLinesTable.companyId, companyId));
 
+
     const salesOrders: ERPSnapshot["salesOrders"] = salesRows
+      .filter(({ line, order }) => isFirmDemand(line.status, order.status))
       .map(({ line, order }) => {
         const demandDate =
           line.effectiveDeliveryDate ||
@@ -481,6 +489,7 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
     const demandSeeds = allSalesRows
+      .filter(({ line, order }) => isFirmDemand(line.status, order.status))
       .map(({ line, order }) => {
         const demandDate =
           line.effectiveDeliveryDate ||

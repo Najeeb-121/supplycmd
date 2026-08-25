@@ -32,11 +32,12 @@ import {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SalesMetrics {
-  totalRevenue: number;
-  totalOrders: number;
-  openPipeline: number;
-  fulfillmentRate: number;
-  avgOrderValue: number;
+  confirmedOrderValue: number;
+  confirmedOrders: number;
+  quotationPipeline: number;
+  quotationCount: number;
+  fulfillmentRate: number | null;
+  avgConfirmedOrderValue: number | null;
   provenance: {
     erpVerified: number;
     derived: number;
@@ -47,24 +48,24 @@ interface SalesMetrics {
 interface TopProduct {
   name: string;
   quantity: number;
-  revenue: number;
+  confirmedOrderValue: number | null;
 }
 
 interface TopCustomer {
   name: string;
   orders: number;
-  revenue: number;
+  confirmedOrderValue: number;
 }
 
 interface RecentOrder {
   id: number;
   orderNumber: string;
-  customerName: string;
+  customerName: string | null;
   orderDate: string;
   expectedDate: string;
   totalAmount: number;
   status: string;
-  currency: string;
+  currency: string | null;
   effectiveDeliveryDateSource: string;
 }
 
@@ -122,10 +123,10 @@ function KpiCard({ title, value, sub, icon: Icon, color }: { title: string; valu
   );
 }
 
-function formatCurrency(val: number) {
-  if (val >= 1000000) return `$${(val / 1000000).toFixed(2)}M`;
-  if (val >= 1000) return `$${(val / 1000).toFixed(1)}k`;
-  return `$${val.toLocaleString()}`;
+function formatCurrency(val: number, currency = "JOD") {
+  if (val >= 1000000) return `${currency} ${(val / 1000000).toFixed(2)}M`;
+  if (val >= 1000) return `${currency} ${(val / 1000).toFixed(1)}k`;
+  return `${currency} ${val.toLocaleString()}`;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -157,7 +158,7 @@ export default function SalesDashboardPage() {
     queryKey: ["sales-metrics"],
     queryFn: fetchSalesMetrics
   });
-  
+
   const { data: topProducts, isLoading: loadingProducts } = useQuery({
     queryKey: ["sales-top-products"],
     queryFn: fetchTopProducts
@@ -187,36 +188,91 @@ export default function SalesDashboardPage() {
           Sales & Demand Dashboard
         </h1>
         <p className="text-muted-foreground mt-2 max-w-3xl">
-          Real-time insights into your Odoo sales pipeline, revenue trends, and customer demand. 
-          Use this data to align your supply chain procurement and production schedules.
+          Last synchronized ERP sales snapshot showing confirmed orders, quotation pipeline,
+          fulfillment, and customer demand.
         </p>
       </div>
 
       {/* ── KPI Row ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <KpiCard title="Total Revenue" value={loadingMetrics ? "..." : formatCurrency(metrics?.totalRevenue || 0)} icon={DollarSign} color="bg-blue-500/10 text-blue-500" />
-        <KpiCard title="Total Orders" value={loadingMetrics ? "..." : (metrics?.totalOrders || 0).toLocaleString()} icon={ShoppingCart} color="bg-emerald-500/10 text-emerald-500" />
-        <KpiCard title="Fulfillment Rate" value={loadingMetrics ? "..." : `${metrics?.fulfillmentRate || 0}%`} icon={Package} color="bg-purple-500/10 text-purple-500" />
-        <KpiCard title="Avg Order Value" value={loadingMetrics ? "..." : formatCurrency(metrics?.avgOrderValue || 0)} icon={Activity} color="bg-orange-500/10 text-orange-500" />
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <KpiCard
+          title="Confirmed Sales Order Value"
+          value={
+            loadingMetrics
+              ? "..."
+              : formatCurrency(metrics?.confirmedOrderValue ?? 0)
+          }
+          icon={DollarSign}
+          color="bg-blue-500/10 text-blue-500"
+        />
+
+        <KpiCard
+          title="Confirmed Orders"
+          value={
+            loadingMetrics
+              ? "..."
+              : (metrics?.confirmedOrders ?? 0).toLocaleString()
+          }
+          icon={ShoppingCart}
+          color="bg-emerald-500/10 text-emerald-500"
+        /><KpiCard
+          title="Quotation Pipeline"
+          value={
+            loadingMetrics
+              ? "..."
+              : formatCurrency(metrics?.quotationPipeline ?? 0)
+          }
+          icon={TrendingUp}
+          color="bg-cyan-500/10 text-cyan-500"
+        />
+
+        <KpiCard
+          title="Fulfillment Rate"
+          value={
+            loadingMetrics
+              ? "..."
+              : metrics?.fulfillmentRate == null
+                ? "N/A"
+                : `${metrics.fulfillmentRate}%`
+          }
+          icon={Package}
+          color="bg-purple-500/10 text-purple-500"
+        />
+
+        <KpiCard
+          title="Avg Confirmed Order Value"
+          value={
+            loadingMetrics
+              ? "..."
+              : metrics?.avgConfirmedOrderValue == null
+                ? "N/A"
+                : formatCurrency(metrics.avgConfirmedOrderValue)
+          }
+          icon={Activity}
+          color="bg-orange-500/10 text-orange-500"
+        />      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card className="border-green-500/20 shadow-sm bg-green-500/5">
           <CardContent className="p-5 flex items-start gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-green-700 dark:text-green-400">ERP VERIFIED (Commitment Date)</p>
+              <p className="text-sm font-medium text-green-700 dark:text-green-400">ERP COMMITMENT DATE</p>
               <p className="text-2xl font-bold tracking-tight mt-1">{loadingMetrics ? "..." : metrics?.provenance?.erpVerified || 0}</p>
               <p className="text-xs text-green-600/70 mt-1">Confirmed delivery timing</p>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-amber-500/20 shadow-sm bg-amber-500/5">
           <CardContent className="p-5 flex items-start gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">DERIVED (Expected Date)</p>
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                ERP EXPECTED DATE
+              </p>
               <p className="text-2xl font-bold tracking-tight mt-1">{loadingMetrics ? "..." : metrics?.provenance?.derived || 0}</p>
-              <p className="text-xs text-amber-600/70 mt-1">System derived timing</p>
+              <p className="text-xs text-amber-600/70 mt-1">
+                Expected delivery timing from ERP
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -234,12 +290,14 @@ export default function SalesDashboardPage() {
 
       {/* ── Chart & Top Lists ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Trend Chart */}
         <Card className="lg:col-span-2 shadow-sm border-border">
           <CardHeader>
-            <CardTitle className="text-lg">Revenue Trend</CardTitle>
-            <CardDescription>Monthly aggregated sales volume from ERP</CardDescription>
+            <CardTitle className="text-lg">Confirmed Sales Order Value Trend</CardTitle>
+            <CardDescription>
+              Monthly confirmed sales order value grouped by order date
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[300px] w-full">
@@ -250,45 +308,51 @@ export default function SalesDashboardPage() {
                   <AreaChart data={revenueTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="month" 
+                    <XAxis
+                      dataKey="month"
                       axisLine={false}
                       tickLine={false}
                       tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                       dy={10}
                     />
-                    <YAxis 
+                    <YAxis
                       axisLine={false}
                       tickLine={false}
                       tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                      tickFormatter={(value) => `$${value >= 1000 ? (value / 1000) + 'k' : value}`}
+                      tickFormatter={(value) =>
+                        value >= 1000
+                          ? `JOD ${(value / 1000).toFixed(1)}k`
+                          : `JOD ${value}`
+                      }
                       dx={-10}
                     />
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
                       itemStyle={{ color: 'hsl(var(--foreground))' }}
-                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
+                      formatter={(value: number) => [
+                        `JOD ${value.toLocaleString()}`,
+                        "Confirmed Order Value"
+                      ]}
                       labelStyle={{ color: 'hsl(var(--muted-foreground))', marginBottom: '4px' }}
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="revenue" 
-                      stroke="hsl(var(--primary))" 
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="hsl(var(--primary))"
                       strokeWidth={2}
-                      fillOpacity={1} 
-                      fill="url(#colorRevenue)" 
+                      fillOpacity={1}
+                      fill="url(#colorRevenue)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-full w-full flex items-center justify-center text-muted-foreground border border-dashed rounded-lg">
-                  No historical revenue data available
-                </div>
+                  No confirmed sales order value history available                </div>
               )}
             </div>
           </CardContent>
@@ -301,7 +365,7 @@ export default function SalesDashboardPage() {
               <Users className="w-4 h-4 text-primary" />
               Top Customers
             </CardTitle>
-            <CardDescription>By total revenue volume</CardDescription>
+            <CardDescription>By confirmed sales order value</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-auto">
             {loadingCustomers ? (
@@ -312,10 +376,10 @@ export default function SalesDashboardPage() {
                   <div key={i} className="flex items-center justify-between">
                     <div className="min-w-0 flex-1 pr-4">
                       <p className="text-sm font-medium truncate text-foreground">{customer.name}</p>
-                      <p className="text-xs text-muted-foreground">{customer.orders} orders</p>
+                      <p className="text-xs text-muted-foreground">{customer.orders} confirmed orders</p>
                     </div>
                     <div className="font-semibold text-sm shrink-0">
-                      {formatCurrency(customer.revenue)}
+                      {formatCurrency(customer.confirmedOrderValue)}
                     </div>
                   </div>
                 ))}
@@ -331,8 +395,8 @@ export default function SalesDashboardPage() {
         {/* Top Products Table */}
         <Card className="shadow-sm border-border">
           <CardHeader>
-            <CardTitle className="text-lg">Top Selling Products</CardTitle>
-            <CardDescription>Highest revenue-driving SKUs</CardDescription>
+            <CardTitle className="text-lg">Top Products by Confirmed Order Value</CardTitle>
+            <CardDescription>Confirmed sales order quantity and value by SKU</CardDescription>
           </CardHeader>
           <CardContent>
             {loadingProducts ? (
@@ -343,7 +407,7 @@ export default function SalesDashboardPage() {
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Product</TableHead>
                     <TableHead className="text-right">Units</TableHead>
-                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">Order Value</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -353,7 +417,11 @@ export default function SalesDashboardPage() {
                         {p.name}
                       </TableCell>
                       <TableCell className="text-right">{p.quantity.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(p.revenue)}</TableCell>
+                      <TableCell className="text-right">
+                        {p.confirmedOrderValue == null
+                          ? "N/A"
+                          : formatCurrency(p.confirmedOrderValue)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -369,8 +437,10 @@ export default function SalesDashboardPage() {
         {/* Recent Orders Table */}
         <Card className="shadow-sm border-border">
           <CardHeader>
-            <CardTitle className="text-lg">Recent Sales Orders</CardTitle>
-            <CardDescription>Latest orders injected into the demand pipeline</CardDescription>
+            <CardTitle className="text-lg">Recent Sales Orders & Quotations</CardTitle>
+            <CardDescription>
+              Latest records from the last synchronized ERP sales snapshot
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {loadingOrders ? (
@@ -391,20 +461,22 @@ export default function SalesDashboardPage() {
                   {recentOrders?.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium">{order.orderNumber}</TableCell>
-                      <TableCell>{order.customerName}</TableCell>
-                      <TableCell>{order.expectedDate || "Unknown"}</TableCell>
+                      <TableCell>{order.customerName ?? "N/A"}</TableCell>
+                      <TableCell>{order.expectedDate ?? "N/A"}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={
                           order.effectiveDeliveryDateSource === "ODOO_COMMITMENT_DATE" ? "border-green-500/30 text-green-600" :
-                          order.effectiveDeliveryDateSource === "ODOO_EXPECTED_DATE" ? "border-amber-500/30 text-amber-600" :
-                          "border-red-500/30 text-red-600"
+                            order.effectiveDeliveryDateSource === "ODOO_EXPECTED_DATE" ? "border-amber-500/30 text-amber-600" :
+                              "border-red-500/30 text-red-600"
                         }>
                           {order.effectiveDeliveryDateSource?.replace("ODOO_", "") || "MISSING"}
                         </Badge>
                       </TableCell>
                       <TableCell><StatusBadge status={order.status} /></TableCell>
                       <TableCell className="text-right font-medium">
-                        {order.currency} {order.totalAmount.toLocaleString()}
+                        {order.currency == null
+                          ? `N/A ${order.totalAmount.toLocaleString()}`
+                          : `${order.currency} ${order.totalAmount.toLocaleString()}`}
                       </TableCell>
                     </TableRow>
                   ))}

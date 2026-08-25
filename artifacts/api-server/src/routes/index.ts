@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
 import inventoryRouter from "./inventory";
+import salesRouter from "./sales";
 import suppliersRouter from "./suppliers";
 import productionRouter from "./production";
 import demandRouter from "./demand";
@@ -25,6 +26,7 @@ router.use(authRouter);
 // Everything below requires a logged-in user, scoped to their company
 router.use(requireAuth);
 router.use(inventoryRouter);
+router.use(salesRouter);
 router.use(suppliersRouter);
 router.use(productionRouter);
 router.use(demandRouter);
