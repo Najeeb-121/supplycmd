@@ -13,19 +13,19 @@ import {
 } from "@workspace/api-zod";
 import { validateBody } from "../lib/validate.js";
 
-class NotFoundError extends Error {}
-class InsufficientStockError extends Error {}
+class NotFoundError extends Error { }
+class InsufficientStockError extends Error { }
 
 // ── Stricter inventory schema with cross-field rules ───────────────────────────
 export const StrictInventoryBody = CreateInventoryItemBody
   .extend({
-    currentStock:     z.number().int().min(0),
+    currentStock: z.number().int().min(0),
     reservedQuantity: z.number().int().min(0).optional(),
-    minStock:         z.number().int().min(0).optional(),
-    maxStock:         z.number().int().min(0).optional(),
-    leadTimeDays:     z.number().int().min(0),
-    sellingPrice:     z.number().min(0).optional(),
-    holdingCostRate:  z.number().min(0).max(1),
+    minStock: z.number().int().min(0).optional(),
+    maxStock: z.number().int().min(0).optional(),
+    leadTimeDays: z.number().int().min(0),
+    sellingPrice: z.number().min(0).optional(),
+    holdingCostRate: z.number().min(0).max(1),
   })
   .refine(
     (d) => d.maxStock == null || d.maxStock >= (d.minStock ?? 0),
@@ -34,13 +34,13 @@ export const StrictInventoryBody = CreateInventoryItemBody
 
 const StrictInventoryPatch = UpdateInventoryItemBody
   .extend({
-    currentStock:     z.number().int().min(0).optional(),
+    currentStock: z.number().int().min(0).optional(),
     reservedQuantity: z.number().int().min(0).optional(),
-    minStock:         z.number().int().min(0).optional(),
-    maxStock:         z.number().int().min(0).optional(),
-    leadTimeDays:     z.number().int().min(0).optional(),
-    sellingPrice:     z.number().min(0).optional(),
-    holdingCostRate:  z.number().min(0).max(1).optional(),
+    minStock: z.number().int().min(0).optional(),
+    maxStock: z.number().int().min(0).optional(),
+    leadTimeDays: z.number().int().min(0).optional(),
+    sellingPrice: z.number().min(0).optional(),
+    holdingCostRate: z.number().min(0).max(1).optional(),
   })
   .refine(
     (d) => {
@@ -73,11 +73,30 @@ function computeMetrics(d: { annualDemand: number; orderingCost: number; unitCos
 }
 
 // Derive status string from stock levels
-function deriveStatus(item: { currentStock: number; safetyStock: number; reorderPoint: number; maxStock: number | null | undefined; minStock: number }): string {
-  if (item.currentStock === 0) return "out_of_stock";
-  if (item.currentStock <= item.safetyStock) return "critical";
-  if (item.currentStock <= item.reorderPoint) return "low_stock";
-  if (item.maxStock != null && item.currentStock > item.maxStock) return "overstock";
+function deriveStatus(item: {
+  currentStock: number;
+  availableQuantity: number;
+  reservationShortage: number;
+  safetyStock: number;
+  reorderPoint: number;
+  maxStock: number | null | undefined;
+}) {
+  if (item.reservationShortage > 0) return "critical";
+
+  if (item.availableQuantity <= 0) return "out_of_stock";
+
+  if (item.safetyStock > 0 && item.availableQuantity <= item.safetyStock) {
+    return "critical";
+  }
+
+  if (item.reorderPoint > 0 && item.availableQuantity <= item.reorderPoint) {
+    return "low_stock";
+  }
+
+  if (item.maxStock != null && item.currentStock > item.maxStock) {
+    return "overstock";
+  }
+
   return "healthy";
 }
 
@@ -132,14 +151,14 @@ router.get("/inventory/relationships", async (req: Request, res: Response): Prom
 
   for (const po of poLines) {
     if (po.supplierId === null || po.productId === null) continue;
-    
+
     // Only count POs that are active (pending) and have remaining quantity
     const isActivePo = po.status === 'pending' && (po.remainingQuantity || 0) > 0;
     if (!isActivePo) continue;
 
     const key = `${po.supplierId}-${po.productId}`;
     const existing = map.get(key);
-    
+
     if (existing) {
       existing.activePoCount += 1;
       existing.inboundQty += Number(po.remainingQuantity || 0);
@@ -193,7 +212,7 @@ router.get("/inventory", async (req: Request, res: Response): Promise<void> => {
   }
   if (category) items = items.filter(i => i.category.toLowerCase() === category.toLowerCase());
   if (warehouse) items = items.filter(i => (i.warehouse ?? "").toLowerCase() === warehouse.toLowerCase());
-  if (supplier)  items = items.filter(i => (i.supplierName ?? "").toLowerCase() === supplier.toLowerCase());
+  if (supplier) items = items.filter(i => (i.supplierName ?? "").toLowerCase() === supplier.toLowerCase());
   if (status) {
     items = items.filter(i => deriveStatus(i) === status);
   }
@@ -216,9 +235,10 @@ router.get("/inventory/kpis", async (req: Request, res: Response): Promise<void>
     else if (s === "low_stock") lowStockCount++;
     else if (s === "overstock") overstockCount++;
 
-    if (item.annualDemand > 0 && item.unitCost > 0) {
-      const avgInventoryValue = ((item.maxStock ?? item.currentStock * 2) / 2) * item.unitCost;
+    if (item.annualDemand > 0 && item.unitCost > 0 && item.maxStock != null) {
+      const avgInventoryValue = (item.maxStock / 2) * item.unitCost;
       const cogsAnnual = item.annualDemand * item.unitCost;
+
       if (avgInventoryValue > 0) {
         const turnover = cogsAnnual / avgInventoryValue;
         totalTurnover += turnover;
@@ -235,8 +255,8 @@ router.get("/inventory/kpis", async (req: Request, res: Response): Promise<void>
     criticalCount,
     outOfStockCount,
     overstockCount,
-    avgTurnoverRate: turnoverItemCount > 0 ? totalTurnover / turnoverItemCount : 0,
-    avgDaysOnHand: turnoverItemCount > 0 ? totalDaysOnHand / turnoverItemCount : 0,
+    avgTurnoverRate: turnoverItemCount > 0 ? totalTurnover / turnoverItemCount : null,
+    avgDaysOnHand: turnoverItemCount > 0 ? totalDaysOnHand / turnoverItemCount : null,
   });
 });
 
@@ -273,7 +293,7 @@ router.get("/inventory/reorder-suggestions", async (req: Request, res: Response)
     };
   });
   // Sort: high first
-  suggestions.sort((a, b) => ["high","medium","low"].indexOf(a.priority) - ["high","medium","low"].indexOf(b.priority));
+  suggestions.sort((a, b) => ["high", "medium", "low"].indexOf(a.priority) - ["high", "medium", "low"].indexOf(b.priority));
   res.json(suggestions);
 });
 
@@ -298,7 +318,7 @@ router.get("/inventory/reorder-alerts", async (req: Request, res: Response): Pro
     eoq: item.eoq,
     urgency: item.currentStock <= item.safetyStock ? "critical"
       : item.currentStock <= item.reorderPoint * 0.5 ? "warning"
-      : "low",
+        : "low",
   })));
 });
 
@@ -378,10 +398,10 @@ router.delete("/inventory/:id", async (req: Request, res: Response): Promise<voi
 
 // ── Stricter movement schema ───────────────────────────────────────────────────
 const StrictMovementBody = CreateStockMovementBody.extend({
-  movementType:    z.string().min(1, "Movement type is required"),
-  action:          z.string().min(2, "Action description is required"),
+  movementType: z.string().min(1, "Movement type is required"),
+  action: z.string().min(2, "Action description is required"),
   quantityChanged: z.number().int("Quantity must be a whole number").refine(v => v !== 0, { message: "Quantity must be non-zero" }),
-  user:            z.string().min(1, "Operator name is required"),
+  user: z.string().min(1, "Operator name is required"),
 });
 
 // ── POST /inventory/:id/movements ─────────────────────────────────────────────

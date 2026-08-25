@@ -883,8 +883,8 @@ components:
         criticalCount:    { type: number }
         outOfStockCount:  { type: number }
         overstockCount:   { type: number }
-        avgTurnoverRate:  { type: number }
-        avgDaysOnHand:    { type: number }
+        avgTurnoverRate: { type: number, nullable: true }
+        avgDaysOnHand:   { type: number, nullable: true }
 
     StockMovement:
       type: object

@@ -368,8 +368,8 @@ export default function InventoryPage() {
           <KpiCard title="Low Stock" value={String(kpis.lowStockCount)} icon={AlertTriangle} color="bg-amber-500/10 text-amber-600" sub="Below reorder point" />
           <KpiCard title="Critical" value={String(kpis.criticalCount)} icon={TrendingDown} color="bg-red-500/10 text-red-600" sub="Below safety stock" />
           <KpiCard title="Out of Stock" value={String(kpis.outOfStockCount)} icon={X} color="bg-zinc-500/10 text-zinc-600" />
-          <KpiCard title="Avg Turnover" value={`${formatNum(kpis.avgTurnoverRate)}×`} icon={TrendingUp} color="bg-emerald-500/10 text-emerald-600" sub="Inventory turns/yr" />
-          <KpiCard title="Avg Days on Hand" value={`${Math.round(kpis.avgDaysOnHand)}d`} icon={Clock} color="bg-violet-500/10 text-violet-600" sub="Days of supply" />
+          <KpiCard title="Avg Turnover" value={kpis.avgTurnoverRate == null ? "N/A" : `${formatNum(kpis.avgTurnoverRate)}×`} icon={TrendingUp} color="bg-emerald-500/10 text-emerald-600" sub="Inventory turns/yr" />
+          <KpiCard title="Avg Days on Hand" value={kpis.avgDaysOnHand == null ? "N/A" : `${Math.round(kpis.avgDaysOnHand)}d`} icon={Clock} color="bg-violet-500/10 text-violet-600" sub="Days of supply" />
         </div>
       )}
 

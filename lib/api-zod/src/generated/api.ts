@@ -230,8 +230,8 @@ export const GetInventoryKpisResponse = zod.object({
   "criticalCount": zod.number(),
   "outOfStockCount": zod.number(),
   "overstockCount": zod.number(),
-  "avgTurnoverRate": zod.number(),
-  "avgDaysOnHand": zod.number()
+  "avgTurnoverRate": zod.number().nullable(),
+  "avgDaysOnHand": zod.number().nullable()
 })
 
 

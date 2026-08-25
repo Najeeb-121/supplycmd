@@ -163,8 +163,8 @@ export interface InventoryKpis {
   criticalCount: number;
   outOfStockCount: number;
   overstockCount: number;
-  avgTurnoverRate: number;
-  avgDaysOnHand: number;
+  avgTurnoverRate: number | null;
+  avgDaysOnHand: number | null;
 }
 
 export interface StockMovement {
