@@ -365,9 +365,9 @@ export default function InventoryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
           <KpiCard title="Total Value" value={formatCurrency(kpis.totalValue)} icon={DollarSign} color="bg-blue-500/10 text-blue-600" />
           <KpiCard title="Total SKUs" value={String(kpis.totalSkus)} icon={Package} color="bg-indigo-500/10 text-indigo-600" />
-          <KpiCard title="Low Stock" value={String(kpis.lowStockCount)} icon={AlertTriangle} color="bg-amber-500/10 text-amber-600" sub="Below reorder point" />
-          <KpiCard title="Critical" value={String(kpis.criticalCount)} icon={TrendingDown} color="bg-red-500/10 text-red-600" sub="Below safety stock" />
-          <KpiCard title="Out of Stock" value={String(kpis.outOfStockCount)} icon={X} color="bg-zinc-500/10 text-zinc-600" />
+          <KpiCard title="Low Stock" value={String(kpis.lowStockCount)} icon={AlertTriangle} color="bg-amber-500/10 text-amber-600" sub="Reorder-threshold risk" />
+          <KpiCard title="Critical" value={String(kpis.criticalCount)} icon={TrendingDown} color="bg-red-500/10 text-red-600" sub="Reservation or safety-stock risk" />
+          <KpiCard title="Out of Stock" value={String(kpis.outOfStockCount)} icon={X} color="bg-zinc-500/10 text-zinc-600" sub="No available-now stock" />
           <KpiCard title="Avg Turnover" value={kpis.avgTurnoverRate == null ? "N/A" : `${formatNum(kpis.avgTurnoverRate)}×`} icon={TrendingUp} color="bg-emerald-500/10 text-emerald-600" sub="Inventory turns/yr" />
           <KpiCard title="Avg Days on Hand" value={kpis.avgDaysOnHand == null ? "N/A" : `${Math.round(kpis.avgDaysOnHand)}d`} icon={Clock} color="bg-violet-500/10 text-violet-600" sub="Days of supply" />
         </div>
@@ -478,19 +478,18 @@ export default function InventoryPage() {
                         <TableHead className="hidden md:table-cell">Warehouse</TableHead>
                         <TableHead className="hidden lg:table-cell">Supplier</TableHead>
                         <SortHeader col="currentStock" label="Stock" />
-                        <TableHead className="hidden md:table-cell text-right">Available</TableHead>
+                        <TableHead className="hidden md:table-cell text-right">Available Now</TableHead>
+                        <TableHead className="hidden lg:table-cell text-right">Reservation Shortage</TableHead>
+                        <TableHead className="hidden xl:table-cell text-right">Incoming</TableHead>
                         <SortHeader col="unitCost" label="Unit Cost" />
                         <TableHead className="text-right hidden lg:table-cell">Total Value</TableHead>
-                        <TableHead className="hidden xl:table-cell text-right">Safety Stock</TableHead>
-                        <TableHead className="hidden xl:table-cell text-right">ROP</TableHead>
-                        <TableHead className="hidden xl:table-cell text-right">EOQ</TableHead>
                         <SortHeader col="status" label="Status" />
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginated.length === 0 ? (
-                        <TableRow><TableCell colSpan={13} className="h-24 text-center text-muted-foreground">No items found.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={12} className="h-24 text-center text-muted-foreground">No items found.</TableCell></TableRow>
                       ) : paginated.map(item => (
                         <TableRow key={item.id} className={`hover:bg-muted/10 ${item.archived ? "opacity-50" : ""}`}>
                           <TableCell>
@@ -508,12 +507,13 @@ export default function InventoryPage() {
                           </TableCell>
                           <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[120px] truncate">{item.supplierName ?? "—"}</TableCell>
                           <TableCell className="font-mono font-medium">{formatNum(item.currentStock)} <span className="text-muted-foreground text-xs">{item.unitOfMeasure}</span></TableCell>
-                          <TableCell className="hidden md:table-cell text-right font-mono text-sm text-muted-foreground">{formatNum(item.currentStock - item.reservedQuantity)}</TableCell>
+                          <TableCell className="hidden md:table-cell text-right font-mono text-sm text-muted-foreground">{formatNum(item.availableQuantity)}</TableCell>
+                          <TableCell className={`hidden lg:table-cell text-right font-mono text-sm ${item.reservationShortage > 0 ? "font-semibold text-red-600" : "text-muted-foreground"}`}>
+                            {formatNum(item.reservationShortage)}
+                          </TableCell>
+                          <TableCell className="hidden xl:table-cell text-right font-mono text-sm text-muted-foreground">{formatNum(item.incomingQuantity)}</TableCell>
                           <TableCell className="text-right font-mono text-sm">{formatCurrency(item.unitCost)}</TableCell>
                           <TableCell className="hidden lg:table-cell text-right font-mono text-sm font-medium">{formatCurrency(item.currentStock * item.unitCost)}</TableCell>
-                          <TableCell className="hidden xl:table-cell text-right font-mono text-sm text-muted-foreground">{Math.round(item.safetyStock)}</TableCell>
-                          <TableCell className="hidden xl:table-cell text-right font-mono text-sm text-muted-foreground">{Math.round(item.reorderPoint)}</TableCell>
-                          <TableCell className="hidden xl:table-cell text-right font-mono text-sm text-accent font-medium">{Math.round(item.eoq)}</TableCell>
                           <TableCell><StatusBadge item={item} /></TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
@@ -715,7 +715,9 @@ export default function InventoryPage() {
                         <TableHead>Bin</TableHead>
                         <TableHead className="text-right">Stock</TableHead>
                         <TableHead className="text-right">Reserved</TableHead>
-                        <TableHead className="text-right">Available</TableHead>
+                        <TableHead className="text-right">Available Now</TableHead>
+                        <TableHead className="text-right">Reservation Shortage</TableHead>
+                        <TableHead className="text-right">Incoming</TableHead>
                         <TableHead className="text-right">Value</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
@@ -731,7 +733,11 @@ export default function InventoryPage() {
                           <TableCell className="font-mono text-xs text-muted-foreground">{item.binLocation ?? "—"}</TableCell>
                           <TableCell className="text-right font-mono">{formatNum(item.currentStock)}</TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">{formatNum(item.reservedQuantity)}</TableCell>
-                          <TableCell className="text-right font-mono font-medium">{formatNum(item.currentStock - item.reservedQuantity)}</TableCell>
+                          <TableCell className="text-right font-mono font-medium">{formatNum(item.availableQuantity)}</TableCell>
+                          <TableCell className={`text-right font-mono ${item.reservationShortage > 0 ? "font-semibold text-red-600" : "text-muted-foreground"}`}>
+                            {formatNum(item.reservationShortage)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">{formatNum(item.incomingQuantity)}</TableCell>
                           <TableCell className="text-right font-mono">{formatCurrency(item.currentStock * item.unitCost)}</TableCell>
                           <TableCell><StatusBadge item={item} /></TableCell>
                         </TableRow>
@@ -783,11 +789,11 @@ export default function InventoryPage() {
               </CardContent>
             </Card>
 
-            {/* Low Stock Report */}
+            {/* Operational Stock Risk Report */}
             <Card className="border-border">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-500" /> Low Stock Report</CardTitle>
-                <CardDescription>Items below reorder point</CardDescription>
+                <CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-500" /> Operational Stock Risk Report</CardTitle>
+                <CardDescription>Reservation shortages, no available-now stock, or reorder-threshold risk</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 {allItems.filter(i => deriveStatus(i) !== "healthy" && deriveStatus(i) !== "overstock").slice(0, 8).map(item => (
@@ -797,17 +803,34 @@ export default function InventoryPage() {
                       <div className="font-mono text-xs text-muted-foreground">{item.sku}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="font-mono font-semibold text-red-600">{formatNum(item.currentStock)}</div>
+                      <div className="font-mono text-xs text-muted-foreground">Available {formatNum(item.availableQuantity)}</div>
+                      {item.reservationShortage > 0 && (
+                        <div className="font-mono font-semibold text-red-600">Shortage {formatNum(item.reservationShortage)}</div>
+                      )}
                       <StatusBadge item={item} />
                     </div>
                   </div>
                 ))}
                 {allItems.filter(i => deriveStatus(i) !== "healthy" && deriveStatus(i) !== "overstock").length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">All items healthy ✓</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">No operational stock risks detected.</p>
                 )}
                 <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => {
-                  const low = allItems.filter(i => deriveStatus(i) !== "healthy" && deriveStatus(i) !== "overstock");
-                  exportCSV("low-stock-report.csv", low.map(i => [i.sku, i.name, i.category, String(i.currentStock), String(Math.round(i.reorderPoint)), String(Math.round(i.safetyStock)), deriveStatus(i)]), ["SKU", "Name", "Category", "Current Stock", "Reorder Point", "Safety Stock", "Status"]);
+                  const atRisk = allItems.filter(i => deriveStatus(i) !== "healthy" && deriveStatus(i) !== "overstock");
+                  exportCSV(
+                    "operational-stock-risk-report.csv",
+                    atRisk.map(i => [
+                      i.sku,
+                      i.name,
+                      i.category,
+                      String(i.currentStock),
+                      String(i.reservedQuantity),
+                      String(i.availableQuantity),
+                      String(i.reservationShortage),
+                      String(i.incomingQuantity),
+                      deriveStatus(i),
+                    ]),
+                    ["SKU", "Name", "Category", "Current Stock", "Reserved", "Available Now", "Reservation Shortage", "Incoming", "Status"],
+                  );
                 }}><Download className="w-3.5 h-3.5 mr-1.5" /> Export</Button>
               </CardContent>
             </Card>
@@ -815,11 +838,11 @@ export default function InventoryPage() {
             {/* Overstock Report */}
             <Card className="border-border">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="w-4 h-4 text-blue-500" /> Overstock / Dead Stock</CardTitle>
-                <CardDescription>Items exceeding max stock or with no demand</CardDescription>
+                <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="w-4 h-4 text-blue-500" /> Verified Overstock</CardTitle>
+                <CardDescription>Only evaluated when a maximum stock threshold is defined</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {allItems.filter(i => deriveStatus(i) === "overstock" || i.annualDemand === 0).slice(0, 8).map(item => (
+                {allItems.filter(i => deriveStatus(i) === "overstock").slice(0, 8).map(item => (
                   <div key={item.id} className="flex items-center justify-between text-sm gap-2">
                     <div className="min-w-0">
                       <div className="font-medium truncate">{item.name}</div>
@@ -831,11 +854,11 @@ export default function InventoryPage() {
                     </div>
                   </div>
                 ))}
-                {allItems.filter(i => deriveStatus(i) === "overstock" || i.annualDemand === 0).length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">No overstock items ✓</p>
+                {allItems.filter(i => deriveStatus(i) === "overstock").length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No verified overstock items. Undefined maximum thresholds remain N/A.</p>
                 )}
                 <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => {
-                  const over = allItems.filter(i => deriveStatus(i) === "overstock" || i.annualDemand === 0);
+                  const over = allItems.filter(i => deriveStatus(i) === "overstock");
                   exportCSV("overstock-report.csv", over.map(i => [i.sku, i.name, i.category, String(i.currentStock), String(i.maxStock ?? "N/A"), String((i.currentStock * i.unitCost).toFixed(2)), deriveStatus(i)]), ["SKU", "Name", "Category", "Current Stock", "Max Stock", "Value", "Status"]);
                 }}><Download className="w-3.5 h-3.5 mr-1.5" /> Export</Button>
               </CardContent>
@@ -844,54 +867,19 @@ export default function InventoryPage() {
             {/* Fast/Slow movers */}
             <Card className="border-border md:col-span-2 lg:col-span-3">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2"><BarChart2 className="w-4 h-4 text-violet-500" /> Fast vs Slow Movers</CardTitle>
-                <CardDescription>Ranked by annual demand — top 10 fast movers and bottom 5 slow movers</CardDescription>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-violet-500" />
+                  Fast vs Slow Movers
+                </CardTitle>
+                <CardDescription>Movement ranking requires verified demand history</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Fast Movers (Top 10 by Annual Demand)</p>
-                    <div className="space-y-2">
-                      {[...allItems].sort((a, b) => b.annualDemand - a.annualDemand).slice(0, 10).map((item, idx) => {
-                        const maxD = Math.max(...allItems.map(i => i.annualDemand));
-                        const pct = maxD > 0 ? (item.annualDemand / maxD) * 100 : 0;
-                        return (
-                          <div key={item.id} className="flex items-center gap-3 text-sm">
-                            <span className="w-5 text-xs text-muted-foreground font-mono">{idx + 1}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between mb-0.5">
-                                <span className="font-medium truncate">{item.name}</span>
-                                <span className="font-mono text-xs text-muted-foreground shrink-0 ml-2">{formatNum(item.annualDemand)}/yr</span>
-                              </div>
-                              <div className="h-1.5 bg-muted rounded-full"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} /></div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Slow Movers / Dead Stock</p>
-                    <div className="space-y-2">
-                      {[...allItems].filter(i => i.annualDemand < 500).sort((a, b) => a.annualDemand - b.annualDemand).slice(0, 5).map(item => (
-                        <div key={item.id} className="flex items-center justify-between text-sm p-2 bg-muted/20 rounded">
-                          <div>
-                            <div className="font-medium">{item.name}</div>
-                            <div className="font-mono text-xs text-muted-foreground">{item.sku}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-mono text-xs">{formatNum(item.annualDemand)}/yr demand</div>
-                            <div className="text-xs text-muted-foreground">{formatCurrency(item.currentStock * item.unitCost)} at risk</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                <div className="rounded-md border border-dashed border-border p-8 text-center">
+                  <p className="font-semibold">N/A — verified annual-demand history is unavailable</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Annual-demand provenance is not available, so SupplyCMD cannot classify fast movers, slow movers, or dead stock.
+                  </p>
                 </div>
-                <Button variant="outline" size="sm" className="mt-4" onClick={() => {
-                  const sorted = [...allItems].sort((a, b) => b.annualDemand - a.annualDemand);
-                  exportCSV("movers-report.csv", sorted.map(i => [i.sku, i.name, i.category, String(i.annualDemand), String(i.currentStock), String((i.currentStock * i.unitCost).toFixed(2))]), ["SKU", "Name", "Category", "Annual Demand", "Current Stock", "Inventory Value"]);
-                }}><Download className="w-3.5 h-3.5 mr-1.5" /> Export Full Report</Button>
               </CardContent>
             </Card>
           </div>
