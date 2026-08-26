@@ -19,6 +19,8 @@ export * from './inventoryItem';
 export * from './inventoryItemInput';
 export * from './inventoryItemUpdate';
 export * from './inventoryKpis';
+export * from './inventoryRelationship';
+export * from './inventoryRelationshipRelationshipSource';
 export * from './listInventoryParams';
 export * from './listStockMovementsParams';
 export * from './loginInput';

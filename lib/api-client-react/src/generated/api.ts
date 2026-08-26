@@ -31,6 +31,7 @@ import type {
   InventoryItemInput,
   InventoryItemUpdate,
   InventoryKpis,
+  InventoryRelationship,
   ListInventoryParams,
   ListStockMovementsParams,
   LoginInput,
@@ -605,6 +606,83 @@ export const useCreateInventoryItem = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateInventoryItemMutationOptions(options));
     }
+
+export const getGetInventoryRelationshipsUrl = () => {
+
+
+
+
+  return `/api/inventory/relationships`
+}
+
+/**
+ * @summary List verified product-supplier relationships
+ */
+export const getInventoryRelationships = async ( options?: Parameters<typeof customFetch>[1]): Promise<InventoryRelationship[]> => {
+
+  return customFetch<InventoryRelationship[]>(getGetInventoryRelationshipsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInventoryRelationshipsQueryKey = () => {
+    return [
+    `/api/inventory/relationships`
+    ] as const;
+    }
+
+
+export const getGetInventoryRelationshipsQueryOptions = <TData = Awaited<ReturnType<typeof getInventoryRelationships>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInventoryRelationships>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInventoryRelationshipsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInventoryRelationships>>> = ({ signal }) => getInventoryRelationships({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInventoryRelationships>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetInventoryRelationshipsQueryResult = NonNullable<Awaited<ReturnType<typeof getInventoryRelationships>>>
+export type GetInventoryRelationshipsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List verified product-supplier relationships
+ */
+
+export function useGetInventoryRelationships<TData = Awaited<ReturnType<typeof getInventoryRelationships>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInventoryRelationships>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetInventoryRelationshipsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetReorderAlertsUrl = () => {
 

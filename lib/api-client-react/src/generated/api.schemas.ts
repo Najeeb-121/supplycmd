@@ -30,6 +30,29 @@ export interface AuthUser {
   companyName: string;
 }
 
+export type InventoryRelationshipRelationshipSource = typeof InventoryRelationshipRelationshipSource[keyof typeof InventoryRelationshipRelationshipSource];
+
+
+export const InventoryRelationshipRelationshipSource = {
+  product_supplier: 'product_supplier',
+  purchase_order_line: 'purchase_order_line',
+  both: 'both',
+} as const;
+
+export interface InventoryRelationship {
+  supplierId: number;
+  supplierOdooId: number | null;
+  supplierName: string;
+  productId: number;
+  productOdooId: number | null;
+  productName: string;
+  sku: string;
+  activePoCount: number;
+  inboundQty: number;
+  hasActivePo: boolean;
+  relationshipSource: InventoryRelationshipRelationshipSource;
+}
+
 export interface InventoryItem {
   id: number;
   name: string;

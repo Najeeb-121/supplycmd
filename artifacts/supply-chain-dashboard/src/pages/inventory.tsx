@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import {
   useListInventory,
+  useGetInventoryRelationships,
   useGetInventoryKpis,
   useGetReorderSuggestions,
   useListStockMovements,
@@ -94,6 +95,23 @@ function StatusBadge({ item }: { item: InventoryItem }) {
   const cfg = STATUS_CONFIG[s];
   return <Badge variant="outline" className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 ${cfg.cls}`}>{cfg.label}</Badge>;
 }
+function SupplierCell({ names }: { names: string[] }) {
+  return (
+    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[180px]">
+      {names.length === 0 ? (
+        "—"
+      ) : (
+        <div className="space-y-0.5">
+          {names.map(name => (
+            <div key={name} className="truncate" title={name}>
+              {name}
+            </div>
+          ))}
+        </div>
+      )}
+    </TableCell>
+  );
+}
 
 // ── KPI card ─────────────────────────────────────────────────────────────────
 function KpiCard({ title, value, sub, icon: Icon, color }: { title: string; value: string; sub?: string; icon: any; color: string }) {
@@ -150,6 +168,7 @@ export default function InventoryPage() {
 
   // ── queries ────────────────────────────────────────────────────────────────
   const { data: allItems = [], isLoading } = useListInventory({ archived: showArchived ? "true" : undefined });
+  const { data: relationships = [] } = useGetInventoryRelationships();
   const { data: kpis } = useGetInventoryKpis();
   const { data: suggestions = [] } = useGetReorderSuggestions();
   const { data: movements = [] } = useListStockMovements();
@@ -186,7 +205,28 @@ export default function InventoryPage() {
   // ── derived filter options ──────────────────────────────────────────────────
   const categories = useMemo(() => ["all", ...Array.from(new Set(allItems.map(i => i.category))).sort()], [allItems]);
   const warehouses = useMemo(() => ["all", ...Array.from(new Set(allItems.map(i => i.warehouse ?? "").filter(Boolean))).sort()], [allItems]);
-  const suppliers = useMemo(() => ["all", ...Array.from(new Set(allItems.map(i => i.supplierName ?? "").filter(Boolean))).sort()], [allItems]);
+
+  const supplierNamesByProduct = useMemo(() => {
+    const map = new Map<number, string[]>();
+
+    for (const relationship of relationships) {
+      const names = map.get(relationship.productId) ?? [];
+
+      if (!names.includes(relationship.supplierName)) {
+        names.push(relationship.supplierName);
+        names.sort((a, b) => a.localeCompare(b));
+      }
+
+      map.set(relationship.productId, names);
+    }
+
+    return map;
+  }, [relationships]);
+
+  const suppliers = useMemo(
+    () => ["all", ...Array.from(new Set(relationships.map(r => r.supplierName))).sort()],
+    [relationships],
+  );
 
   // ── filtered + sorted ──────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -197,14 +237,16 @@ export default function InventoryPage() {
         i.name.toLowerCase().includes(q) ||
         i.sku.toLowerCase().includes(q) ||
         (i.barcode ?? "").toLowerCase().includes(q) ||
-        (i.supplierName ?? "").toLowerCase().includes(q) ||
+        (supplierNamesByProduct.get(i.id) ?? []).some(name => name.toLowerCase().includes(q)) ||
         i.category.toLowerCase().includes(q) ||
         (i.warehouse ?? "").toLowerCase().includes(q)
       );
     }
     if (filterCategory !== "all") items = items.filter(i => i.category === filterCategory);
     if (filterWarehouse !== "all") items = items.filter(i => (i.warehouse ?? "") === filterWarehouse);
-    if (filterSupplier !== "all") items = items.filter(i => (i.supplierName ?? "") === filterSupplier);
+    if (filterSupplier !== "all") {
+      items = items.filter(i => (supplierNamesByProduct.get(i.id) ?? []).includes(filterSupplier));
+    }
     if (filterStatus !== "all") items = items.filter(i => deriveStatus(i) === filterStatus);
 
     // sort
@@ -218,7 +260,7 @@ export default function InventoryPage() {
       return sortDir === "asc" ? c : -c;
     });
     return items;
-  }, [allItems, search, filterCategory, filterWarehouse, filterSupplier, filterStatus, sortCol, sortDir]);
+  }, [allItems, supplierNamesByProduct, search, filterCategory, filterWarehouse, filterSupplier, filterStatus, sortCol, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -310,8 +352,38 @@ export default function InventoryPage() {
 
   // ── exports ─────────────────────────────────────────────────────────────────
   const exportInventory = () => {
-    const headers = ["SKU", "Name", "Category", "Warehouse", "Supplier", "Current Stock", "Unit Cost", "Total Value", "Status", "Safety Stock", "Reorder Point", "EOQ"];
-    const rows = filtered.map(i => [i.sku, i.name, i.category, i.warehouse ?? "", i.supplierName ?? "", i.currentStock, i.unitCost, (i.currentStock * i.unitCost).toFixed(2), deriveStatus(i), Math.round(i.safetyStock), Math.round(i.reorderPoint), Math.round(i.eoq)].map(String));
+    const headers = [
+      "SKU",
+      "Name",
+      "Category",
+      "Warehouse",
+      "Verified Suppliers",
+      "Current Stock",
+      "Reserved",
+      "Available Now",
+      "Reservation Shortage",
+      "Incoming",
+      "Unit Cost",
+      "Total Value",
+      "Status",
+    ];
+
+    const rows = filtered.map(i => [
+      i.sku,
+      i.name,
+      i.category,
+      i.warehouse ?? "",
+      (supplierNamesByProduct.get(i.id) ?? []).join("; "),
+      i.currentStock,
+      i.reservedQuantity,
+      i.availableQuantity,
+      i.reservationShortage,
+      i.incomingQuantity,
+      i.unitCost,
+      (i.currentStock * i.unitCost).toFixed(2),
+      deriveStatus(i),
+    ].map(String));
+
     exportCSV(`inventory-${new Date().toISOString().slice(0, 10)}.csv`, rows, headers);
   };
 
@@ -505,7 +577,7 @@ export default function InventoryPage() {
                             {item.warehouse ?? "—"}
                             {item.binLocation && <div className="text-xs text-muted-foreground/60">{item.binLocation}</div>}
                           </TableCell>
-                          <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[120px] truncate">{item.supplierName ?? "—"}</TableCell>
+                          <SupplierCell names={supplierNamesByProduct.get(item.id) ?? []} />
                           <TableCell className="font-mono font-medium">{formatNum(item.currentStock)} <span className="text-muted-foreground text-xs">{item.unitOfMeasure}</span></TableCell>
                           <TableCell className="hidden md:table-cell text-right font-mono text-sm text-muted-foreground">{formatNum(item.availableQuantity)}</TableCell>
                           <TableCell className={`hidden lg:table-cell text-right font-mono text-sm ${item.reservationShortage > 0 ? "font-semibold text-red-600" : "text-muted-foreground"}`}>
@@ -654,9 +726,8 @@ export default function InventoryPage() {
                           <div className="font-mono text-xs text-muted-foreground">{s.sku}</div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">{s.warehouse || "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">{s.supplierName || "—"}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold">{formatNum(s.currentStock)}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold">{formatNum(s.availableQuantity)}</TableCell>
+                        <SupplierCell names={supplierNamesByProduct.get(s.id) ?? []} />
+                        <TableCell className="text-right font-mono font-semibold">{formatNum(s.currentStock)}</TableCell>                        <TableCell className="text-right font-mono font-semibold">{formatNum(s.availableQuantity)}</TableCell>
                         <TableCell className="text-right font-mono font-bold text-red-600">{formatNum(s.reservationShortage)}</TableCell>
                         <TableCell className="text-right font-mono text-muted-foreground">{formatNum(s.incomingQuantity)}</TableCell>
                         <TableCell className="text-right font-mono font-bold text-primary">

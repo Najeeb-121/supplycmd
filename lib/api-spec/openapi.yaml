@@ -153,6 +153,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/InventoryItem"
 
+  /inventory/relationships:
+    get:
+      operationId: getInventoryRelationships
+      tags: [inventory]
+      summary: List verified product-supplier relationships
+      responses:
+        "200":
+          description: Product-supplier relationships with provenance and active inbound details
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryRelationship"
+
   /inventory/reorder-alerts:
     get:
       operationId: getReorderAlerts
@@ -756,6 +771,24 @@ components:
         companyName: { type: string }
 
     # --- Inventory ---
+    InventoryRelationship:
+      type: object
+      required: [supplierId, supplierOdooId, supplierName, productId, productOdooId, productName, sku, activePoCount, inboundQty, hasActivePo, relationshipSource]
+      properties:
+        supplierId:        { type: number }
+        supplierOdooId:    { type: number, nullable: true }
+        supplierName:      { type: string }
+        productId:         { type: number }
+        productOdooId:     { type: number, nullable: true }
+        productName:       { type: string }
+        sku:               { type: string }
+        activePoCount:     { type: number }
+        inboundQty:        { type: number }
+        hasActivePo:       { type: boolean }
+        relationshipSource:
+          type: string
+          enum: [product_supplier, purchase_order_line, both]
+
     InventoryItem:
       type: object
       required: [id, name, sku, category, unitOfMeasure, currentStock, reservedQuantity, availableQuantity, rawAvailableQuantity, reservationShortage, incomingQuantity, minStock, reorderPoint, safetyStock, eoq, leadTimeDays, leadTimeSource, unitCost, annualDemand, holdingCostRate, orderingCost, archived, createdAt]    

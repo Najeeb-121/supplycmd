@@ -9,21 +9,22 @@ import InventoryPage from "../../pages/inventory";
 const mockCreate = vi.hoisted(() => vi.fn());
 
 vi.mock("@workspace/api-client-react", () => ({
-  useListInventory:             () => ({ data: [], isLoading: false }),
-  useGetInventoryKpis:          () => ({ data: null, isLoading: false }),
-  useGetReorderSuggestions:     () => ({ data: [], isLoading: false }),
-  useListStockMovements:        () => ({ data: [], isLoading: false }),
-  useCreateInventoryItem:       () => ({ mutate: mockCreate, mutateAsync: vi.fn(), isPending: false }),
-  useUpdateInventoryItem:       () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  useDeleteInventoryItem:       () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  useCreateStockMovement:       () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  getListInventoryQueryKey:         () => ["inventory"],
-  getGetInventoryKpisQueryKey:      () => ["inventory-kpis"],
+  useListInventory: () => ({ data: [], isLoading: false }),
+  useGetInventoryRelationships: () => ({ data: [], isLoading: false }),
+  useGetInventoryKpis: () => ({ data: null, isLoading: false }),
+  useGetReorderSuggestions: () => ({ data: [], isLoading: false }),
+  useListStockMovements: () => ({ data: [], isLoading: false }),
+  useCreateInventoryItem: () => ({ mutate: mockCreate, mutateAsync: vi.fn(), isPending: false }),
+  useUpdateInventoryItem: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useDeleteInventoryItem: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useCreateStockMovement: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  getListInventoryQueryKey: () => ["inventory"],
+  getGetInventoryKpisQueryKey: () => ["inventory-kpis"],
   getGetReorderSuggestionsQueryKey: () => ["reorder-suggestions"],
-  getListStockMovementsQueryKey:    () => ["stock-movements"],
-  getGetDashboardSummaryQueryKey:   () => ["dashboard-summary"],
-  getGetInventoryHealthQueryKey:    () => ["inventory-health"],
-  getGetReorderAlertsQueryKey:      () => ["reorder-alerts"],
+  getListStockMovementsQueryKey: () => ["stock-movements"],
+  getGetDashboardSummaryQueryKey: () => ["dashboard-summary"],
+  getGetInventoryHealthQueryKey: () => ["inventory-health"],
+  getGetReorderAlertsQueryKey: () => ["reorder-alerts"],
 }));
 
 vi.mock("@/hooks/use-toast", () => ({

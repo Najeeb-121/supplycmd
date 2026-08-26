@@ -186,6 +186,25 @@ export const CreateInventoryItemResponse = zod.object({
 
 
 /**
+ * @summary List verified product-supplier relationships
+ */
+export const GetInventoryRelationshipsResponseItem = zod.object({
+  "supplierId": zod.number(),
+  "supplierOdooId": zod.number().nullable(),
+  "supplierName": zod.string(),
+  "productId": zod.number(),
+  "productOdooId": zod.number().nullable(),
+  "productName": zod.string(),
+  "sku": zod.string(),
+  "activePoCount": zod.number(),
+  "inboundQty": zod.number(),
+  "hasActivePo": zod.boolean(),
+  "relationshipSource": zod.enum(['product_supplier', 'purchase_order_line', 'both'])
+})
+export const GetInventoryRelationshipsResponse = zod.array(GetInventoryRelationshipsResponseItem)
+
+
+/**
  * @summary Items at or below reorder point
  */
 export const GetReorderAlertsResponseItem = zod.object({
