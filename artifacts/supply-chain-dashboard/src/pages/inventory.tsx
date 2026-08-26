@@ -617,15 +617,15 @@ export default function InventoryPage() {
         {/* ── Reorder Tab ───────────────────────────────────────────────────── */}
         <TabsContent value="reorder" className="mt-4 space-y-3">
           <div>
-            <h2 className="font-semibold text-lg">Reorder Suggestions</h2>
-            <p className="text-sm text-muted-foreground">Items that have fallen to or below their reorder point — ranked by priority</p>
+            <h2 className="font-semibold text-lg">Operational Replenishment Review</h2>
+            <p className="text-sm text-muted-foreground">Verified reservation shortages requiring review. Order quantities remain N/A without supported planning inputs.</p>
           </div>
           {suggestions.length === 0 ? (
             <Card className="border-border">
               <CardContent className="p-12 text-center">
                 <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-                <p className="font-semibold">All stock levels are healthy</p>
-                <p className="text-sm text-muted-foreground mt-1">No items are at or below their reorder points.</p>
+                <p className="font-semibold">No reservation shortages detected</p>
+                <p className="text-sm text-muted-foreground mt-1">No items currently have reservations exceeding on-hand stock.</p>
               </CardContent>
             </Card>
           ) : (
@@ -638,10 +638,11 @@ export default function InventoryPage() {
                       <TableHead>Warehouse</TableHead>
                       <TableHead>Supplier</TableHead>
                       <TableHead className="text-right">Current</TableHead>
-                      <TableHead className="text-right">Safety Stock</TableHead>
-                      <TableHead className="text-right">Reorder Point</TableHead>
-                      <TableHead className="text-right">EOQ</TableHead>
+                      <TableHead className="text-right">Available Now</TableHead>
+                      <TableHead className="text-right">Reservation Shortage</TableHead>
+                      <TableHead className="text-right">Incoming</TableHead>
                       <TableHead className="text-right">Recommended Qty</TableHead>
+                      <TableHead>Planning Status</TableHead>
                       <TableHead>Priority</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -654,11 +655,18 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">{s.warehouse || "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{s.supplierName || "—"}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold text-red-600">{formatNum(s.currentStock)}</TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">{formatNum(s.safetyStock)}</TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">{formatNum(s.reorderPoint)}</TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">{Math.round(s.eoq)}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-primary">{s.recommendedOrderQty}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold">{formatNum(s.currentStock)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold">{formatNum(s.availableQuantity)}</TableCell>
+                        <TableCell className="text-right font-mono font-bold text-red-600">{formatNum(s.reservationShortage)}</TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">{formatNum(s.incomingQuantity)}</TableCell>
+                        <TableCell className="text-right font-mono font-bold text-primary">
+                          {s.recommendedOrderQty == null ? "N/A" : formatNum(s.recommendedOrderQty)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="bg-zinc-500/10 text-zinc-700 border-zinc-500/20">
+                            {s.planningStatus === "NOT_DETERMINABLE" ? "Not determinable" : s.planningStatus}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={
                             s.priority === "high" ? "bg-red-500/10 text-red-700 border-red-500/20" :

@@ -5,17 +5,24 @@
  * Supply Chain & Manufacturing Dashboard API
  * OpenAPI spec version: 0.1.0
  */
+import type { ReorderSuggestionPlanningStatus } from './reorderSuggestionPlanningStatus';
 import type { ReorderSuggestionPriority } from './reorderSuggestionPriority';
+import type { ReorderSuggestionReason } from './reorderSuggestionReason';
 
 export interface ReorderSuggestion {
   id: number;
   name: string;
   sku: string;
   currentStock: number;
-  safetyStock: number;
-  reorderPoint: number;
-  eoq: number;
-  recommendedOrderQty: number;
+  availableQuantity: number;
+  reservationShortage: number;
+  incomingQuantity: number;
+  safetyStock: number | null;
+  reorderPoint: number | null;
+  eoq: number | null;
+  recommendedOrderQty: number | null;
+  planningStatus: ReorderSuggestionPlanningStatus;
+  reason: ReorderSuggestionReason;
   priority: ReorderSuggestionPriority;
   warehouse: string;
   supplierName: string;

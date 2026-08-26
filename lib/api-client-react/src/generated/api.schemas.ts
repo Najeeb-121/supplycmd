@@ -133,6 +133,20 @@ export interface ReorderAlert {
   urgency: ReorderAlertUrgency;
 }
 
+export type ReorderSuggestionPlanningStatus = typeof ReorderSuggestionPlanningStatus[keyof typeof ReorderSuggestionPlanningStatus];
+
+
+export const ReorderSuggestionPlanningStatus = {
+  NOT_DETERMINABLE: 'NOT_DETERMINABLE',
+} as const;
+
+export type ReorderSuggestionReason = typeof ReorderSuggestionReason[keyof typeof ReorderSuggestionReason];
+
+
+export const ReorderSuggestionReason = {
+  RESERVATION_SHORTAGE: 'RESERVATION_SHORTAGE',
+} as const;
+
 export type ReorderSuggestionPriority = typeof ReorderSuggestionPriority[keyof typeof ReorderSuggestionPriority];
 
 
@@ -147,10 +161,15 @@ export interface ReorderSuggestion {
   name: string;
   sku: string;
   currentStock: number;
-  safetyStock: number;
-  reorderPoint: number;
-  eoq: number;
-  recommendedOrderQty: number;
+  availableQuantity: number;
+  reservationShortage: number;
+  incomingQuantity: number;
+  safetyStock: number | null;
+  reorderPoint: number | null;
+  eoq: number | null;
+  recommendedOrderQty: number | null;
+  planningStatus: ReorderSuggestionPlanningStatus;
+  reason: ReorderSuggestionReason;
   priority: ReorderSuggestionPriority;
   warehouse: string;
   supplierName: string;

@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, lte, and, sql } from "drizzle-orm";
+import { eq, lte, gt, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, inventoryItemsTable, stockMovementsTable, productSuppliersTable, purchaseOrderLinesTable, suppliersTable } from "@workspace/db";
 import {
@@ -268,32 +268,28 @@ router.get("/inventory/reorder-suggestions", async (req: Request, res: Response)
     .where(and(
       eq(inventoryItemsTable.companyId, req.user!.companyId),
       eq(inventoryItemsTable.archived, false),
-      lte(inventoryItemsTable.currentStock, inventoryItemsTable.reorderPoint),
+      gt(inventoryItemsTable.reservationShortage, 0),
     ));
 
-  const suggestions = items.map(item => {
-    const available = item.currentStock - item.reservedQuantity;
-    const gap = item.safetyStock - available;
-    const recommendedOrderQty = Math.ceil(Math.max(item.eoq, gap + item.safetyStock));
-    let priority: "high" | "medium" | "low" = "low";
-    if (item.currentStock <= item.safetyStock) priority = "high";
-    else if (item.currentStock <= item.reorderPoint * 0.75) priority = "medium";
-    return {
-      id: item.id,
-      name: item.name,
-      sku: item.sku,
-      currentStock: item.currentStock,
-      safetyStock: item.safetyStock,
-      reorderPoint: item.reorderPoint,
-      eoq: item.eoq,
-      recommendedOrderQty,
-      priority,
-      warehouse: item.warehouse ?? "",
-      supplierName: item.supplierName ?? "",
-    };
-  });
-  // Sort: high first
-  suggestions.sort((a, b) => ["high", "medium", "low"].indexOf(a.priority) - ["high", "medium", "low"].indexOf(b.priority));
+  const suggestions = items.map(item => ({
+    id: item.id,
+    name: item.name,
+    sku: item.sku,
+    currentStock: item.currentStock,
+    availableQuantity: item.availableQuantity,
+    reservationShortage: item.reservationShortage,
+    incomingQuantity: item.incomingQuantity,
+    safetyStock: null,
+    reorderPoint: null,
+    eoq: null,
+    recommendedOrderQty: null,
+    planningStatus: "NOT_DETERMINABLE" as const,
+    reason: "RESERVATION_SHORTAGE" as const,
+    priority: "high" as const,
+    warehouse: item.warehouse ?? "",
+    supplierName: item.supplierName ?? "",
+  }));
+
   res.json(suggestions);
 });
 

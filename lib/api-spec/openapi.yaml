@@ -859,16 +859,21 @@ components:
 
     ReorderSuggestion:
       type: object
-      required: [id, name, sku, currentStock, safetyStock, reorderPoint, eoq, recommendedOrderQty, priority, warehouse, supplierName]
+      required: [id, name, sku, currentStock, availableQuantity, reservationShortage, incomingQuantity, safetyStock, reorderPoint, eoq, recommendedOrderQty, planningStatus, reason, priority, warehouse, supplierName]
       properties:
         id:                  { type: number }
         name:                { type: string }
         sku:                 { type: string }
         currentStock:        { type: number }
-        safetyStock:         { type: number }
-        reorderPoint:        { type: number }
-        eoq:                 { type: number }
-        recommendedOrderQty: { type: number }
+        availableQuantity:   { type: number }
+        reservationShortage: { type: number }
+        incomingQuantity:    { type: number }
+        safetyStock:         { type: number, nullable: true }
+        reorderPoint:        { type: number, nullable: true }
+        eoq:                 { type: number, nullable: true }
+        recommendedOrderQty: { type: number, nullable: true }
+        planningStatus:      { type: string, enum: [NOT_DETERMINABLE] }
+        reason:              { type: string, enum: [RESERVATION_SHORTAGE] }
         priority:            { type: string, enum: [high, medium, low] }
         warehouse:           { type: string }
         supplierName:        { type: string }
