@@ -693,7 +693,7 @@ export const getGetReorderAlertsUrl = () => {
 }
 
 /**
- * @summary Items at or below reorder point
+ * @summary Items with verified reservation shortages
  */
 export const getReorderAlerts = async ( options?: Parameters<typeof customFetch>[1]): Promise<ReorderAlert[]> => {
 
@@ -740,7 +740,7 @@ export type GetReorderAlertsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Items at or below reorder point
+ * @summary Items with verified reservation shortages
  */
 
 export function useGetReorderAlerts<TData = Awaited<ReturnType<typeof getReorderAlerts>>, TError = ErrorType<unknown>>(

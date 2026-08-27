@@ -205,17 +205,17 @@ export const GetInventoryRelationshipsResponse = zod.array(GetInventoryRelations
 
 
 /**
- * @summary Items at or below reorder point
+ * @summary Items with verified reservation shortages
  */
 export const GetReorderAlertsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "sku": zod.string(),
   "currentStock": zod.number(),
-  "reorderPoint": zod.number(),
-  "safetyStock": zod.number(),
-  "eoq": zod.number(),
-  "urgency": zod.enum(['critical', 'warning', 'low'])
+  "availableQuantity": zod.number(),
+  "reservationShortage": zod.number(),
+  "incomingQuantity": zod.number(),
+  "reason": zod.enum(['RESERVATION_SHORTAGE'])
 })
 export const GetReorderAlertsResponse = zod.array(GetReorderAlertsResponseItem)
 

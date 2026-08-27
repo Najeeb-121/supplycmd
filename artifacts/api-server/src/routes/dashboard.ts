@@ -24,7 +24,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   // Inventory
   const totalSkus = items.length;
   const totalInventoryValue = items.reduce((s, i) => s + i.currentStock * i.unitCost, 0);
-  const reorderAlertCount = items.filter((i) => i.currentStock <= i.reorderPoint).length;
+  const reorderAlertCount = items.filter((i) => i.reservationShortage > 0).length;
 
   // Suppliers
   const activeSuppliers = suppliers.length;

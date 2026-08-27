@@ -172,10 +172,10 @@ paths:
     get:
       operationId: getReorderAlerts
       tags: [inventory]
-      summary: Items at or below reorder point
+      summary: Items with verified reservation shortages
       responses:
         "200":
-          description: Reorder alerts
+          description: Operational stock alerts caused by reservation shortages
           content:
             application/json:
               schema:
@@ -879,17 +879,16 @@ components:
 
     ReorderAlert:
       type: object
-      required: [id, name, sku, currentStock, reorderPoint, safetyStock, eoq, urgency]
+      required: [id, name, sku, currentStock, availableQuantity, reservationShortage, incomingQuantity, reason]
       properties:
-        id:           { type: number }
-        name:         { type: string }
-        sku:          { type: string }
-        currentStock: { type: number }
-        reorderPoint: { type: number }
-        safetyStock:  { type: number }
-        eoq:          { type: number }
-        urgency:      { type: string, enum: [critical, warning, low] }
-
+        id:                  { type: number }
+        name:                { type: string }
+        sku:                 { type: string }
+        currentStock:        { type: number }
+        availableQuantity:   { type: number }
+        reservationShortage: { type: number }
+        incomingQuantity:    { type: number }
+        reason:              { type: string, enum: [RESERVATION_SHORTAGE] }
     ReorderSuggestion:
       type: object
       required: [id, name, sku, currentStock, availableQuantity, reservationShortage, incomingQuantity, safetyStock, reorderPoint, eoq, recommendedOrderQty, planningStatus, reason, priority, warehouse, supplierName]

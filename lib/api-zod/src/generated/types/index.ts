@@ -42,7 +42,7 @@ export * from './productionRun';
 export * from './productionRunInput';
 export * from './productionRunUpdate';
 export * from './reorderAlert';
-export * from './reorderAlertUrgency';
+export * from './reorderAlertReason';
 export * from './reorderSuggestion';
 export * from './reorderSuggestionPlanningStatus';
 export * from './reorderSuggestionPriority';

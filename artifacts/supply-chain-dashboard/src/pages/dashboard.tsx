@@ -16,7 +16,6 @@ import {
   CardTitle,
   CardDescription
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, TrendingUp, TrendingDown, Package, Activity, Truck, AlertOctagon } from "lucide-react";
 import {
   BarChart,
@@ -189,7 +188,7 @@ export default function DashboardPage() {
 
         <Card className="border-border shadow-sm bg-destructive/5 border-destructive/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-semibold text-destructive uppercase tracking-wider">Critical Alerts</CardTitle>
+            <CardTitle className="text-sm font-semibold text-destructive uppercase tracking-wider">Reservation Shortages</CardTitle>
             <AlertOctagon className="w-4 h-4 text-destructive" />
           </CardHeader>
           <CardContent>
@@ -197,7 +196,7 @@ export default function DashboardPage() {
               {summary?.reorderAlertCount || 0}
             </div>
             <p className="text-xs text-destructive/80 mt-1">
-              SKUs below safety stock
+              SKUs with verified reservation shortages
             </p>
           </CardContent>
         </Card>
@@ -289,9 +288,9 @@ export default function DashboardPage() {
             <div>
               <CardTitle className="text-lg text-destructive flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5" />
-                Action Required: Reorder Alerts
+                Action Required: Reservation Shortages
               </CardTitle>
-              <CardDescription>Items below reorder point</CardDescription>
+              <CardDescription>Confirmed reservations exceed available stock</CardDescription>
             </div>
           </CardHeader>
           <div className="flex-1 overflow-auto">
@@ -301,8 +300,9 @@ export default function DashboardPage() {
                   <tr>
                     <th className="px-6 py-3 font-medium">SKU / Item</th>
                     <th className="px-6 py-3 font-medium text-right">Current Stock</th>
-                    <th className="px-6 py-3 font-medium text-right">Reorder Pt</th>
-                    <th className="px-6 py-3 font-medium">Status</th>
+                    <th className="px-6 py-3 font-medium text-right">Available Now</th>
+                    <th className="px-6 py-3 font-medium text-right">Reservation Shortage</th>
+                    <th className="px-6 py-3 font-medium text-right">Incoming</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -312,20 +312,17 @@ export default function DashboardPage() {
                         <div className="font-mono font-medium text-foreground">{alert.sku}</div>
                         <div className="text-muted-foreground text-xs">{alert.name}</div>
                       </td>
-                      <td className="px-6 py-3 text-right font-mono font-bold text-destructive">
+                      <td className="px-6 py-3 text-right font-mono">
                         {alert.currentStock}
                       </td>
                       <td className="px-6 py-3 text-right font-mono text-muted-foreground">
-                        {alert.reorderPoint}
+                        {alert.availableQuantity}
                       </td>
-                      <td className="px-6 py-3">
-                        <Badge variant="outline" className={
-                          alert.urgency === 'critical' ? 'bg-destructive/10 text-destructive border-destructive/20' :
-                            alert.urgency === 'warning' ? 'bg-amber-500/10 text-amber-700 border-amber-500/20' :
-                              'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
-                        }>
-                          {alert.urgency.toUpperCase()}
-                        </Badge>
+                      <td className="px-6 py-3 text-right font-mono font-bold text-destructive">
+                        {alert.reservationShortage}
+                      </td>
+                      <td className="px-6 py-3 text-right font-mono text-muted-foreground">
+                        {alert.incomingQuantity}
                       </td>
                     </tr>
                   ))}
@@ -333,7 +330,7 @@ export default function DashboardPage() {
               </table>
             ) : (
               <div className="p-8 text-center text-muted-foreground">
-                No active reorder alerts. Inventory is healthy.
+                No verified reservation shortages.
               </div>
             )}
           </div>

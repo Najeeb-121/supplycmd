@@ -301,7 +301,7 @@ router.get("/inventory/reorder-alerts", async (req: Request, res: Response): Pro
     .where(and(
       eq(inventoryItemsTable.companyId, req.user!.companyId),
       eq(inventoryItemsTable.archived, false),
-      lte(inventoryItemsTable.currentStock, inventoryItemsTable.reorderPoint),
+      gt(inventoryItemsTable.reservationShortage, 0),
     ));
 
   res.json(items.map(item => ({
@@ -309,12 +309,10 @@ router.get("/inventory/reorder-alerts", async (req: Request, res: Response): Pro
     name: item.name,
     sku: item.sku,
     currentStock: item.currentStock,
-    reorderPoint: item.reorderPoint,
-    safetyStock: item.safetyStock,
-    eoq: item.eoq,
-    urgency: item.currentStock <= item.safetyStock ? "critical"
-      : item.currentStock <= item.reorderPoint * 0.5 ? "warning"
-        : "low",
+    availableQuantity: item.availableQuantity,
+    reservationShortage: item.reservationShortage,
+    incomingQuantity: item.incomingQuantity,
+    reason: "RESERVATION_SHORTAGE" as const,
   })));
 });
 

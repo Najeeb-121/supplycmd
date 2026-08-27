@@ -5,15 +5,15 @@
  * Supply Chain & Manufacturing Dashboard API
  * OpenAPI spec version: 0.1.0
  */
-import type { ReorderAlertUrgency } from './reorderAlertUrgency';
+import type { ReorderAlertReason } from './reorderAlertReason';
 
 export interface ReorderAlert {
   id: number;
   name: string;
   sku: string;
   currentStock: number;
-  reorderPoint: number;
-  safetyStock: number;
-  eoq: number;
-  urgency: ReorderAlertUrgency;
+  availableQuantity: number;
+  reservationShortage: number;
+  incomingQuantity: number;
+  reason: ReorderAlertReason;
 }

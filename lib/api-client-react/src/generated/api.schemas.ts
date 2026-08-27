@@ -136,13 +136,11 @@ export interface InventoryItemUpdate {
   archived?: boolean;
 }
 
-export type ReorderAlertUrgency = typeof ReorderAlertUrgency[keyof typeof ReorderAlertUrgency];
+export type ReorderAlertReason = typeof ReorderAlertReason[keyof typeof ReorderAlertReason];
 
 
-export const ReorderAlertUrgency = {
-  critical: 'critical',
-  warning: 'warning',
-  low: 'low',
+export const ReorderAlertReason = {
+  RESERVATION_SHORTAGE: 'RESERVATION_SHORTAGE',
 } as const;
 
 export interface ReorderAlert {
@@ -150,10 +148,10 @@ export interface ReorderAlert {
   name: string;
   sku: string;
   currentStock: number;
-  reorderPoint: number;
-  safetyStock: number;
-  eoq: number;
-  urgency: ReorderAlertUrgency;
+  availableQuantity: number;
+  reservationShortage: number;
+  incomingQuantity: number;
+  reason: ReorderAlertReason;
 }
 
 export type ReorderSuggestionPlanningStatus = typeof ReorderSuggestionPlanningStatus[keyof typeof ReorderSuggestionPlanningStatus];

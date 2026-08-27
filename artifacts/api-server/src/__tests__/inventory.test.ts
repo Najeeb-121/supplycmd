@@ -13,14 +13,15 @@ const mocks = vi.hoisted(() => {
   const mockUpdate = vi.fn(() => ({ set: mockSet }));
 
   const mockOrderBy = vi.fn(() => Promise.resolve([]));
-  const mockFrom = vi.fn(() => ({ where: vi.fn(() => Promise.resolve([])), orderBy: mockOrderBy }));
+  const mockSelectWhere = vi.fn<() => Promise<unknown[]>>(() => Promise.resolve([]));
+  const mockFrom = vi.fn(() => ({ where: mockSelectWhere, orderBy: mockOrderBy }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
 
   const mockDeleteWhere = vi.fn(() => Promise.resolve([]));
   const mockDeleteFrom = vi.fn(() => ({ where: mockDeleteWhere }));
   const mockDelete = vi.fn(() => ({ from: mockDeleteFrom }));
 
-  return { mockReturning, mockValues, mockInsert, mockSelect, mockFrom, mockOrderBy, mockUpdate, mockDelete };
+  return { mockReturning, mockValues, mockInsert, mockSelect, mockSelectWhere, mockFrom, mockOrderBy, mockUpdate, mockDelete };
 });
 
 vi.mock("@workspace/db", () => ({
@@ -68,7 +69,7 @@ describe("POST /api/inventory", () => {
   it("201 – creates item with a valid body", async () => {
     mocks.mockReturning.mockResolvedValueOnce([fakeItem]);
 
-    const res = await request(app).post("/api/inventory").send(validBody);
+    const res = await request(app).post("/api/inventory").set("x-e2e-test-company-id", "1").send(validBody);
 
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ id: 1, name: "Steel Bearing 10mm" });
@@ -77,7 +78,7 @@ describe("POST /api/inventory", () => {
   // ── Required field validation ─────────────────────────────────────────────
   it("400 – rejects when name is missing", async () => {
     const { name: _name, ...body } = validBody;
-    const res = await request(app).post("/api/inventory").send(body);
+    const res = await request(app).post("/api/inventory").set("x-e2e-test-company-id", "1").send(body);
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("errors");
@@ -86,7 +87,7 @@ describe("POST /api/inventory", () => {
 
   it("400 – rejects when sku is missing", async () => {
     const { sku: _sku, ...body } = validBody;
-    const res = await request(app).post("/api/inventory").send(body);
+    const res = await request(app).post("/api/inventory").set("x-e2e-test-company-id", "1").send(body);
 
     expect(res.status).toBe(400);
     expect(res.body.errors).toHaveProperty("sku");
@@ -94,7 +95,7 @@ describe("POST /api/inventory", () => {
 
   it("400 – rejects when currentStock is negative", async () => {
     const res = await request(app)
-      .post("/api/inventory")
+      .post("/api/inventory").set("x-e2e-test-company-id", "1")
       .send({ ...validBody, currentStock: -1 });
 
     expect(res.status).toBe(400);
@@ -103,7 +104,7 @@ describe("POST /api/inventory", () => {
 
   it("400 – rejects when holdingCostRate exceeds 1", async () => {
     const res = await request(app)
-      .post("/api/inventory")
+      .post("/api/inventory").set("x-e2e-test-company-id", "1")
       .send({ ...validBody, holdingCostRate: 1.5 });
 
     expect(res.status).toBe(400);
@@ -112,7 +113,7 @@ describe("POST /api/inventory", () => {
 
   it("400 – rejects when leadTimeDays is negative", async () => {
     const res = await request(app)
-      .post("/api/inventory")
+      .post("/api/inventory").set("x-e2e-test-company-id", "1")
       .send({ ...validBody, leadTimeDays: -1 });
 
     expect(res.status).toBe(400);
@@ -122,7 +123,7 @@ describe("POST /api/inventory", () => {
   // ── Cross-field constraint ─────────────────────────────────────────────────
   it("400 – rejects when maxStock < minStock", async () => {
     const res = await request(app)
-      .post("/api/inventory")
+      .post("/api/inventory").set("x-e2e-test-company-id", "1")
       .send({ ...validBody, minStock: 100, maxStock: 50 });
 
     expect(res.status).toBe(400);
@@ -135,7 +136,7 @@ describe("POST /api/inventory", () => {
     mocks.mockReturning.mockResolvedValueOnce([fakeItem]);
 
     const res = await request(app)
-      .post("/api/inventory")
+      .post("/api/inventory").set("x-e2e-test-company-id", "1")
       .send({ ...validBody, minStock: 50, maxStock: 50 });
 
     expect(res.status).toBe(201);
@@ -145,8 +146,48 @@ describe("POST /api/inventory", () => {
     mocks.mockReturning.mockResolvedValueOnce([fakeItem]);
     const { maxStock: _max, ...body } = validBody;
 
-    const res = await request(app).post("/api/inventory").send(body);
+    const res = await request(app).post("/api/inventory").set("x-e2e-test-company-id", "1").send(body);
 
     expect(res.status).toBe(201);
+  });
+});
+
+describe("GET /api/inventory/reorder-alerts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns verified reservation-shortage fields without unsupported planning values", async () => {
+    mocks.mockSelectWhere.mockResolvedValueOnce([
+      {
+        id: 42,
+        name: "Finished Good",
+        sku: "FG-001",
+        currentStock: 100,
+        availableQuantity: 0,
+        reservationShortage: 25,
+        incomingQuantity: 10,
+      },
+    ]);
+
+    const res = await request(app).get("/api/inventory/reorder-alerts").set("x-e2e-test-company-id", "1");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      {
+        id: 42,
+        name: "Finished Good",
+        sku: "FG-001",
+        currentStock: 100,
+        availableQuantity: 0,
+        reservationShortage: 25,
+        incomingQuantity: 10,
+        reason: "RESERVATION_SHORTAGE",
+      },
+    ]);
+    expect(res.body[0]).not.toHaveProperty("reorderPoint");
+    expect(res.body[0]).not.toHaveProperty("safetyStock");
+    expect(res.body[0]).not.toHaveProperty("eoq");
+    expect(res.body[0]).not.toHaveProperty("urgency");
   });
 });
