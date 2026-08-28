@@ -90,14 +90,19 @@ export function simulatePortfolio(
       }
     } else if (action.type === "FOLLOW_UP_INBOUND") {
       // Find earliest PO and shift date
-      let earliestPo = null;
-      let earliestDateStr = "2099-12-31";
-      for (const po of product.inboundPOs) {
-        if (po.currentlyInbound && po.expectedArrivalDate && po.expectedArrivalDate < earliestDateStr) {
-          earliestDateStr = po.expectedArrivalDate;
-          earliestPo = po;
-        }
-      }
+      const earliestPo = product.inboundPOs
+        .filter(
+          (po) =>
+            po.currentlyInbound &&
+            po.expectedArrivalDate != null,
+        )
+        .sort(
+          (a, b) =>
+            a.expectedArrivalDate!.localeCompare(
+              b.expectedArrivalDate!,
+            ) ||
+            a.poId - b.poId,
+        )[0];
       if (earliestPo && action.mitigationDate) {
         earliestPo.expectedArrivalDate = action.mitigationDate;
       }

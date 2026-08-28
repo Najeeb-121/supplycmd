@@ -1,5 +1,5 @@
 import { SupplyRiskSnapshot, RiskExposure, ProductInventory, SupplierRiskProfile } from "./supply-risk-contracts";
-import { calculateDeterministicProductionDelay, BOMNode } from "./bom-propagation";
+import { BOMNode } from "./bom-propagation";
 
 export function calculateRiskSeverity(exposure: Omit<RiskExposure, 'severity'>): RiskExposure["severity"] {
   if (exposure.residualShortage > 0) {
@@ -182,101 +182,6 @@ export function analyzeSupplierFailure(
     alternateSupplierAvailable: factors.alternateSupplierAvailable,
     downstreamImpacts,
     exposureReason: `Total failure of supplier affecting ${currentlyInboundQuantity} currently inbound units.`,
-    inventoryCoveragePercent,
-    singleSupplierDependency: factors.singleSupplierDependency,
-    leadTimeVerified: factors.leadTimeVerified,
-    capacityRisk: "UNKNOWN",
-    currentlyInboundQuantity,
-    totalSupplierCount: factors.totalSupplierCount
-  };
-
-  return {
-    ...baseExposure,
-    severity: calculateRiskSeverity(baseExposure)
-  };
-}
-
-export function analyzeSupplierDelay(
-  snapshot: SupplyRiskSnapshot,
-  targetSupplierId: number,
-  targetProductId: number,
-  delayDays: number
-): RiskExposure {
-  const product = snapshot.products[targetProductId];
-  if (!product) throw new Error("Product not found in snapshot");
-
-  const inboundForSupplier = product.inboundPOs.filter(po => po.supplierId === targetSupplierId && po.currentlyInbound);
-  const currentlyInboundQuantity = inboundForSupplier.reduce((sum, po) => sum + po.remainingQuantity, 0);
-
-  // For delay, the affected quantity is the delayed inbound quantity. 
-  const affectedQuantity = currentlyInboundQuantity;
-
-  // To preserve Phase 3-5 exactly:
-  // We mock the inventory record for calculateDeterministicProductionDelay
-  const inventoryMock: Record<number, { onHand: number }> = {};
-  for (const p of Object.values(snapshot.products)) {
-    // Note: calculateDeterministicProductionDelay uses onHand historically, 
-    // but SR-1.7 dictates risk engine uses availableStock for its math.
-    // However, we pass physicalStock here because Phase 3-5 relies on it internally for its specific math.
-    inventoryMock[p.productId] = { onHand: p.physicalStock };
-    if (p.odooId) inventoryMock[p.odooId] = { onHand: p.physicalStock };
-  }
-
-  // Need raw POs to pass to calculateDeterministicProductionDelay (it expects some Odoo IDs etc)
-  const rawPOs = inboundForSupplier.map(po => ({
-    id: po.poId,
-    odooId: po.odooId,
-    supplierId: po.supplierId,
-    expectedDate: po.expectedArrivalDate,
-    qty: po.orderedQuantity
-  }));
-
-  const delaySchedule = calculateDeterministicProductionDelay(
-    snapshot.productionRuns,
-    rawPOs,
-    inventoryMock,
-    "2026-08-20", // Hardcoded target SO date for Phase 3-5 test
-    delayDays,
-    targetProductId,
-    "SUPPLIER_DELAY"
-  );
-
-  // We map the Phase 3-5 output into RiskExposure:
-  const residualShortage = delaySchedule.p1270.netShortage;
-  const inventoryCoverage = Math.max(0, delaySchedule.p1270.grossRequirement - residualShortage);
-
-  // NOTE: If the scenario doesn't have bom dependencies (not Hydro), we fall back to generic deterministic calculation
-  // Let's use the standard SR-1.7 fallback if hasBomDependencies is false.
-
-  let finalResidualShortage = residualShortage;
-  let finalInventoryCoverage = inventoryCoverage;
-  let finalAffectedQuantity = affectedQuantity;
-  let finalDownstream = traceDownstreamImpacts(snapshot, targetProductId);
-
-  if (!delaySchedule.hasBomDependencies) {
-    finalAffectedQuantity = affectedQuantity;
-    finalInventoryCoverage = Math.min(affectedQuantity, product.availableStock);
-    finalResidualShortage = Math.max(affectedQuantity - product.availableStock, 0);
-  }
-
-  const canAbsorbWithBuffer = finalResidualShortage === 0 && finalAffectedQuantity > 0;
-  const inventoryCoveragePercent = finalAffectedQuantity > 0 ? (finalInventoryCoverage / finalAffectedQuantity) * 100 : 100;
-
-  // FIX: pass targetSupplierId so alternateSupplierAvailable is correctly evaluated
-  // relative to the disrupted supplier, not as if no target is specified.
-  const factors = extractGeneralRiskFactors(snapshot, targetProductId, targetSupplierId);
-
-  const baseExposure: Omit<RiskExposure, "severity"> = {
-    scenarioType: "SUPPLIER_DELAY",
-    targetSupplierId,
-    targetProductId,
-    affectedQuantity: finalAffectedQuantity,
-    inventoryCoverage: finalInventoryCoverage,
-    residualShortage: finalResidualShortage,
-    canAbsorbWithBuffer,
-    alternateSupplierAvailable: factors.alternateSupplierAvailable,
-    downstreamImpacts: finalDownstream,
-    exposureReason: `Supplier delayed ${currentlyInboundQuantity} units by ${delayDays} days.`,
     inventoryCoveragePercent,
     singleSupplierDependency: factors.singleSupplierDependency,
     leadTimeVerified: factors.leadTimeVerified,

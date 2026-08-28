@@ -1,7 +1,6 @@
 import { SupplyRiskSnapshot } from "./supply-risk-contracts";
-import { 
-  analyzeSupplierDelay, 
-  analyzeQualityFailure, 
+import {
+  analyzeQualityFailure,
   analyzeSupplierFailure,
   traceDownstreamImpacts
 } from "./supply-risk-engine";
@@ -115,15 +114,7 @@ function runTests() {
 
   console.log("=== SR-1.7 DETERMINISTIC TEST SUITE ===\n");
 
-  // TEST 1-4: Supplier Delay
-  const d0 = analyzeSupplierDelay(snapshot, 380, 1270, 0);
-  assertEq("TEST 1: Supplier Delay 0d -> shortage 1450", d0.residualShortage, 1450); // From Phase 3-5 math
-
-  const d7 = analyzeSupplierDelay(snapshot, 380, 1270, 7);
-  assertEq("TEST 2: Supplier Delay +7d -> shortage 1450", d7.residualShortage, 1450);
-
-  const d14 = analyzeSupplierDelay(snapshot, 380, 1270, 14);
-  assertEq("TEST 3: Supplier Delay +14d -> shortage 1450", d14.residualShortage, 1450);
+  // Supplier-delay behavior is covered by the time-phased daily simulation tests.
 
   // TEST 5: Quality failure 10%
   const q10 = analyzeQualityFailure(snapshot, 1, 99, 0.10);
@@ -150,7 +141,7 @@ function runTests() {
 
   // TEST 10: Lead time provenance
   assertEq("TEST 10: Mountain Dew leadTimeVerified = true", mtnDewFail.leadTimeVerified, true);
-  
+
   const tropicanaFail = analyzeSupplierFailure(snapshot, 999, 100);
   assertEq("TEST 10: Tropicana leadTimeVerified = false", tropicanaFail.leadTimeVerified, false);
 

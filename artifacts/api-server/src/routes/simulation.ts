@@ -28,14 +28,14 @@ const router: IRouter = Router();
 // Legacy Graph Endpoint (Used by older simulation code)
 // -----------------------------------------------------------------------------
 export interface RelationshipGraph {
-  supplier: { id: number; name: string; leadTimeDays: number } | null;
+  supplier: { id: number; name: string; leadTimeDays: number | null } | null;
   product: { id: number; name: string; sku: string } | null;
   openPOs: { id: number; qty: number; expectedDate: string }[];
   currentInventory: { qty: number; reserved: number; available: number };
   dailyConsumption: { rate: number; sampleDays: number; confidence: string };
   dependentBOMs: { bomId: string; parentProduct: string }[];
   affectedMOs: { moId: string; scheduledDate: string; qty: number }[];
-  alternateSuppliers: { id: number; name: string; leadTimeDays: number; openPOQty: number; classification: string; status: "VERIFIED" | "CANDIDATE" }[];
+  alternateSuppliers: { id: number; name: string; leadTimeDays: number | null; openPOQty: number; classification: string; status: "VERIFIED" | "CANDIDATE" }[];
   confidence: {
     supplierRelationship: "VERIFIED" | "UNVERIFIED";
     inventoryData: "VERIFIED" | "ESTIMATED" | "MISSING";
@@ -54,7 +54,11 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
   if (supplierId) {
     const [found] = await db.select().from(suppliersTable).where(and(eq(suppliersTable.id, supplierId), eq(suppliersTable.companyId, req.user!.companyId)));
     if (found) {
-      supplier = { id: found.id, name: found.name, leadTimeDays: found.leadTimeDays ?? 7 };
+      supplier = {
+        id: found.id,
+        name: found.name,
+        leadTimeDays: found.leadTimeDays,
+      };
     }
   }
 
@@ -66,7 +70,7 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
     }
   }
 
-  const alternateSuppliers: any[] = [];
+  const alternateSuppliers: RelationshipGraph["alternateSuppliers"] = [];
   if (product) {
     const configuredItems = await db.select().from(inventoryItemsTable).where(
       and(eq(inventoryItemsTable.companyId, req.user!.companyId), or(eq(inventoryItemsTable.name, product.name), eq(inventoryItemsTable.sku, product.sku)))
@@ -111,8 +115,15 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
         const supplierOpenPOs = relatedOrders.filter(o => o.supplierId === altSupplier.id && (o.status === "pending" || o.status === "confirmed"));
         const totalOpenPO = supplierOpenPOs.reduce((sum, po) => sum + (po.orderedQuantity || 0), 0);
         alternateSuppliers.push({
-          id: altSupplier.id, name: altSupplier.name, leadTimeDays: altSupplier.leadTimeDays ?? 7,
-          openPOQty: totalOpenPO, classification, status: classification === "CONFIGURED_VENDOR" ? "VERIFIED" : "CANDIDATE"
+          id: altSupplier.id,
+          name: altSupplier.name,
+          leadTimeDays: altSupplier.leadTimeDays,
+          openPOQty: totalOpenPO,
+          classification,
+          status:
+            classification === "CONFIGURED_VENDOR"
+              ? "VERIFIED"
+              : "CANDIDATE",
         });
       }
     }
@@ -172,7 +183,9 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
 
   const graph: RelationshipGraph = {
     supplier, product, openPOs, currentInventory, dailyConsumption,
-    dependentBOMs: [], affectedMOs: [], alternateSuppliers: alternateSuppliers as any,
+    dependentBOMs: [],
+    affectedMOs: [],
+    alternateSuppliers,
     confidence: {
       supplierRelationship, inventoryData: inventoryDataStatus, consumptionRate: consumptionStatus,
       financialData: "MISSING", alternateSupplierData, overallConfidence
@@ -186,7 +199,13 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
 // -----------------------------------------------------------------------------
 // NEW ERP Snapshot Service (Phase 2, 3, 4)
 // -----------------------------------------------------------------------------
-export type ProvenanceTag = "VERIFIED_ERP" | "COMPUTED" | "SCENARIO_INPUT" | "ASSUMPTION" | "UNKNOWN";
+export type ProvenanceTag =
+  | "VERIFIED_ERP"
+  | "VERIFIED_LOCAL"
+  | "COMPUTED"
+  | "SCENARIO_INPUT"
+  | "ASSUMPTION"
+  | "UNKNOWN";
 
 export interface ProvenanceValue<T> {
   value: T;
@@ -200,6 +219,37 @@ function makeUnknown<T>(): ProvenanceValue<T | null> {
 
 function makeVerified<T>(val: T, source: string): ProvenanceValue<T> {
   return { value: val, source, provenance: "VERIFIED_ERP" };
+}
+function makeLocal<T>(
+  val: T,
+  source: string,
+): ProvenanceValue<T> {
+  return {
+    value: val,
+    source,
+    provenance: "VERIFIED_LOCAL",
+  };
+}
+
+function makeScenarioInput<T>(
+  val: T,
+): ProvenanceValue<T> {
+  return {
+    value: val,
+    source: "Scenario Input",
+    provenance: "SCENARIO_INPUT",
+  };
+}
+
+function makeComputed<T>(
+  val: T,
+  source: string,
+): ProvenanceValue<T> {
+  return {
+    value: val,
+    source,
+    provenance: "COMPUTED",
+  };
 }
 
 router.post("/simulation/snapshot", async (req: Request, res: Response): Promise<void> => {
@@ -223,7 +273,7 @@ router.post("/simulation/snapshot", async (req: Request, res: Response): Promise
 
     const snapshot: any = {
       timestamp: new Date().toISOString(),
-      scenarioType: makeVerified(scenarioType, "Scenario Input"),
+      scenarioType: makeScenarioInput(scenarioType),
       product: {
         odooId: makeUnknown(),
         name: makeUnknown(),
@@ -244,34 +294,91 @@ router.post("/simulation/snapshot", async (req: Request, res: Response): Promise
     };
 
     if (localProduct) {
-      snapshot.product.name = makeVerified(localProduct.name, "Local DB (Inventory)");
-      snapshot.product.sku = makeVerified(localProduct.sku || "", "Local DB (Inventory)");
-      snapshot.product.onHand = makeVerified(localProduct.currentStock, "Local DB (Inventory)");
-      snapshot.product.reserved = makeVerified(localProduct.reservedQuantity || 0, "Local DB (Inventory)");
-      snapshot.product.available = makeVerified(localProduct.currentStock - (localProduct.reservedQuantity || 0), "Local DB (Inventory) Computed");
-      snapshot.product.available.provenance = "COMPUTED";
-      snapshot.product.unitCost = makeVerified(localProduct.unitCost, "Local DB (Inventory)");
-      snapshot.product.sellingPrice = localProduct.sellingPrice ? makeVerified(localProduct.sellingPrice, "Local DB (Inventory)") : makeUnknown();
+      snapshot.product.name = makeLocal(
+        localProduct.name,
+        "Local DB (Inventory)",
+      );
+      snapshot.product.sku = makeLocal(
+        localProduct.sku,
+        "Local DB (Inventory)",
+      );
+      snapshot.product.onHand = makeLocal(
+        localProduct.currentStock,
+        "Local DB (Inventory)",
+      );
+      snapshot.product.reserved = makeLocal(
+        localProduct.reservedQuantity,
+        "Local DB (Inventory)",
+      );
+      snapshot.product.available = makeComputed(
+        Math.max(
+          localProduct.currentStock -
+          localProduct.reservedQuantity,
+          0,
+        ),
+        "Local DB (Inventory) Computed",
+      );
+      snapshot.product.unitCost = makeLocal(
+        localProduct.unitCost,
+        "Local DB (Inventory)",
+      );
+      snapshot.product.sellingPrice =
+        localProduct.sellingPrice != null
+          ? makeLocal(
+            localProduct.sellingPrice,
+            "Local DB (Inventory)",
+          )
+          : makeUnknown();
 
-      const dailyDemand = localProduct.annualDemand ? localProduct.annualDemand / 365 : 10;
-      snapshot.product.dailyConsumption = {
-        value: dailyDemand,
-        source: localProduct.annualDemand ? "Local DB (Inventory)" : "Fallback Assumption",
-        provenance: localProduct.annualDemand ? "COMPUTED" : "ASSUMPTION"
-      };
+      const hasSupportedAnnualDemand =
+        localProduct.annualDemand != null &&
+        !["UNKNOWN", "SCHEMA_DEFAULT"].includes(
+          localProduct.annualDemandSource,
+        );
 
-      if (localProduct.odooId) snapshot.product.odooId = makeVerified(localProduct.odooId, "Local DB (Inventory)");
+      snapshot.product.dailyConsumption =
+        hasSupportedAnnualDemand
+          ? makeComputed(
+            localProduct.annualDemand! / 365,
+            `Local DB (Inventory; ${localProduct.annualDemandSource})`,
+          )
+          : makeUnknown();
+
+      if (localProduct.odooId != null) {
+        snapshot.product.odooId = makeLocal(
+          localProduct.odooId,
+          "Local DB (Inventory)",
+        );
+      }
     }
 
     if (localSupplier) {
       snapshot.supplier = {
-        id: makeVerified(localSupplier.id, "Local DB"),
-        odooId: localSupplier.odooId ? makeVerified(localSupplier.odooId, "Local DB") : makeUnknown(),
-        name: makeVerified(localSupplier.name, "Local DB"),
-        leadTimeDays: localSupplier.leadTimeDays ? makeVerified(localSupplier.leadTimeDays, "Local DB") : makeUnknown(),
+        id: makeLocal(
+          localSupplier.id,
+          "Local DB (Supplier)",
+        ),
+        odooId:
+          localSupplier.odooId != null
+            ? makeLocal(
+              localSupplier.odooId,
+              "Local DB (Supplier)",
+            )
+            : makeUnknown(),
+        name: makeLocal(
+          localSupplier.name,
+          "Local DB (Supplier)",
+        ),
+        leadTimeDays:
+          localSupplier.leadTimeDays != null
+            ? makeLocal(
+              localSupplier.leadTimeDays,
+              "Local DB (Supplier)",
+            )
+            : makeUnknown(),
         price: makeUnknown(),
         minQuantity: makeUnknown(),
-        currency: makeUnknown()
+        currency: makeUnknown(),
       };
     }
 
@@ -351,7 +458,10 @@ router.post("/simulation/snapshot", async (req: Request, res: Response): Promise
                     odooId: makeVerified(orderTuple[0], "Odoo (purchase.order.line)"),
                     orderName: makeVerified(orderTuple[1], "Odoo (purchase.order.line)"),
                     supplierName: makeVerified(partnerTuple[1], "Odoo (purchase.order.line)"),
-                    remainingQty: makeVerified(remainingQty, "Odoo (purchase.order.line) Computed"),
+                    remainingQty: makeComputed(
+                      remainingQty,
+                      "Odoo (purchase.order.line) Computed",
+                    ),
                     expectedDate: makeVerified(pol.date_planned as string, "Odoo (purchase.order.line)"),
                     unitPrice: makeVerified(Number(pol.price_unit), "Odoo (purchase.order.line)")
                   });
