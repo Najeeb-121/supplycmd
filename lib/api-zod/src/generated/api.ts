@@ -108,14 +108,20 @@ export const ListInventoryResponseItem = zod.object({
   "incomingQuantity": zod.number(),
   "minStock": zod.number(),
   "maxStock": zod.number().optional(),
-  "annualDemand": zod.number(),
-  "holdingCostRate": zod.number(),
-  "orderingCost": zod.number(),
-  "leadTimeDays": zod.number(),
+  "annualDemand": zod.number().nullable(),
+  "annualDemandSource": zod.string(),
+  "holdingCostRate": zod.number().nullable(),
+  "holdingCostRateSource": zod.string(),
+  "orderingCost": zod.number().nullable(),
+  "orderingCostSource": zod.string(),
+  "leadTimeDays": zod.number().nullable(),
   "leadTimeSource": zod.string(),
-  "reorderPoint": zod.number(),
-  "safetyStock": zod.number(),
-  "eoq": zod.number(),
+  "reorderPoint": zod.number().nullable(),
+  "reorderPointSource": zod.string(),
+  "safetyStock": zod.number().nullable(),
+  "safetyStockSource": zod.string(),
+  "eoq": zod.number().nullable(),
+  "eoqSource": zod.string(),
   "archived": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -141,12 +147,12 @@ export const CreateInventoryItemBody = zod.object({
   "reservedQuantity": zod.number().optional(),
   "minStock": zod.number().optional(),
   "maxStock": zod.number().optional(),
-  "leadTimeDays": zod.number(),
+  "leadTimeDays": zod.number().nullish(),
   "unitCost": zod.number(),
   "sellingPrice": zod.number().optional(),
-  "annualDemand": zod.number(),
-  "holdingCostRate": zod.number(),
-  "orderingCost": zod.number()
+  "annualDemand": zod.number().nullish(),
+  "holdingCostRate": zod.number().nullish(),
+  "orderingCost": zod.number().nullish()
 })
 
 export const CreateInventoryItemResponse = zod.object({
@@ -172,14 +178,20 @@ export const CreateInventoryItemResponse = zod.object({
   "incomingQuantity": zod.number(),
   "minStock": zod.number(),
   "maxStock": zod.number().optional(),
-  "annualDemand": zod.number(),
-  "holdingCostRate": zod.number(),
-  "orderingCost": zod.number(),
-  "leadTimeDays": zod.number(),
+  "annualDemand": zod.number().nullable(),
+  "annualDemandSource": zod.string(),
+  "holdingCostRate": zod.number().nullable(),
+  "holdingCostRateSource": zod.string(),
+  "orderingCost": zod.number().nullable(),
+  "orderingCostSource": zod.string(),
+  "leadTimeDays": zod.number().nullable(),
   "leadTimeSource": zod.string(),
-  "reorderPoint": zod.number(),
-  "safetyStock": zod.number(),
-  "eoq": zod.number(),
+  "reorderPoint": zod.number().nullable(),
+  "reorderPointSource": zod.string(),
+  "safetyStock": zod.number().nullable(),
+  "safetyStockSource": zod.string(),
+  "eoq": zod.number().nullable(),
+  "eoqSource": zod.string(),
   "archived": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -314,14 +326,20 @@ export const GetInventoryItemResponse = zod.object({
   "incomingQuantity": zod.number(),
   "minStock": zod.number(),
   "maxStock": zod.number().optional(),
-  "annualDemand": zod.number(),
-  "holdingCostRate": zod.number(),
-  "orderingCost": zod.number(),
-  "leadTimeDays": zod.number(),
+  "annualDemand": zod.number().nullable(),
+  "annualDemandSource": zod.string(),
+  "holdingCostRate": zod.number().nullable(),
+  "holdingCostRateSource": zod.string(),
+  "orderingCost": zod.number().nullable(),
+  "orderingCostSource": zod.string(),
+  "leadTimeDays": zod.number().nullable(),
   "leadTimeSource": zod.string(),
-  "reorderPoint": zod.number(),
-  "safetyStock": zod.number(),
-  "eoq": zod.number(),
+  "reorderPoint": zod.number().nullable(),
+  "reorderPointSource": zod.string(),
+  "safetyStock": zod.number().nullable(),
+  "safetyStockSource": zod.string(),
+  "eoq": zod.number().nullable(),
+  "eoqSource": zod.string(),
   "archived": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -349,12 +367,12 @@ export const UpdateInventoryItemBody = zod.object({
   "reservedQuantity": zod.number().optional(),
   "minStock": zod.number().optional(),
   "maxStock": zod.number().optional(),
-  "leadTimeDays": zod.number().optional(),
+  "leadTimeDays": zod.number().nullish(),
   "unitCost": zod.number().optional(),
   "sellingPrice": zod.number().optional(),
-  "annualDemand": zod.number().optional(),
-  "holdingCostRate": zod.number().optional(),
-  "orderingCost": zod.number().optional(),
+  "annualDemand": zod.number().nullish(),
+  "holdingCostRate": zod.number().nullish(),
+  "orderingCost": zod.number().nullish(),
   "archived": zod.boolean().optional()
 })
 
@@ -381,14 +399,20 @@ export const UpdateInventoryItemResponse = zod.object({
   "incomingQuantity": zod.number(),
   "minStock": zod.number(),
   "maxStock": zod.number().optional(),
-  "annualDemand": zod.number(),
-  "holdingCostRate": zod.number(),
-  "orderingCost": zod.number(),
-  "leadTimeDays": zod.number(),
+  "annualDemand": zod.number().nullable(),
+  "annualDemandSource": zod.string(),
+  "holdingCostRate": zod.number().nullable(),
+  "holdingCostRateSource": zod.string(),
+  "orderingCost": zod.number().nullable(),
+  "orderingCostSource": zod.string(),
+  "leadTimeDays": zod.number().nullable(),
   "leadTimeSource": zod.string(),
-  "reorderPoint": zod.number(),
-  "safetyStock": zod.number(),
-  "eoq": zod.number(),
+  "reorderPoint": zod.number().nullable(),
+  "reorderPointSource": zod.string(),
+  "safetyStock": zod.number().nullable(),
+  "safetyStockSource": zod.string(),
+  "eoq": zod.number().nullable(),
+  "eoqSource": zod.string(),
   "archived": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -444,10 +468,10 @@ export const ListSuppliersResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "country": zod.string(),
-  "leadTimeDays": zod.number(),
-  "onTimeDeliveryRate": zod.number(),
-  "qualityScore": zod.number(),
-  "fillRate": zod.number(),
+  "leadTimeDays": zod.number().nullable(),
+  "onTimeDeliveryRate": zod.number().nullable(),
+  "qualityScore": zod.number().nullable(),
+  "fillRate": zod.number().nullable(),
   "createdAt": zod.string()
 })
 export const ListSuppliersResponse = zod.array(ListSuppliersResponseItem)
@@ -459,20 +483,20 @@ export const ListSuppliersResponse = zod.array(ListSuppliersResponseItem)
 export const CreateSupplierBody = zod.object({
   "name": zod.string(),
   "country": zod.string(),
-  "leadTimeDays": zod.number(),
-  "onTimeDeliveryRate": zod.number(),
-  "qualityScore": zod.number(),
-  "fillRate": zod.number()
+  "leadTimeDays": zod.number().nullish(),
+  "onTimeDeliveryRate": zod.number().nullish(),
+  "qualityScore": zod.number().nullish(),
+  "fillRate": zod.number().nullish()
 })
 
 export const CreateSupplierResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "country": zod.string(),
-  "leadTimeDays": zod.number(),
-  "onTimeDeliveryRate": zod.number(),
-  "qualityScore": zod.number(),
-  "fillRate": zod.number(),
+  "leadTimeDays": zod.number().nullable(),
+  "onTimeDeliveryRate": zod.number().nullable(),
+  "qualityScore": zod.number().nullable(),
+  "fillRate": zod.number().nullable(),
   "createdAt": zod.string()
 })
 
@@ -487,20 +511,20 @@ export const UpdateSupplierParams = zod.object({
 export const UpdateSupplierBody = zod.object({
   "name": zod.string().optional(),
   "country": zod.string().optional(),
-  "leadTimeDays": zod.number().optional(),
-  "onTimeDeliveryRate": zod.number().optional(),
-  "qualityScore": zod.number().optional(),
-  "fillRate": zod.number().optional()
+  "leadTimeDays": zod.number().nullish(),
+  "onTimeDeliveryRate": zod.number().nullish(),
+  "qualityScore": zod.number().nullish(),
+  "fillRate": zod.number().nullish()
 })
 
 export const UpdateSupplierResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "country": zod.string(),
-  "leadTimeDays": zod.number(),
-  "onTimeDeliveryRate": zod.number(),
-  "qualityScore": zod.number(),
-  "fillRate": zod.number(),
+  "leadTimeDays": zod.number().nullable(),
+  "onTimeDeliveryRate": zod.number().nullable(),
+  "qualityScore": zod.number().nullable(),
+  "fillRate": zod.number().nullable(),
   "createdAt": zod.string()
 })
 
@@ -737,9 +761,9 @@ export const GetDashboardSummaryResponse = zod.object({
   "openOrders": zod.number(),
   "pendingOrderValue": zod.number(),
   "oeePercent": zod.number(),
-  "forecastAccuracy": zod.number(),
-  "fillRate": zod.number(),
-  "otifPercent": zod.number()
+  "forecastAccuracy": zod.number().nullable(),
+  "fillRate": zod.number().nullable(),
+  "otifPercent": zod.number().nullable()
 })
 
 
@@ -747,8 +771,8 @@ export const GetDashboardSummaryResponse = zod.object({
  * @summary Inventory health breakdown with turnover, DOS, and stock status counts
  */
 export const GetInventoryHealthResponse = zod.object({
-  "avgTurnoverRate": zod.number(),
-  "avgDaysOfSupply": zod.number(),
+  "avgTurnoverRate": zod.number().nullable(),
+  "avgDaysOfSupply": zod.number().nullable(),
   "overstockCount": zod.number(),
   "stockoutCount": zod.number(),
   "healthyCount": zod.number(),
@@ -756,7 +780,7 @@ export const GetInventoryHealthResponse = zod.object({
   "category": zod.string(),
   "count": zod.number(),
   "value": zod.number(),
-  "avgTurnover": zod.number()
+  "avgTurnover": zod.number().nullable()
 }))
 })
 
@@ -765,10 +789,10 @@ export const GetInventoryHealthResponse = zod.object({
  * @summary Logistics KPIs including fill rate and OTIF
  */
 export const GetLogisticsKpisResponse = zod.object({
-  "fillRate": zod.number(),
-  "otifPercent": zod.number(),
-  "avgLeadTimeDays": zod.number(),
-  "avgSupplierScore": zod.number(),
+  "fillRate": zod.number().nullable(),
+  "otifPercent": zod.number().nullable(),
+  "avgLeadTimeDays": zod.number().nullable(),
+  "avgSupplierScore": zod.number().nullable(),
   "ordersDeliveredOnTime": zod.number(),
   "ordersFulfilled": zod.number(),
   "totalOrders": zod.number()

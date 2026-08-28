@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import type { ZodType } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, inventoryItemsTable, suppliersTable, productionRunsTable, demandRecordsTable, ordersTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { StrictInventoryBody } from "./inventory";
@@ -76,6 +76,15 @@ function parseFile(buffer: Buffer, mimetype: string, originalname: string): Reco
 }
 
 function num(v: unknown): number { return parseFloat(String(v)) || 0; }
+function optionalNum(v: unknown): number | undefined {
+  const value = str(v);
+  if (!value) return undefined;
+  return Number(value);
+}
+function requiredNum(v: unknown): number {
+  const value = str(v);
+  return value ? Number(value) : Number.NaN;
+}
 function str(v: unknown): string { return String(v ?? "").trim(); }
 
 // ─── Date normalizer ───────────────────────────────────────────────────────────
@@ -119,13 +128,7 @@ function parseDate(v: unknown): string | null {
 function calcEOQ(d: number, s: number, h_unit: number): number {
   return h_unit > 0 ? Math.sqrt((2 * d * s) / h_unit) : 0;
 }
-function calcSafetyStock(leadDays: number, annualD: number): number {
-  const daily = annualD / 365;
-  return Math.ceil(1.65 * (daily * 0.2) * Math.sqrt(leadDays));
-}
-function calcROP(leadDays: number, annualD: number): number {
-  return Math.ceil((annualD / 365) * leadDays + calcSafetyStock(leadDays, annualD));
-}
+
 
 // POST /api/import  (multipart: file + entity + optional fieldMap JSON)
 router.post(
@@ -186,29 +189,156 @@ router.post(
         try {
           const name = get(r, "name"); const sku = get(r, "sku");
           if (!name || !sku) { errors.push(`Row ${i + 2}: name and sku are required`); continue; }
-          const annualDemand = num(get(r, "annualDemand", "annual_demand", "annualdemand"));
-          const orderingCost = num(get(r, "orderingCost", "ordering_cost", "orderingcost"));
-          const unitCost = num(get(r, "unitCost", "unit_cost", "unitcost"));
-          const holdingCostRate = num(get(r, "holdingCostRate", "holding_cost_rate", "holdingcostrate")) || 0.25;
-          const leadTimeDays = num(get(r, "leadTimeDays", "lead_time_days", "leadtimedays")) || 7;
-          const currentStock = num(get(r, "currentStock", "current_stock", "currentstock"));
-          const category = get(r, "category") || "Uncategorized";
+          const annualDemand = optionalNum(
+            get(r, "annualDemand", "annual_demand", "annualdemand"),
+          );
+          const orderingCost = optionalNum(
+            get(r, "orderingCost", "ordering_cost", "orderingcost"),
+          );
+          const unitCost = requiredNum(get(r, "unitCost", "unit_cost", "unitcost"));
+          const holdingCostRate = optionalNum(
+            get(r, "holdingCostRate", "holding_cost_rate", "holdingcostrate"),
+          );
+          const leadTimeDays = optionalNum(
+            get(r, "leadTimeDays", "lead_time_days", "leadtimedays"),
+          );
+          const currentStock = requiredNum(get(r, "currentStock", "current_stock", "currentstock"));
+          const categoryInput = get(r, "category");
+          const category = categoryInput || "Uncategorized";
 
           const validated = validateRow(StrictInventoryBody, {
             name, sku, category, currentStock,
             leadTimeDays, unitCost, annualDemand, holdingCostRate, orderingCost,
           });
           if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
+          const [existing] = await db
+            .select()
+            .from(inventoryItemsTable)
+            .where(
+              and(
+                eq(inventoryItemsTable.companyId, req.user!.companyId),
+                eq(inventoryItemsTable.sku, validated.data.sku),
+              ),
+            );
 
-          const eoq = calcEOQ(annualDemand, orderingCost, unitCost * holdingCostRate);
-          const safetyStock = calcSafetyStock(leadTimeDays, annualDemand);
-          const reorderPoint = calcROP(leadTimeDays, annualDemand);
-          await db.insert(inventoryItemsTable).values({
-            companyId: req.user!.companyId,
-            name, sku, category, currentStock,
-            leadTimeDays, unitCost, annualDemand, holdingCostRate, orderingCost,
-            eoq, safetyStock, reorderPoint,
-          }).onConflictDoUpdate({ target: [inventoryItemsTable.companyId, inventoryItemsTable.sku], set: { name, currentStock, unitCost, annualDemand, holdingCostRate, orderingCost, leadTimeDays, eoq, safetyStock, reorderPoint } });
+          const mergedAnnualDemand =
+            annualDemand !== undefined
+              ? annualDemand
+              : existing?.annualDemand ?? null;
+
+          const mergedOrderingCost =
+            orderingCost !== undefined
+              ? orderingCost
+              : existing?.orderingCost ?? null;
+
+          const mergedHoldingCostRate =
+            holdingCostRate !== undefined
+              ? holdingCostRate
+              : existing?.holdingCostRate ?? null;
+
+          const mergedLeadTimeDays =
+            leadTimeDays !== undefined
+              ? leadTimeDays
+              : existing?.leadTimeDays ?? null;
+
+          const annualDemandSource =
+            annualDemand !== undefined
+              ? "CSV_IMPORT"
+              : existing?.annualDemandSource ?? "UNKNOWN";
+
+          const orderingCostSource =
+            orderingCost !== undefined
+              ? "CSV_IMPORT"
+              : existing?.orderingCostSource ?? "UNKNOWN";
+
+          const holdingCostRateSource =
+            holdingCostRate !== undefined
+              ? "CSV_IMPORT"
+              : existing?.holdingCostRateSource ?? "UNKNOWN";
+
+          const leadTimeSource =
+            leadTimeDays !== undefined
+              ? "CSV_IMPORT"
+              : existing?.leadTimeSource ?? "UNKNOWN";
+
+          const unsupportedSources = new Set([
+            "UNKNOWN",
+            "SCHEMA_DEFAULT",
+          ]);
+
+          const canCalculateEoq =
+            mergedAnnualDemand != null &&
+            mergedAnnualDemand > 0 &&
+            !unsupportedSources.has(annualDemandSource) &&
+            mergedOrderingCost != null &&
+            mergedOrderingCost > 0 &&
+            !unsupportedSources.has(orderingCostSource) &&
+            unitCost > 0 &&
+            mergedHoldingCostRate != null &&
+            mergedHoldingCostRate > 0 &&
+            !unsupportedSources.has(holdingCostRateSource);
+
+          const eoq = canCalculateEoq
+            ? calcEOQ(
+              mergedAnnualDemand!,
+              mergedOrderingCost!,
+              unitCost * mergedHoldingCostRate!,
+            )
+            : null;
+
+          const planningValues = {
+            annualDemand: mergedAnnualDemand,
+            annualDemandSource,
+            orderingCost: mergedOrderingCost,
+            orderingCostSource,
+            holdingCostRate: mergedHoldingCostRate,
+            holdingCostRateSource,
+            leadTimeDays: mergedLeadTimeDays,
+            leadTimeSource,
+            eoq,
+            eoqSource: canCalculateEoq
+              ? "CALCULATED_FROM_VERIFIED_INPUTS"
+              : "UNKNOWN",
+            safetyStock:
+              annualDemand !== undefined || leadTimeDays !== undefined
+                ? null
+                : existing?.safetyStock ?? null,
+            safetyStockSource:
+              annualDemand !== undefined || leadTimeDays !== undefined
+                ? "UNKNOWN"
+                : existing?.safetyStockSource ?? "UNKNOWN",
+            reorderPoint:
+              annualDemand !== undefined || leadTimeDays !== undefined
+                ? null
+                : existing?.reorderPoint ?? null,
+            reorderPointSource:
+              annualDemand !== undefined || leadTimeDays !== undefined
+                ? "UNKNOWN"
+                : existing?.reorderPointSource ?? "UNKNOWN",
+          };
+
+          await db
+            .insert(inventoryItemsTable)
+            .values({
+              ...validated.data,
+              companyId: req.user!.companyId,
+              ...planningValues,
+            })
+            .onConflictDoUpdate({
+              target: [
+                inventoryItemsTable.companyId,
+                inventoryItemsTable.sku,
+              ],
+              set: {
+                name: validated.data.name,
+                ...(categoryInput
+                  ? { category: validated.data.category }
+                  : {}),
+                currentStock: validated.data.currentStock,
+                unitCost: validated.data.unitCost,
+                ...planningValues,
+              },
+            });
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }
@@ -218,17 +348,94 @@ router.post(
         try {
           const name = get(r, "name");
           if (!name) { errors.push(`Row ${i + 2}: name is required`); continue; }
+          const countryInput = get(r, "country");
+
+          const leadTimeDays = optionalNum(
+            get(r, "leadTimeDays", "lead_time_days", "leadtimedays"),
+          );
+
+          const onTimeDeliveryRate = optionalNum(
+            get(
+              r,
+              "onTimeDeliveryRate",
+              "on_time_delivery_rate",
+              "ontimedeliveryrate",
+            ),
+          );
+
+          const qualityScore = optionalNum(
+            get(r, "qualityScore", "quality_score", "qualityscore"),
+          );
+
+          const fillRate = optionalNum(
+            get(r, "fillRate", "fill_rate", "fillrate"),
+          );
+
+          const [existingSupplier] = await db
+            .select()
+            .from(suppliersTable)
+            .where(
+              and(
+                eq(suppliersTable.companyId, req.user!.companyId),
+                eq(suppliersTable.name, name),
+              ),
+            );
+
           const candidate = {
             name,
-            country: get(r, "country") || "Unknown",
-            leadTimeDays: num(get(r, "leadTimeDays", "lead_time_days", "leadtimedays")) || 7,
-            onTimeDeliveryRate: num(get(r, "onTimeDeliveryRate", "on_time_delivery_rate", "ontimedeliveryrate")) || 95,
-            qualityScore: num(get(r, "qualityScore", "quality_score", "qualityscore")) || 90,
-            fillRate: num(get(r, "fillRate", "fill_rate", "fillrate")) || 97,
+            country:
+              countryInput ||
+              existingSupplier?.country ||
+              "Unknown",
+            leadTimeDays:
+              leadTimeDays !== undefined
+                ? leadTimeDays
+                : existingSupplier?.leadTimeDays ?? null,
+            onTimeDeliveryRate:
+              onTimeDeliveryRate !== undefined
+                ? onTimeDeliveryRate
+                : existingSupplier?.onTimeDeliveryRate ?? null,
+            qualityScore:
+              qualityScore !== undefined
+                ? qualityScore
+                : existingSupplier?.qualityScore ?? null,
+            fillRate:
+              fillRate !== undefined
+                ? fillRate
+                : existingSupplier?.fillRate ?? null,
           };
-          const validated = validateRow(StrictSupplierBody, candidate);
-          if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
-          await db.insert(suppliersTable).values({ ...validated.data, companyId: req.user!.companyId });
+
+          const validated = validateRow(
+            StrictSupplierBody,
+            candidate,
+          );
+
+          if (!validated.ok) {
+            errors.push(`Row ${i + 2}: ${validated.error}`);
+            continue;
+          }
+
+          if (existingSupplier) {
+            await db
+              .update(suppliersTable)
+              .set(validated.data)
+              .where(
+                and(
+                  eq(suppliersTable.id, existingSupplier.id),
+                  eq(
+                    suppliersTable.companyId,
+                    req.user!.companyId,
+                  ),
+                ),
+              );
+          } else {
+            await db
+              .insert(suppliersTable)
+              .values({
+                ...validated.data,
+                companyId: req.user!.companyId,
+              });
+          }
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
       }

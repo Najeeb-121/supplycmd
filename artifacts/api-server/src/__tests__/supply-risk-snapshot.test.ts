@@ -23,16 +23,16 @@ describe('buildSupplyRiskSnapshot', () => {
     ];
 
     (db as any).where
-      .mockReturnValueOnce(mockItems) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]); 
+      .mockReturnValueOnce(mockItems)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
 
     const { snapshot } = await buildSupplyRiskSnapshot(1);
-    
+
     expect(snapshot.products[100]).toBeDefined();
     expect(snapshot.products[100].name).toBe('Prod 1');
     expect(Object.keys(snapshot.products).length).toBe(1);
@@ -51,21 +51,21 @@ describe('buildSupplyRiskSnapshot', () => {
     ];
 
     (db as any).where
-      .mockReturnValueOnce(mockItems) 
-      .mockReturnValueOnce(mockRawSuppliers) 
-      .mockReturnValueOnce(mockProdSuppliers) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]); 
+      .mockReturnValueOnce(mockItems)
+      .mockReturnValueOnce(mockRawSuppliers)
+      .mockReturnValueOnce(mockProdSuppliers)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
 
     const { snapshot } = await buildSupplyRiskSnapshot(1);
-    
+
     const supplier = snapshot.products[100].suppliers[0];
     expect(supplier.supplierId).toBe(200);
     expect(supplier.supplierUnitCost).toBeNull();
-    expect(supplier.leadTimeDays.value).toBe(7);
-    expect(supplier.leadTimeDays.source).toBe('SCHEMA_DEFAULT');
+    expect(supplier.leadTimeDays.value).toBeNull();
+    expect(supplier.leadTimeDays.source).toBe("UNKNOWN");
   });
 
   it('handles demand mapping properly and excludes missing dates', async () => {
@@ -77,20 +77,20 @@ describe('buildSupplyRiskSnapshot', () => {
     ];
     const mockSoLines = [
       { id: 6, companyId: 1, orderId: 5, inventoryItemId: 1, odooId: 60, remainingQuantity: 5, expectedDate: '2026-08-20', unitPrice: null, currency: 'USD' },
-      { id: 7, companyId: 1, orderId: 5, inventoryItemId: 1, odooId: 61, remainingQuantity: 5, expectedDate: null, unitPrice: 10, currency: 'USD' } 
+      { id: 7, companyId: 1, orderId: 5, inventoryItemId: 1, odooId: 61, remainingQuantity: 5, expectedDate: null, unitPrice: 10, currency: 'USD' }
     ];
 
     (db as any).where
-      .mockReturnValueOnce(mockItems) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce([]) 
-      .mockReturnValueOnce(mockSos) 
+      .mockReturnValueOnce(mockItems)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce(mockSos)
       .mockReturnValueOnce(mockSoLines);
 
     const { snapshot, priceLookup } = await buildSupplyRiskSnapshot(1);
-    
+
     expect(snapshot.demand.length).toBe(1);
     expect(snapshot.demand[0].demandDate).toBe('2026-08-20');
     expect(snapshot.demand[0].salesOrderId).toBe(50);

@@ -76,14 +76,20 @@ export interface InventoryItem {
   incomingQuantity: number;
   minStock: number;
   maxStock?: number;
-  annualDemand: number;
-  holdingCostRate: number;
-  orderingCost: number;
-  leadTimeDays: number;
+  annualDemand: number | null;
+  annualDemandSource: string;
+  holdingCostRate: number | null;
+  holdingCostRateSource: string;
+  orderingCost: number | null;
+  orderingCostSource: string;
+  leadTimeDays: number | null;
   leadTimeSource: string;
-  reorderPoint: number;
-  safetyStock: number;
-  eoq: number;
+  reorderPoint: number | null;
+  reorderPointSource: string;
+  safetyStock: number | null;
+  safetyStockSource: string;
+  eoq: number | null;
+  eoqSource: string;
   archived: boolean;
   createdAt: string;
 }
@@ -104,12 +110,12 @@ export interface InventoryItemInput {
   reservedQuantity?: number;
   minStock?: number;
   maxStock?: number;
-  leadTimeDays: number;
+  leadTimeDays?: number | null;
   unitCost: number;
   sellingPrice?: number;
-  annualDemand: number;
-  holdingCostRate: number;
-  orderingCost: number;
+  annualDemand?: number | null;
+  holdingCostRate?: number | null;
+  orderingCost?: number | null;
 }
 
 export interface InventoryItemUpdate {
@@ -127,12 +133,12 @@ export interface InventoryItemUpdate {
   reservedQuantity?: number;
   minStock?: number;
   maxStock?: number;
-  leadTimeDays?: number;
+  leadTimeDays?: number | null;
   unitCost?: number;
   sellingPrice?: number;
-  annualDemand?: number;
-  holdingCostRate?: number;
-  orderingCost?: number;
+  annualDemand?: number | null;
+  holdingCostRate?: number | null;
+  orderingCost?: number | null;
   archived?: boolean;
 }
 
@@ -236,29 +242,29 @@ export interface Supplier {
   id: number;
   name: string;
   country: string;
-  leadTimeDays: number;
-  onTimeDeliveryRate: number;
-  qualityScore: number;
-  fillRate: number;
+  leadTimeDays: number | null;
+  onTimeDeliveryRate: number | null;
+  qualityScore: number | null;
+  fillRate: number | null;
   createdAt: string;
 }
 
 export interface SupplierInput {
   name: string;
   country: string;
-  leadTimeDays: number;
-  onTimeDeliveryRate: number;
-  qualityScore: number;
-  fillRate: number;
+  leadTimeDays?: number | null;
+  onTimeDeliveryRate?: number | null;
+  qualityScore?: number | null;
+  fillRate?: number | null;
 }
 
 export interface SupplierUpdate {
   name?: string;
   country?: string;
-  leadTimeDays?: number;
-  onTimeDeliveryRate?: number;
-  qualityScore?: number;
-  fillRate?: number;
+  leadTimeDays?: number | null;
+  onTimeDeliveryRate?: number | null;
+  qualityScore?: number | null;
+  fillRate?: number | null;
 }
 
 export interface ProductionRun {
@@ -400,21 +406,21 @@ export interface DashboardSummary {
   openOrders: number;
   pendingOrderValue: number;
   oeePercent: number;
-  forecastAccuracy: number;
-  fillRate: number;
-  otifPercent: number;
+  forecastAccuracy: number | null;
+  fillRate: number | null;
+  otifPercent: number | null;
 }
 
 export interface CategoryBreakdown {
   category: string;
   count: number;
   value: number;
-  avgTurnover: number;
+  avgTurnover: number | null;
 }
 
 export interface InventoryHealth {
-  avgTurnoverRate: number;
-  avgDaysOfSupply: number;
+  avgTurnoverRate: number | null;
+  avgDaysOfSupply: number | null;
   overstockCount: number;
   stockoutCount: number;
   healthyCount: number;
@@ -422,10 +428,10 @@ export interface InventoryHealth {
 }
 
 export interface LogisticsKpis {
-  fillRate: number;
-  otifPercent: number;
-  avgLeadTimeDays: number;
-  avgSupplierScore: number;
+  fillRate: number | null;
+  otifPercent: number | null;
+  avgLeadTimeDays: number | null;
+  avgSupplierScore: number | null;
   ordersDeliveredOnTime: number;
   ordersFulfilled: number;
   totalOrders: number;

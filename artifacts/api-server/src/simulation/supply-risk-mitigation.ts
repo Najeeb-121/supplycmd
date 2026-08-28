@@ -49,7 +49,7 @@ export function generateMitigations(snapshot: SupplyRiskSnapshot, exposure: Risk
   // 3. ALTERNATE_SUPPLIER
   if (product && exposure.alternateSupplierAvailable) {
     const alternates = product.suppliers.filter(s => s.supplierId !== targetSupplierId);
-    
+
     // Sort by sequence (lowest first) then preferred supplier
     alternates.sort((a, b) => {
       const seqA = a.sequence ?? 999;
@@ -64,18 +64,17 @@ export function generateMitigations(snapshot: SupplyRiskSnapshot, exposure: Risk
       let cost: number | undefined = undefined;
       let costProv: "CALCULATED" | "UNKNOWN" = "UNKNOWN";
 
-      if (alt.supplierUnitCost > 0 && residualShortage > 0) {
+      if (
+        alt.supplierUnitCost != null &&
+        alt.supplierUnitCost > 0 &&
+        residualShortage > 0
+      ) {
         cost = residualShortage * alt.supplierUnitCost;
         costProv = "CALCULATED";
       }
 
       let date: string | undefined = undefined;
       let dateProv: "CALCULATED" | "UNKNOWN" = "UNKNOWN";
-
-      if (alt.leadTimeDays && alt.leadTimeDays.value > 0) {
-        date = undefined;
-        dateProv = "UNKNOWN";
-      }
 
       actions.push({
         id: `ALT_SUPPLIER_${alt.supplierId}`,

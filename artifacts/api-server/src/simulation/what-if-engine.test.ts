@@ -69,7 +69,7 @@ test("SR-4.1 What-If Core: ALTERNATE_SUPPLIER isolated baseline and assumptions"
     targetSupplierName: "Alt Supplier",
     targetProductId: 100,
     mitigationCostProvenance: "CALCULATED",
-    mitigationDateProvenance: "CALCULATED"
+    mitigationDateProvenance: "UNKNOWN"
   };
 
   const snapshotJson = JSON.stringify(snapshot);
@@ -81,7 +81,7 @@ test("SR-4.1 What-If Core: ALTERNATE_SUPPLIER isolated baseline and assumptions"
 
   // 2. Scenario is isolated
   assert.strictEqual(result.scenarioValidity, "VALID");
-  
+
   // 3. ALTERNATE_SUPPLIER injects only the requested quantity
   // 4. Uses verified supplier cost
   // Base procurement cost: 50 inbound * $10 (old supplier) = $500
@@ -98,9 +98,14 @@ test("SR-4.1 What-If Core: ALTERNATE_SUPPLIER isolated baseline and assumptions"
 
   // 6. Supplier capacity remains UNKNOWN
   assert.strictEqual(result.provenance.supplierCapacity, "UNKNOWN");
-  
-  // 9. Scenario dates are marked SCENARIO_ASSUMPTION
-  assert.strictEqual(result.provenance.dateSource, "SCENARIO_ASSUMPTION");
+
+  // 9. No arrival date is claimed without a supportable scenario date.
+  assert.strictEqual(result.provenance.dateSource, "UNKNOWN");
+  assert(
+    result.scenarioAssumptions.includes(
+      "Alternate supplier arrival date is not determinable.",
+    ),
+  );
 
   // 10. Expedite cost remains UNKNOWN
   assert.strictEqual(result.provenance.expediteCost, "UNKNOWN");
@@ -129,11 +134,11 @@ test("SR-4.1 What-If Core: FOLLOW_UP_INBOUND shifts explicitly supplied date shi
   };
 
   const result = simulateMitigationAction(snapshot, exposure, mitigation);
-  
+
   assert.strictEqual(result.scenarioValidity, "VALID");
   assert.strictEqual(result.provenance.dateSource, "SCENARIO_ASSUMPTION");
   assert(result.scenarioAssumptions.includes("Expedited arrival date is a hypothetical scenario assumption."));
-  
+
   // Cost should not change for follow-up
   assert.strictEqual(result.incrementalMetrics.procurementCostDelta, 0);
 });
@@ -155,12 +160,12 @@ test("SR-4.1 What-If Core: COVER_FROM_AVAILABLE_STOCK cannot consume more than a
   };
 
   const result = simulateMitigationAction(snapshot, exposure, mitigation);
-  
+
   assert.strictEqual(result.scenarioValidity, "VALID");
   // Shortage was 100, we injected a dummy PO for Math.min(100, 50) = 50.
   // The scenario shortage should be 50.
-  assert.strictEqual(result.baselineMetrics.residualShortage, 100); 
-  
+  assert.strictEqual(result.baselineMetrics.residualShortage, 100);
+
   // The key is that it didn't consume 100
   assert.strictEqual(result.scenarioMetrics.residualShortage, result.baselineMetrics.residualShortage - 50);
 });
@@ -168,7 +173,7 @@ test("SR-4.1 What-If Core: COVER_FROM_AVAILABLE_STOCK cannot consume more than a
 test("SR-4.1 What-If Core: Unsupported actions and Missing data return INVALID", () => {
   const snapshot = createMockSnapshot();
   const exposure = createMockExposure();
-  
+
   const badMitigation: RiskMitigation = {
     id: "PRIORITIZE_1",
     type: "PRIORITIZE_DOWNSTREAM_DEMAND",

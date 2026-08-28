@@ -56,11 +56,19 @@ function deriveStatus(item: InventoryItem): StockStatus {
 
   if (item.availableQuantity <= 0) return "out_of_stock";
 
-  if (item.safetyStock > 0 && item.availableQuantity <= item.safetyStock) {
+  if (
+    item.safetyStock != null &&
+    item.safetyStock > 0 &&
+    item.availableQuantity <= item.safetyStock
+  ) {
     return "critical";
   }
 
-  if (item.reorderPoint > 0 && item.availableQuantity <= item.reorderPoint) {
+  if (
+    item.reorderPoint != null &&
+    item.reorderPoint > 0 &&
+    item.availableQuantity <= item.reorderPoint
+  ) {
     return "low_stock";
   }
 
@@ -193,7 +201,7 @@ export default function InventoryPage() {
   // ── forms ──────────────────────────────────────────────────────────────────
   const itemForm = useForm<ItemForm>({
     resolver: zodResolver(itemSchema),
-    defaultValues: { name: "", sku: "", category: "", unitOfMeasure: "units", currentStock: 0, reservedQuantity: 0, minStock: 0, unitCost: 0, annualDemand: 0, leadTimeDays: 7, orderingCost: 0, holdingCostRate: 0.25 },
+    defaultValues: { name: "", sku: "", category: "", unitOfMeasure: "units", currentStock: 0, reservedQuantity: 0, minStock: 0, unitCost: 0 },
     mode: "onChange",
   });
   const movForm = useForm<MovementForm>({
@@ -280,7 +288,7 @@ export default function InventoryPage() {
 
   // ── item CRUD ───────────────────────────────────────────────────────────────
   const openCreate = () => {
-    itemForm.reset({ name: "", sku: "", category: "", unitOfMeasure: "units", currentStock: 0, reservedQuantity: 0, minStock: 0, unitCost: 0, annualDemand: 0, leadTimeDays: 7, orderingCost: 0, holdingCostRate: 0.25 });
+    itemForm.reset({ name: "", sku: "", category: "", unitOfMeasure: "units", currentStock: 0, reservedQuantity: 0, minStock: 0, unitCost: 0 });
     setItemDialog({ open: true, item: null });
   };
   const openEdit = (item: InventoryItem) => {
@@ -290,8 +298,11 @@ export default function InventoryPage() {
       unitOfMeasure: item.unitOfMeasure, warehouse: item.warehouse ?? "", binLocation: item.binLocation ?? "",
       supplierName: item.supplierName ?? "", unitCost: item.unitCost, sellingPrice: item.sellingPrice ?? undefined,
       currentStock: item.currentStock, reservedQuantity: item.reservedQuantity, minStock: item.minStock,
-      maxStock: item.maxStock ?? undefined, annualDemand: item.annualDemand, leadTimeDays: item.leadTimeDays,
-      orderingCost: item.orderingCost, holdingCostRate: item.holdingCostRate,
+      maxStock: item.maxStock ?? undefined,
+      annualDemand: item.annualDemand ?? undefined,
+      leadTimeDays: item.leadTimeDays ?? undefined,
+      orderingCost: item.orderingCost ?? undefined,
+      holdingCostRate: item.holdingCostRate ?? undefined,
     });
     setItemDialog({ open: true, item });
   };
@@ -1028,7 +1039,7 @@ export default function InventoryPage() {
                     <FormItem><FormLabel>Cost Price ($) *</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="sellingPrice" render={({ field }) => (
-                    <FormItem><FormLabel>Selling Price ($)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Selling Price ($)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
               </div>
@@ -1047,26 +1058,31 @@ export default function InventoryPage() {
                     <FormItem><FormLabel>Minimum Stock</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="maxStock" render={({ field }) => (
-                    <FormItem><FormLabel>Maximum Stock</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Maximum Stock</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
               </div>
               <Separator />
               {/* EOQ Parameters */}
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Demand &amp; Ordering (for EOQ / ROP calculation)</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                  Optional Planning Inputs
+                </p>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Leave unknown values blank. EOQ is calculated only from supportable inputs; Safety Stock and Reorder Point require additional demand-variability evidence.
+                </p>
                 <div className="grid grid-cols-2 gap-3">
                   <FormField control={itemForm.control} name="annualDemand" render={({ field }) => (
-                    <FormItem><FormLabel>Annual Demand (units)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Annual Demand (units)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="leadTimeDays" render={({ field }) => (
-                    <FormItem><FormLabel>Lead Time (Days)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Lead Time (Days)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="orderingCost" render={({ field }) => (
-                    <FormItem><FormLabel>Cost per Order ($)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Cost per Order ($)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="holdingCostRate" render={({ field }) => (
-                    <FormItem><FormLabel>Holding Cost Rate (0–1)</FormLabel><FormControl><Input type="number" min="0" step="0.01" max="1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Holding Cost Rate (0–1)</FormLabel><FormControl><Input type="number" min="0" step="0.01" max="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
               </div>

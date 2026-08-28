@@ -10,6 +10,21 @@ import {
 } from "@workspace/db";
 
 const router: IRouter = Router();
+function averageKnown(
+  values: readonly (number | null)[],
+): number | null {
+  const knownValues = values.filter(
+    (value): value is number => value != null,
+  );
+
+  if (knownValues.length === 0) return null;
+
+  const average =
+    knownValues.reduce((sum, value) => sum + value, 0) /
+    knownValues.length;
+
+  return Math.round(average * 10) / 10;
+}
 
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const companyId = req.user!.companyId;
@@ -70,12 +85,14 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   }
 
   // Fill rate & OTIF from suppliers (both already stored on a 0-100 scale)
-  const fillRate = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.fillRate, 0) / suppliers.length) * 10) / 10
-    : 0;
-  const otifPercent = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.onTimeDeliveryRate, 0) / suppliers.length) * 10) / 10
-    : 0;
+  // Supplier KPIs use only observed values; missing evidence remains null.
+  const fillRate = averageKnown(
+    suppliers.map((supplier) => supplier.fillRate),
+  );
+
+  const otifPercent = averageKnown(
+    suppliers.map((supplier) => supplier.onTimeDeliveryRate),
+  );
 
   res.json({
     totalSkus,
@@ -94,50 +111,65 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 router.get("/dashboard/inventory-health", async (req, res): Promise<void> => {
   const items = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.companyId, req.user!.companyId), eq(inventoryItemsTable.archived, false)));
 
-  const avgTurnoverRate = items.length > 0
-    ? items.reduce((s, i) => {
-      const avgInventory = i.currentStock;
-      return s + (avgInventory > 0 ? i.annualDemand / avgInventory : 0);
-    }, 0) / items.length
-    : 0;
+  const supportedDemandItems = items.filter(
+    (item) =>
+      item.annualDemand != null &&
+      item.annualDemand > 0 &&
+      !["UNKNOWN", "SCHEMA_DEFAULT"].includes(item.annualDemandSource),
+  );
 
-  const avgDaysOfSupply = items.length > 0
-    ? items.reduce((s, i) => {
-      const dailyDemand = i.annualDemand / 365;
-      return s + (dailyDemand > 0 ? i.currentStock / dailyDemand : 0);
-    }, 0) / items.length
-    : 0;
+  // Turnover requires average inventory history, not a single stock snapshot.
+  const avgTurnoverRate = null;
 
-  const overstockCount = items.filter((i) => {
-    const dailyDemand = i.annualDemand / 365;
-    return dailyDemand > 0 && i.currentStock / dailyDemand > 90;
-  }).length;
+  const avgDaysOfSupply = supportedDemandItems.length > 0
+    ? supportedDemandItems.reduce((sum, item) => {
+      const dailyDemand = item.annualDemand! / 365;
+      return sum + Math.max(item.availableQuantity, 0) / dailyDemand;
+    }, 0) / supportedDemandItems.length
+    : null;
 
-  const stockoutCount = items.filter((i) => i.currentStock <= 0).length;
-  const healthyCount = items.length - overstockCount - stockoutCount;
+  const overstockCount = items.filter(
+    (item) => item.maxStock != null && item.currentStock > item.maxStock,
+  ).length;
 
-  // Category breakdown
-  const categoryMap = new Map<string, { count: number; value: number; turnoverSum: number }>();
+  const stockoutCount = items.filter(
+    (item) => item.availableQuantity <= 0,
+  ).length;
+
+  const healthyCount = items.filter(
+    (item) =>
+      item.availableQuantity > 0 &&
+      !(item.maxStock != null && item.currentStock > item.maxStock),
+  ).length;
+
+  // Category value remains supportable; turnover does not without history.
+  const categoryMap = new Map<string, { count: number; value: number }>();
+
   for (const item of items) {
     if (!categoryMap.has(item.category)) {
-      categoryMap.set(item.category, { count: 0, value: 0, turnoverSum: 0 });
+      categoryMap.set(item.category, { count: 0, value: 0 });
     }
-    const cat = categoryMap.get(item.category)!;
-    cat.count++;
-    cat.value += item.currentStock * item.unitCost;
-    cat.turnoverSum += item.currentStock > 0 ? item.annualDemand / item.currentStock : 0;
+
+    const category = categoryMap.get(item.category)!;
+    category.count++;
+    category.value += item.currentStock * item.unitCost;
   }
 
-  const categoryBreakdown = Array.from(categoryMap.entries()).map(([category, data]) => ({
-    category,
-    count: data.count,
-    value: Math.round(data.value * 100) / 100,
-    avgTurnover: Math.round((data.turnoverSum / data.count) * 100) / 100,
-  }));
+  const categoryBreakdown = Array.from(categoryMap.entries()).map(
+    ([category, data]) => ({
+      category,
+      count: data.count,
+      value: Math.round(data.value * 100) / 100,
+      avgTurnover: null,
+    }),
+  );
 
   res.json({
-    avgTurnoverRate: Math.round(avgTurnoverRate * 100) / 100,
-    avgDaysOfSupply: Math.round(avgDaysOfSupply * 10) / 10,
+    avgTurnoverRate,
+    avgDaysOfSupply:
+      avgDaysOfSupply == null
+        ? null
+        : Math.round(avgDaysOfSupply * 10) / 10,
     overstockCount,
     stockoutCount,
     healthyCount,
@@ -151,21 +183,21 @@ router.get("/dashboard/logistics-kpis", async (req, res): Promise<void> => {
     db.select().from(ordersTable).where(eq(ordersTable.companyId, req.user!.companyId)),
   ]);
 
-  const fillRate = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.fillRate, 0) / suppliers.length) * 10) / 10
-    : 0;
+  const fillRate = averageKnown(
+    suppliers.map((supplier) => supplier.fillRate),
+  );
 
-  const otifPercent = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.onTimeDeliveryRate, 0) / suppliers.length) * 10) / 10
-    : 0;
+  const otifPercent = averageKnown(
+    suppliers.map((supplier) => supplier.onTimeDeliveryRate),
+  );
 
-  const avgLeadTimeDays = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.leadTimeDays, 0) / suppliers.length) * 10) / 10
-    : 0;
+  const avgLeadTimeDays = averageKnown(
+    suppliers.map((supplier) => supplier.leadTimeDays),
+  );
 
-  const avgSupplierScore = suppliers.length > 0
-    ? Math.round((suppliers.reduce((s, sup) => s + sup.qualityScore, 0) / suppliers.length) * 10) / 10
-    : 0;
+  const avgSupplierScore = averageKnown(
+    suppliers.map((supplier) => supplier.qualityScore),
+  );
 
   const deliveredOrders = orders.filter((o) => o.status === "delivered");
   const ordersDeliveredOnTime = deliveredOrders.filter((o) => {

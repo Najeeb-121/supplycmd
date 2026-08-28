@@ -7,10 +7,10 @@
  */
 
 export interface LogisticsKpis {
-  fillRate: number;
-  otifPercent: number;
-  avgLeadTimeDays: number;
-  avgSupplierScore: number;
+  fillRate: number | null;
+  otifPercent: number | null;
+  avgLeadTimeDays: number | null;
+  avgSupplierScore: number | null;
   ordersDeliveredOnTime: number;
   ordersFulfilled: number;
   totalOrders: number;

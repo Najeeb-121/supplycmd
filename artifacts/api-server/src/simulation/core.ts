@@ -4,7 +4,7 @@ export interface ERPSnapshot {
   productId: number;
   openingStock: number;
   dailyDemandRate: number;
-  safetyStock: number;
+  safetyStock: number | null;
   inboundPOs: { id: number; expectedDate: string; qty: number; supplierId: number; status: string }[];
   scheduledMOs: {
     id: number;

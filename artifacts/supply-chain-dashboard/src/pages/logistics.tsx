@@ -19,13 +19,13 @@ import { Plus, Truck, PackageCheck, Clock, CheckCircle2, XCircle, Pencil, Trash2
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -75,7 +75,7 @@ export default function LogisticsPage() {
   const { data: kpis, isLoading: kpisLoading } = useGetLogisticsKpis();
   const { data: suppliers, isLoading: suppliersLoading } = useListSuppliers();
   const { data: orders, isLoading: ordersLoading } = useListOrders();
-  
+
   const createOrderMutationRef = useRef(useCreateOrder().mutate);
   const createOrderMutation = useCreateOrder();
   createOrderMutationRef.current = createOrderMutation.mutate;
@@ -101,12 +101,7 @@ export default function LogisticsPage() {
     defaultValues: {
       name: "",
       country: "",
-      leadTimeDays: 7,
-      onTimeDeliveryRate: 95,
-      qualityScore: 90,
-      fillRate: 97,
-    },
-    mode: "onChange",
+    }, mode: "onChange",
   });
 
   const openCreateSupplierForm = () => {
@@ -114,12 +109,7 @@ export default function LogisticsPage() {
     supplierForm.reset({
       name: "",
       country: "",
-      leadTimeDays: 7,
-      onTimeDeliveryRate: 95,
-      qualityScore: 90,
-      fillRate: 97,
-    });
-    setIsSupplierFormOpen(true);
+    }); setIsSupplierFormOpen(true);
   };
 
   const openEditSupplierForm = (supplier: Supplier) => {
@@ -127,10 +117,11 @@ export default function LogisticsPage() {
     supplierForm.reset({
       name: supplier.name,
       country: supplier.country,
-      leadTimeDays: supplier.leadTimeDays,
-      onTimeDeliveryRate: supplier.onTimeDeliveryRate,
-      qualityScore: supplier.qualityScore,
-      fillRate: supplier.fillRate,
+      leadTimeDays: supplier.leadTimeDays ?? undefined,
+      onTimeDeliveryRate:
+        supplier.onTimeDeliveryRate ?? undefined,
+      qualityScore: supplier.qualityScore ?? undefined,
+      fillRate: supplier.fillRate ?? undefined,
     });
     setIsSupplierFormOpen(true);
   };
@@ -195,7 +186,7 @@ export default function LogisticsPage() {
       orderDate: new Date(values.orderDate).toISOString(),
       expectedDelivery: new Date(values.expectedDelivery).toISOString()
     };
-    
+
     createOrderMutationRef.current({ data: payload }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListOrdersQueryKey() });
@@ -221,7 +212,7 @@ export default function LogisticsPage() {
       'confirmed': 'shipped',
       'shipped': 'delivered'
     };
-    
+
     const nextStatus = statusFlow[currentStatus];
     if (!nextStatus) return;
 
@@ -392,18 +383,34 @@ export default function LogisticsPage() {
                             <div className="text-xs text-muted-foreground">{s.country}</div>
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
-                            {s.leadTimeDays}d
+                            {s.leadTimeDays != null
+                              ? `${s.leadTimeDays}d`
+                              : "N/A"}
                           </TableCell>
                           <TableCell className="text-right font-mono">
-                            <span className={s.onTimeDeliveryRate < 90 ? "text-destructive" : "text-emerald-600"}>
-                              {(s.onTimeDeliveryRate ?? 0).toFixed(1)}%
-                            </span>
+                            {s.onTimeDeliveryRate != null ? (
+                              <span
+                                className={
+                                  s.onTimeDeliveryRate < 90
+                                    ? "text-destructive"
+                                    : "text-emerald-600"
+                                }
+                              >
+                                {s.onTimeDeliveryRate.toFixed(1)}%
+                              </span>
+                            ) : (
+                              "N/A"
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-mono">
-                            {(s.qualityScore ?? 0).toFixed(1)}/100
+                            {s.qualityScore != null
+                              ? `${s.qualityScore.toFixed(1)}/100`
+                              : "N/A"}
                           </TableCell>
                           <TableCell className="text-right font-mono font-medium">
-                            {(s.fillRate ?? 0).toFixed(1)}%
+                            {s.fillRate != null
+                              ? `${s.fillRate.toFixed(1)}%`
+                              : "N/A"}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button
@@ -477,7 +484,7 @@ export default function LogisticsPage() {
                           'delivered': 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20',
                           'cancelled': 'bg-destructive/10 text-destructive border-destructive/20'
                         };
-                        
+
                         return (
                           <TableRow key={o.id} className="hover:bg-muted/10">
                             <TableCell>
@@ -497,9 +504,9 @@ export default function LogisticsPage() {
                             </TableCell>
                             <TableCell className="text-right">
                               {o.status !== 'delivered' && o.status !== 'cancelled' ? (
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   className="text-xs h-7"
                                   onClick={() => handleUpdateStatus(o.id, o.status as OrderStatus)}
                                 >
@@ -529,7 +536,7 @@ export default function LogisticsPage() {
               Issue a new PO to a registered supplier.
             </DialogDescription>
           </DialogHeader>
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmitOrder)} className="space-y-4">
               <FormField
@@ -554,7 +561,7 @@ export default function LogisticsPage() {
                   </FormItem>
                 )}
               />
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -609,7 +616,7 @@ export default function LogisticsPage() {
                   )}
                 />
               </div>
-              
+
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setIsOrderFormOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={createOrderMutation.isPending || !form.formState.isValid}>
@@ -668,7 +675,7 @@ export default function LogisticsPage() {
                     <FormItem>
                       <FormLabel>Lead Time (Days)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" step="1" {...field} />
+                        <Input type="number" min="0" step="1" {...field} value={field.value ?? ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -681,7 +688,7 @@ export default function LogisticsPage() {
                     <FormItem>
                       <FormLabel>On-Time Delivery (0-100)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" max="100" step="0.1" {...field} />
+                        <Input type="number" min="0" max="100" step="0.1" {...field} value={field.value ?? ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -694,7 +701,7 @@ export default function LogisticsPage() {
                     <FormItem>
                       <FormLabel>Quality Score (0-100)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" max="100" step="0.1" {...field} />
+                        <Input type="number" min="0" max="100" step="0.1" {...field} value={field.value ?? ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -707,7 +714,7 @@ export default function LogisticsPage() {
                     <FormItem>
                       <FormLabel>Fill Rate (0-100)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" max="100" step="0.1" {...field} />
+                        <Input type="number" min="0" max="100" step="0.1" {...field} value={field.value ?? ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

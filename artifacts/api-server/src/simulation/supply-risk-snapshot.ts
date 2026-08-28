@@ -17,9 +17,29 @@ import {
   ProductInventory,
   SupplierRiskProfile,
   InboundSupply,
-  DemandRecord
+  DemandRecord,
+  DataProvenance
 } from "./supply-risk-contracts";
 import { SalesOrderPriceLookup } from "./pegging-contracts";
+type ProvenanceSource = DataProvenance<unknown>["source"];
+
+const provenanceSources = new Set<ProvenanceSource>([
+  "ODOO_VERIFIED",
+  "ODOO_SUPPLIERINFO",
+  "USER_PROVIDED",
+  "CSV_IMPORT",
+  "CALCULATED_FROM_VERIFIED_INPUTS",
+  "SCHEMA_DEFAULT",
+  "UNKNOWN",
+]);
+
+function normalizeProvenanceSource(
+  source: string | null | undefined,
+): ProvenanceSource {
+  return provenanceSources.has(source as ProvenanceSource)
+    ? source as ProvenanceSource
+    : "UNKNOWN";
+}
 
 export async function buildSupplyRiskSnapshot(companyId: number): Promise<{ snapshot: SupplyRiskSnapshot, priceLookup: SalesOrderPriceLookup[] }> {
   const items = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.companyId, companyId));
@@ -92,11 +112,17 @@ export async function buildSupplyRiskSnapshot(companyId: number): Promise<{ snap
         supplierName: sup.name,
         preferredSupplier: ps.preferredSupplier,
         leadTimeDays: {
-          value: ps.leadTimeDays ?? sup.leadTimeDays ?? 7,
-          source: (ps.leadTimeDays === null && sup.leadTimeDays === null) ? "SCHEMA_DEFAULT" : "ODOO_VERIFIED"
+          value: ps.leadTimeDays,
+          source:
+            ps.leadTimeDays == null
+              ? "UNKNOWN"
+              : ps.source.toLowerCase() === "odoo" &&
+                ps.sourceEntity === "product.supplierinfo"
+                ? "ODOO_SUPPLIERINFO"
+                : normalizeProvenanceSource(ps.source),
         },
-        minimumOrderQuantity: ps.minimumOrderQuantity || 0,
-        supplierUnitCost: ps.supplierUnitCost as number,
+        minimumOrderQuantity: ps.minimumOrderQuantity,
+        supplierUnitCost: ps.supplierUnitCost,
         sequence: 0
       });
     }
@@ -115,11 +141,11 @@ export async function buildSupplyRiskSnapshot(companyId: number): Promise<{ snap
       incomingQuantity: item.incomingQuantity,
       safetyStock: {
         value: item.safetyStock,
-        source: item.safetyStock === 0 ? "SCHEMA_DEFAULT" : "ODOO_VERIFIED"
+        source: normalizeProvenanceSource(item.safetyStockSource),
       },
       leadTimeDays: {
         value: item.leadTimeDays,
-        source: item.leadTimeSource as "ODOO_VERIFIED" | "SCHEMA_DEFAULT" | "UNKNOWN"
+        source: normalizeProvenanceSource(item.leadTimeSource),
       },
 
       suppliers,

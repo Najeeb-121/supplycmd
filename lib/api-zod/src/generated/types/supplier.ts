@@ -10,9 +10,9 @@ export interface Supplier {
   id: number;
   name: string;
   country: string;
-  leadTimeDays: number;
-  onTimeDeliveryRate: number;
-  qualityScore: number;
-  fillRate: number;
+  leadTimeDays: number | null;
+  onTimeDeliveryRate: number | null;
+  qualityScore: number | null;
+  fillRate: number | null;
   createdAt: string;
 }

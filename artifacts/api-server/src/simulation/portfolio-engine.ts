@@ -19,35 +19,37 @@ export function simulatePortfolio(
 ): PortfolioCompositionResult {
   // 1. Deep clone baseline
   const scenarioSnapshot: SupplyRiskSnapshot = JSON.parse(JSON.stringify(baselineSnapshot));
-  
+
   // 2. Canonical Sort
   const sortedMitigations = [...mitigations].sort((a, b) => {
     const pA = getPriority(a.type);
     const pB = getPriority(b.type);
     if (pA !== pB) return pA - pB;
-    
+
     if (a.type === "ALTERNATE_SUPPLIER" && b.type === "ALTERNATE_SUPPLIER") {
       const productA = baselineSnapshot.products[a.targetProductId!];
       const supA = productA?.suppliers.find(s => s.supplierId === a.targetSupplierId);
-      const costA = supA ? supA.supplierUnitCost : Number.MAX_SAFE_INTEGER;
-      
+      const costA =
+        supA?.supplierUnitCost ?? Number.MAX_SAFE_INTEGER;
+
       const productB = baselineSnapshot.products[b.targetProductId!];
       const supB = productB?.suppliers.find(s => s.supplierId === b.targetSupplierId);
-      const costB = supB ? supB.supplierUnitCost : Number.MAX_SAFE_INTEGER;
-      
+      const costB =
+        supB?.supplierUnitCost ?? Number.MAX_SAFE_INTEGER;
+
       if (costA !== costB) return costA - costB;
     }
-    
+
     return a.id.localeCompare(b.id);
   });
 
   const actionExecutionTraces: PortfolioActionTrace[] = [];
   let totalProcurementCostDelta: number | "UNKNOWN" = 0;
   let isCostUnknown = false;
-  
+
   // Track shortages per component
   const dynamicShortages = new Map<number, number>();
-  
+
   for (const productIdStr of Object.keys(scenarioSnapshot.products)) {
     const productId = Number(productIdStr);
     const p = scenarioSnapshot.products[productId];
@@ -59,12 +61,12 @@ export function simulatePortfolio(
     const action = sortedMitigations[i];
     const targetProductId = action.targetProductId;
     if (!targetProductId) continue;
-    
+
     const product = scenarioSnapshot.products[targetProductId];
     if (!product) continue;
 
     let currentShortage = dynamicShortages.get(targetProductId) || 0;
-    
+
     if (currentShortage <= 0) {
       actionExecutionTraces.push({
         mitigationId: action.id,
@@ -78,7 +80,7 @@ export function simulatePortfolio(
 
     let executedQty = 0;
     let executedCost: number | "UNKNOWN" = 0;
-    
+
     if (action.type === "COVER_FROM_AVAILABLE_STOCK") {
       executedQty = Math.min(currentShortage, product.availableStock);
       if (executedQty > 0) {
@@ -107,16 +109,15 @@ export function simulatePortfolio(
       if (executedQty > 0) {
         currentShortage -= executedQty;
         const sup = product.suppliers.find(s => s.supplierId === action.targetSupplierId);
-        
-        let arrivalDate = undefined;
-        if (sup && sup.leadTimeDays && sup.leadTimeDays.value > 0) {
-          const today = new Date();
-          today.setDate(today.getDate() + sup.leadTimeDays.value);
-          arrivalDate = today.toISOString().split("T")[0];
-        }
-        
+
+        const arrivalDate =
+          action.mitigationDate != null &&
+            action.mitigationDateProvenance !== "UNKNOWN"
+            ? action.mitigationDate
+            : null;
+
         const syntheticPoId = 9000000 + targetProductId + i;
-        
+
         product.inboundPOs.push({
           poId: syntheticPoId,
           odooId: null,
@@ -125,13 +126,17 @@ export function simulatePortfolio(
           orderedQuantity: executedQty,
           receivedQuantity: 0,
           remainingQuantity: executedQty,
-          expectedArrivalDate: arrivalDate || "2099-12-31",
+          expectedArrivalDate: arrivalDate,
           status: "confirmed",
           confirmedForSupply: true,
           currentlyInbound: true
         });
-        
-        if (action.mitigationCostProvenance === "UNKNOWN" || !sup || sup.supplierUnitCost === undefined) {
+
+        if (
+          action.mitigationCostProvenance === "UNKNOWN" ||
+          !sup ||
+          sup.supplierUnitCost == null
+        ) {
           executedCost = "UNKNOWN";
         } else {
           executedCost = executedQty * sup.supplierUnitCost;
@@ -140,7 +145,7 @@ export function simulatePortfolio(
     }
 
     dynamicShortages.set(targetProductId, currentShortage);
-    
+
     if (executedQty > 0) {
       if (executedCost === "UNKNOWN") {
         isCostUnknown = true;
@@ -149,7 +154,7 @@ export function simulatePortfolio(
         (totalProcurementCostDelta as number) += executedCost;
       }
     }
-    
+
     actionExecutionTraces.push({
       mitigationId: action.id,
       type: action.type,
@@ -168,13 +173,13 @@ export function simulatePortfolio(
 
   let baselineRevenueTotal = 0;
   let isBaselineRevenueUnknown = false;
-  
+
   const uniqueProducts = Array.from(new Set(sortedMitigations.map(m => m.targetProductId).filter(p => p !== undefined))) as number[];
-  
+
   for (const productId of uniqueProducts) {
     const productBaselineShortage = baselineSnapshot.products[productId]?.reservationShortage || 0;
     const baselinePegging = calculateDownstreamPegging(baselineSnapshot, productId, productBaselineShortage, priceLookup);
-    
+
     for (const so of baselinePegging.affectedSalesOrders) {
       const existing = baselineRevenueCache.get(so.salesOrderId);
       if (existing === undefined) {
@@ -196,7 +201,7 @@ export function simulatePortfolio(
 
     const productScenarioShortage = dynamicShortages.get(productId) || 0;
     const scenarioPegging = calculateDownstreamPegging(scenarioSnapshot, productId, productScenarioShortage, priceLookup);
-    
+
     for (const so of scenarioPegging.affectedSalesOrders) {
       const existing = scenarioSalesOrdersMap.get(so.salesOrderId);
       if (existing === undefined) {
@@ -214,7 +219,7 @@ export function simulatePortfolio(
 
   let scenarioRevenueTotal = 0;
   let isScenarioRevenueUnknown = false;
-  
+
   const finalAffectedSOs: AffectedSalesOrderPortfolio[] = [];
   Array.from(scenarioSalesOrdersMap.entries()).forEach(([soId, data]) => {
     finalAffectedSOs.push({

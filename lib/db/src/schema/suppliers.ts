@@ -14,13 +14,13 @@ export const suppliersTable = pgTable("suppliers", {
   // as the idempotency key so re-syncing updates instead of duplicating.
   // Unique per company, not globally.
   odooId: integer("odoo_id"),
-  leadTimeDays: real("lead_time_days").notNull().default(0),
+  leadTimeDays: real("lead_time_days"),
   // On-Time Delivery Rate, Quality Score, and Fill Rate all use the same
   // 0-100 percentage scale for consistency with the API validation bounds
   // and the frontend display (which renders them directly with a "%" suffix).
-  onTimeDeliveryRate: real("on_time_delivery_rate").notNull().default(0),
-  qualityScore: real("quality_score").notNull().default(0),
-  fillRate: real("fill_rate").notNull().default(0),
+  onTimeDeliveryRate: real("on_time_delivery_rate"),
+  qualityScore: real("quality_score"),
+  fillRate: real("fill_rate"),
   supplierCode: text("supplier_code"),
   active: boolean("active").notNull().default(true),
   currency: text("currency"),

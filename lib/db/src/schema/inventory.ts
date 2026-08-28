@@ -38,20 +38,30 @@ export const inventoryItemsTable = pgTable("inventory_items", {
   reservedQuantity: real("reserved_quantity").notNull().default(0),
   minStock: real("min_stock").notNull().default(0),
   maxStock: real("max_stock"),
-  // EOQ Calculation inputs
-  annualDemand: real("annual_demand").notNull().default(0),
-  holdingCostRate: real("holding_cost_rate").notNull().default(0.25),
-  orderingCost: real("ordering_cost").notNull().default(0),
-  leadTimeDays: real("lead_time_days").notNull().default(7),
-  // Computed — stored for display
-  reorderPoint: real("reorder_point").notNull().default(0),
-  safetyStock: real("safety_stock").notNull().default(0),
-  eoq: real("eoq").notNull().default(0),
+  // Planning inputs — nullable when the business has not provided evidence.
+  annualDemand: real("annual_demand"),
+  annualDemandSource: text("annual_demand_source").notNull().default("UNKNOWN"),
+  holdingCostRate: real("holding_cost_rate"),
+  holdingCostRateSource: text("holding_cost_rate_source").notNull().default("UNKNOWN"),
+  orderingCost: real("ordering_cost"),
+  orderingCostSource: text("ordering_cost_source").notNull().default("UNKNOWN"),
+  leadTimeDays: real("lead_time_days"),
+  leadTimeSource: text("lead_time_source").notNull().default("UNKNOWN"),
+
+  // Planning outputs — null unless their required inputs are supportable.
+  reorderPoint: real("reorder_point"),
+  reorderPointSource: text("reorder_point_source").notNull().default("UNKNOWN"),
+  safetyStock: real("safety_stock"),
+  safetyStockSource: text("safety_stock_source").notNull().default("UNKNOWN"),
+  eoq: real("eoq"),
+  eoqSource: text("eoq_source").notNull().default("UNKNOWN"),
+
+  // Operational quantities remain deterministic numeric facts.
   availableQuantity: real("available_quantity").notNull().default(0),
   rawAvailableQuantity: real("raw_available_quantity").notNull().default(0),
   reservationShortage: real("reservation_shortage").notNull().default(0),
   incomingQuantity: real("incoming_quantity").notNull().default(0),
-  leadTimeSource: text("lead_time_source").notNull().default("Odoo"),
+
   // Lifecycle
   archived: boolean("archived").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

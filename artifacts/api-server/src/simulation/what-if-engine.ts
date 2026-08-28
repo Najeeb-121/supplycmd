@@ -7,7 +7,7 @@ export function simulateMitigationAction(
   mitigation: RiskMitigation
 ): WhatIfResult {
   const targetProductId = exposure.targetProductId;
-  
+
   const baseResult: WhatIfResult = {
     actionApplied: mitigation,
     scenarioValidity: "VALID",
@@ -63,7 +63,7 @@ export function simulateMitigationAction(
     }
   }
   baseResult.baselineMetrics.procurementCost = baselineProcurementCost;
-  baseResult.scenarioMetrics.procurementCost = baselineProcurementCost; 
+  baseResult.scenarioMetrics.procurementCost = baselineProcurementCost;
 
   let scenarioProcurementCost = baselineProcurementCost;
   let scenarioShortage = exposure.residualShortage;
@@ -74,7 +74,7 @@ export function simulateMitigationAction(
       baseResult.scenarioValidity = "INVALID_INSUFFICIENT_DATA";
       return baseResult;
     }
-    
+
     const alternateSupplier = product.suppliers.find(s => s.supplierId === targetSupplierId);
     if (!alternateSupplier) {
       baseResult.scenarioValidity = "INVALID_INSUFFICIENT_DATA";
@@ -85,22 +85,24 @@ export function simulateMitigationAction(
 
     if (qtyToOrder > 0) {
       // Inject hypothetical PO
-      const today = new Date();
-      let arrivalDate = undefined;
-      if (alternateSupplier.leadTimeDays && alternateSupplier.leadTimeDays.value > 0) {
-        today.setDate(today.getDate() + alternateSupplier.leadTimeDays.value);
-        arrivalDate = today.toISOString().split("T")[0];
-      }
+      const arrivalDate =
+        mitigation.mitigationDate != null &&
+          mitigation.mitigationDateProvenance !== "UNKNOWN"
+          ? mitigation.mitigationDate
+          : null;
+
+      const syntheticPoId =
+        -(targetProductId * 1_000_000 + targetSupplierId);
 
       scenarioProduct.inboundPOs.push({
-        poId: 999999 + Math.floor(Math.random() * 1000),
+        poId: syntheticPoId,
         odooId: null,
         supplierId: targetSupplierId,
         productId: targetProductId,
         orderedQuantity: qtyToOrder,
         receivedQuantity: 0,
         remainingQuantity: qtyToOrder,
-        expectedArrivalDate: arrivalDate || "2099-12-31", 
+        expectedArrivalDate: arrivalDate,
         status: "confirmed",
         confirmedForSupply: true,
         currentlyInbound: true
@@ -109,8 +111,12 @@ export function simulateMitigationAction(
       scenarioShortage = Math.max(0, exposure.residualShortage - qtyToOrder);
 
       // Calculate the scenario procurement cost addition
-      if (alternateSupplier.supplierUnitCost > 0) {
-        scenarioProcurementCost += (qtyToOrder * alternateSupplier.supplierUnitCost);
+      if (
+        alternateSupplier.supplierUnitCost != null &&
+        alternateSupplier.supplierUnitCost > 0
+      ) {
+        scenarioProcurementCost +=
+          qtyToOrder * alternateSupplier.supplierUnitCost;
         baseResult.provenance.costSource = "CALCULATED";
       } else {
         baseResult.provenance.costSource = "UNKNOWN";
@@ -119,8 +125,21 @@ export function simulateMitigationAction(
 
     baseResult.scenarioAssumptions.push("Alternate supplier quantity is hypothetical.");
     baseResult.scenarioAssumptions.push("Supplier capacity is not verified.");
-    baseResult.scenarioAssumptions.push("Lead time is based on verified supplier lead time.");
-    baseResult.provenance.dateSource = "SCENARIO_ASSUMPTION";
+
+    if (
+      mitigation.mitigationDate != null &&
+      mitigation.mitigationDateProvenance !== "UNKNOWN"
+    ) {
+      baseResult.scenarioAssumptions.push(
+        "Arrival date is supplied by the mitigation scenario.",
+      );
+      baseResult.provenance.dateSource = "SCENARIO_ASSUMPTION";
+    } else {
+      baseResult.scenarioAssumptions.push(
+        "Alternate supplier arrival date is not determinable.",
+      );
+      baseResult.provenance.dateSource = "UNKNOWN";
+    }
 
   } else if (mitigation.type === "FOLLOW_UP_INBOUND") {
     if (!mitigation.mitigationDate) {
@@ -128,14 +147,17 @@ export function simulateMitigationAction(
       return baseResult;
     }
 
-    let earliestPo = null;
-    let earliestDateStr = "2099-12-31";
-    for (const po of scenarioProduct.inboundPOs) {
-      if (po.currentlyInbound && po.expectedArrivalDate && po.expectedArrivalDate < earliestDateStr) {
-        earliestDateStr = po.expectedArrivalDate;
-        earliestPo = po;
-      }
-    }
+    const earliestPo = scenarioProduct.inboundPOs
+      .filter(
+        (po) =>
+          po.currentlyInbound &&
+          po.expectedArrivalDate != null,
+      )
+      .sort(
+        (a, b) =>
+          a.expectedArrivalDate!.localeCompare(b.expectedArrivalDate!) ||
+          a.poId - b.poId,
+      )[0];
 
     if (earliestPo) {
       earliestPo.expectedArrivalDate = mitigation.mitigationDate;
@@ -156,11 +178,11 @@ export function simulateMitigationAction(
       baseResult.scenarioValidity = "INVALID_INSUFFICIENT_DATA";
       return baseResult;
     }
-    
+
     // Simulate consuming stock by reducing availableStock and residualShortage
     scenarioProduct.availableStock -= qtyToCover;
     scenarioShortage = Math.max(0, exposure.residualShortage - qtyToCover);
-    
+
     baseResult.provenance.dateSource = "SCENARIO_ASSUMPTION";
     baseResult.scenarioAssumptions.push("Available stock coverage is hypothetically allocated.");
 

@@ -29,14 +29,20 @@ export interface InventoryItem {
   incomingQuantity: number;
   minStock: number;
   maxStock?: number;
-  annualDemand: number;
-  holdingCostRate: number;
-  orderingCost: number;
-  leadTimeDays: number;
+  annualDemand: number | null;
+  annualDemandSource: string;
+  holdingCostRate: number | null;
+  holdingCostRateSource: string;
+  orderingCost: number | null;
+  orderingCostSource: string;
+  leadTimeDays: number | null;
   leadTimeSource: string;
-  reorderPoint: number;
-  safetyStock: number;
-  eoq: number;
+  reorderPoint: number | null;
+  reorderPointSource: string;
+  safetyStock: number | null;
+  safetyStockSource: string;
+  eoq: number | null;
+  eoqSource: string;
   archived: boolean;
   createdAt: string;
 }

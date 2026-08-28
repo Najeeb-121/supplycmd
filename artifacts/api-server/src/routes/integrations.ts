@@ -226,7 +226,7 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
       const candidate = {
         name,
         country: many2oneLabel(p.country_id, "Unknown"),
-        leadTimeDays: leadTimeDays ?? 7,
+        leadTimeDays,
         onTimeDeliveryRate,
         qualityScore: null,
         fillRate: null,
@@ -243,7 +243,19 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
           .values({ ...validated.data, companyId, odooId })
           .onConflictDoUpdate({
             target: [suppliersTable.companyId, suppliersTable.odooId],
-            set: { name: validated.data.name, country: validated.data.country },
+            set: {
+              name: validated.data.name,
+              country: validated.data.country,
+              ...(validated.data.leadTimeDays != null
+                ? { leadTimeDays: validated.data.leadTimeDays }
+                : {}),
+              ...(validated.data.onTimeDeliveryRate != null
+                ? {
+                  onTimeDeliveryRate:
+                    validated.data.onTimeDeliveryRate,
+                }
+                : {}),
+            },
           });
         synced++;
       } catch (err) {
@@ -346,10 +358,6 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
         category: many2oneLabel(p.categ_id, "Uncategorized"),
         currentStock: Math.round(num(p.qty_available)),
         unitCost: num(p.standard_price),
-        annualDemand: 0,
-        holdingCostRate: 0.25,
-        orderingCost: 0,
-        leadTimeDays: 7,
       };
       const validated = StrictInventoryBody.safeParse(candidate);
       if (!validated.success) {
@@ -480,10 +488,10 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
           const candidate = {
             name,
             country: many2oneLabel(p.country_id, "Unknown"),
-            leadTimeDays: 7,
-            onTimeDeliveryRate: 95,
-            qualityScore: 90,
-            fillRate: 97,
+            leadTimeDays: null,
+            onTimeDeliveryRate: null,
+            qualityScore: null,
+            fillRate: null,
           };
           const validated = StrictSupplierBody.safeParse(candidate);
           if (validated.success) {

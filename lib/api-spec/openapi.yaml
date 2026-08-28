@@ -791,7 +791,7 @@ components:
 
     InventoryItem:
       type: object
-      required: [id, name, sku, category, unitOfMeasure, currentStock, reservedQuantity, availableQuantity, rawAvailableQuantity, reservationShortage, incomingQuantity, minStock, reorderPoint, safetyStock, eoq, leadTimeDays, leadTimeSource, unitCost, annualDemand, holdingCostRate, orderingCost, archived, createdAt]    
+      required: [id, name, sku, category, unitOfMeasure, currentStock, reservedQuantity, availableQuantity, rawAvailableQuantity, reservationShortage, incomingQuantity, minStock, annualDemand, annualDemandSource, holdingCostRate, holdingCostRateSource, orderingCost, orderingCostSource, leadTimeDays, leadTimeSource, reorderPoint, reorderPointSource, safetyStock, safetyStockSource, eoq, eoqSource, unitCost, archived, createdAt]
       properties:
         id:               { type: number }
         name:             { type: string }
@@ -815,20 +815,26 @@ components:
         incomingQuantity:     { type: number }
         minStock:         { type: number }
         maxStock:         { type: number }
-        annualDemand:     { type: number }
-        holdingCostRate:  { type: number }
-        orderingCost:     { type: number }
-        leadTimeDays:     { type: number }
-        leadTimeSource: { type: string }
-        reorderPoint:     { type: number }
-        safetyStock:      { type: number }
-        eoq:              { type: number }
+        annualDemand:          { type: number, nullable: true }
+        annualDemandSource:    { type: string }
+        holdingCostRate:       { type: number, nullable: true }
+        holdingCostRateSource: { type: string }
+        orderingCost:          { type: number, nullable: true }
+        orderingCostSource:    { type: string }
+        leadTimeDays:          { type: number, nullable: true }
+        leadTimeSource:        { type: string }
+        reorderPoint:          { type: number, nullable: true }
+        reorderPointSource:    { type: string }
+        safetyStock:           { type: number, nullable: true }
+        safetyStockSource:     { type: string }
+        eoq:                   { type: number, nullable: true }
+        eoqSource:             { type: string }
         archived:         { type: boolean }
         createdAt:        { type: string }
 
     InventoryItemInput:
       type: object
-      required: [name, sku, category, currentStock, unitCost, annualDemand, holdingCostRate, orderingCost, leadTimeDays]
+      required: [name, sku, category, currentStock, unitCost]
       properties:
         name:             { type: string }
         sku:              { type: string }
@@ -845,12 +851,12 @@ components:
         reservedQuantity: { type: number }
         minStock:         { type: number }
         maxStock:         { type: number }
-        leadTimeDays:     { type: number }
+        leadTimeDays:     { type: number, nullable: true }
         unitCost:         { type: number }
         sellingPrice:     { type: number }
-        annualDemand:     { type: number }
-        holdingCostRate:  { type: number }
-        orderingCost:     { type: number }
+        annualDemand:     { type: number, nullable: true }
+        holdingCostRate:  { type: number, nullable: true }
+        orderingCost:     { type: number, nullable: true }
 
     InventoryItemUpdate:
       type: object
@@ -869,12 +875,12 @@ components:
         reservedQuantity: { type: number }
         minStock:         { type: number }
         maxStock:         { type: number }
-        leadTimeDays:     { type: number }
+        leadTimeDays:     { type: number, nullable: true }
         unitCost:         { type: number }
         sellingPrice:     { type: number }
-        annualDemand:     { type: number }
-        holdingCostRate:  { type: number }
-        orderingCost:     { type: number }
+        annualDemand:     { type: number, nullable: true }
+        holdingCostRate:  { type: number, nullable: true }
+        orderingCost:     { type: number, nullable: true }
         archived:         { type: boolean }
 
     ReorderAlert:
@@ -960,32 +966,32 @@ components:
         id:                  { type: number }
         name:                { type: string }
         country:             { type: string }
-        leadTimeDays:        { type: number }
-        onTimeDeliveryRate:  { type: number }
-        qualityScore:        { type: number }
-        fillRate:            { type: number }
+        leadTimeDays:        { type: number, nullable: true }
+        onTimeDeliveryRate:  { type: number, nullable: true }
+        qualityScore:        { type: number, nullable: true }
+        fillRate:            { type: number, nullable: true }
         createdAt:           { type: string }
 
     SupplierInput:
       type: object
-      required: [name, country, leadTimeDays, onTimeDeliveryRate, qualityScore, fillRate]
+      required: [name, country]
       properties:
         name:                { type: string }
         country:             { type: string }
-        leadTimeDays:        { type: number }
-        onTimeDeliveryRate:  { type: number }
-        qualityScore:        { type: number }
-        fillRate:            { type: number }
+        leadTimeDays:        { type: number, nullable: true }
+        onTimeDeliveryRate:  { type: number, nullable: true }
+        qualityScore:        { type: number, nullable: true }
+        fillRate:            { type: number, nullable: true }
 
     SupplierUpdate:
       type: object
       properties:
         name:                { type: string }
         country:             { type: string }
-        leadTimeDays:        { type: number }
-        onTimeDeliveryRate:  { type: number }
-        qualityScore:        { type: number }
-        fillRate:            { type: number }
+        leadTimeDays:        { type: number, nullable: true }
+        onTimeDeliveryRate:  { type: number, nullable: true }
+        qualityScore:        { type: number, nullable: true }
+        fillRate:            { type: number, nullable: true }
 
     # --- Production ---
     ProductionRun:
@@ -1116,16 +1122,16 @@ components:
         openOrders:          { type: number }
         pendingOrderValue:   { type: number }
         oeePercent:          { type: number }
-        forecastAccuracy:    { type: number }
-        fillRate:            { type: number }
-        otifPercent:         { type: number }
+        forecastAccuracy:    { type: number, nullable: true }
+        fillRate:            { type: number, nullable: true }
+        otifPercent:         { type: number, nullable: true }
 
     InventoryHealth:
       type: object
       required: [avgTurnoverRate, avgDaysOfSupply, overstockCount, stockoutCount, healthyCount, categoryBreakdown]
       properties:
-        avgTurnoverRate: { type: number }
-        avgDaysOfSupply: { type: number }
+        avgTurnoverRate: { type: number, nullable: true }
+        avgDaysOfSupply: { type: number, nullable: true }
         overstockCount:  { type: number }
         stockoutCount:   { type: number }
         healthyCount:    { type: number }
@@ -1141,16 +1147,16 @@ components:
         category:    { type: string }
         count:       { type: number }
         value:       { type: number }
-        avgTurnover: { type: number }
+        avgTurnover: { type: number, nullable: true }
 
     LogisticsKpis:
       type: object
       required: [fillRate, otifPercent, avgLeadTimeDays, avgSupplierScore, ordersDeliveredOnTime, ordersFulfilled, totalOrders]
       properties:
-        fillRate:               { type: number }
-        otifPercent:            { type: number }
-        avgLeadTimeDays:        { type: number }
-        avgSupplierScore:       { type: number }
+        fillRate:               { type: number, nullable: true }
+        otifPercent:            { type: number, nullable: true }
+        avgLeadTimeDays:        { type: number, nullable: true }
+        avgSupplierScore:       { type: number, nullable: true }
         ordersDeliveredOnTime:  { type: number }
         ordersFulfilled:        { type: number }
         totalOrders:            { type: number }

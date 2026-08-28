@@ -22,10 +22,10 @@ export interface InventoryItemInput {
   reservedQuantity?: number;
   minStock?: number;
   maxStock?: number;
-  leadTimeDays: number;
+  leadTimeDays?: number | null;
   unitCost: number;
   sellingPrice?: number;
-  annualDemand: number;
-  holdingCostRate: number;
-  orderingCost: number;
+  annualDemand?: number | null;
+  holdingCostRate?: number | null;
+  orderingCost?: number | null;
 }

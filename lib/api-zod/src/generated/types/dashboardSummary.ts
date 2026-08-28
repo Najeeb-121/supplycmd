@@ -14,7 +14,7 @@ export interface DashboardSummary {
   openOrders: number;
   pendingOrderValue: number;
   oeePercent: number;
-  forecastAccuracy: number;
-  fillRate: number;
-  otifPercent: number;
+  forecastAccuracy: number | null;
+  fillRate: number | null;
+  otifPercent: number | null;
 }

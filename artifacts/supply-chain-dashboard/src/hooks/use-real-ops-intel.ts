@@ -79,26 +79,44 @@ export function useRealOpsIntel(): { ops: OpsIntelState; isFetching: boolean; re
 
     // 3. Supplier Performance
     const supPerfMeta = kpisMeta.get("supplier_performance")!;
-    let supPerfVal = supPerfMeta.baseline;
-    if (suppliersQuery.data && suppliersQuery.data.length > 0) {
-      const avgQuality = suppliersQuery.data.reduce((acc, s) => acc + s.qualityScore, 0) / suppliersQuery.data.length;
-      const avgOtd = suppliersQuery.data.reduce((acc, s) => acc + s.onTimeDeliveryRate, 0) / suppliersQuery.data.length;
-      supPerfVal = (avgQuality + avgOtd) / 2;
-    }
-    const supPerfKpi: KpiMetric = {
-      id: "supplier_performance",
-      label: supPerfMeta.label,
-      description: supPerfMeta.description,
-      value: supPerfVal,
-      prevValue: Math.max(0, supPerfVal - 0.5),
-      unit: supPerfMeta.unit,
-      format: supPerfMeta.format,
-      goodDirection: supPerfMeta.goodDirection,
-      target: supPerfMeta.target,
-      status: resolveStatus(supPerfMeta, supPerfVal),
-      trend: "flat",
-      sparkline: buildSparkline(supPerfMeta, supPerfVal),
-    };
+
+    const qualityValues =
+      suppliersQuery.data
+        ?.map((supplier) => supplier.qualityScore)
+        .filter((value): value is number => value != null) ?? [];
+
+    const onTimeValues =
+      suppliersQuery.data
+        ?.map((supplier) => supplier.onTimeDeliveryRate)
+        .filter((value): value is number => value != null) ?? [];
+
+    const supPerfVal =
+      qualityValues.length > 0 && onTimeValues.length > 0
+        ? (
+          qualityValues.reduce((sum, value) => sum + value, 0) /
+          qualityValues.length +
+          onTimeValues.reduce((sum, value) => sum + value, 0) /
+          onTimeValues.length
+        ) / 2
+        : null;
+
+    const supPerfKpi: KpiMetric | null =
+      supPerfVal == null
+        ? null
+        : {
+          id: "supplier_performance",
+          label: supPerfMeta.label,
+          description: supPerfMeta.description,
+          value: supPerfVal,
+          prevValue: Math.max(0, supPerfVal - 0.5),
+          unit: supPerfMeta.unit,
+          format: supPerfMeta.format,
+          goodDirection: supPerfMeta.goodDirection,
+          target: supPerfMeta.target,
+          status: resolveStatus(supPerfMeta, supPerfVal),
+          trend: "flat",
+          sparkline: buildSparkline(supPerfMeta, supPerfVal),
+        };
 
     // 4. Warehouse Fill Rate
     const whFillMeta = kpisMeta.get("warehouse_fill_rate")!;
@@ -129,48 +147,29 @@ export function useRealOpsIntel(): { ops: OpsIntelState; isFetching: boolean; re
 
     // 5. Purchase Lead Time
     const leadTimeMeta = kpisMeta.get("purchase_lead_time")!;
-    const leadTimeVal = kpisQuery.data?.avgLeadTimeDays ?? leadTimeMeta.baseline;
-    const leadTimeKpi: KpiMetric = {
-      id: "purchase_lead_time",
-      label: leadTimeMeta.label,
-      description: leadTimeMeta.description,
-      value: leadTimeVal,
-      prevValue: leadTimeVal + 0.2, // Previously higher (worse)
-      unit: leadTimeMeta.unit,
-      format: leadTimeMeta.format,
-      goodDirection: leadTimeMeta.goodDirection,
-      target: leadTimeMeta.target,
-      status: resolveStatus(leadTimeMeta, leadTimeVal),
-      trend: "down",
-      sparkline: buildSparkline(leadTimeMeta, leadTimeVal),
-    };
+    const leadTimeVal =
+      kpisQuery.data?.avgLeadTimeDays ?? null;
 
-    // 6. Stock Turnover
-    const turnoverMeta = kpisMeta.get("stock_turnover")!;
-    let turnoverVal = turnoverMeta.baseline;
-    if (inventoryQuery.data && inventoryQuery.data.length > 0) {
-      let annualTotal = 0;
-      let stockTotal = 0;
-      inventoryQuery.data.forEach((item) => {
-        annualTotal += item.annualDemand;
-        stockTotal += item.currentStock;
-      });
-      turnoverVal = stockTotal > 0 ? (annualTotal / stockTotal) : turnoverMeta.baseline;
-    }
-    const turnoverKpi: KpiMetric = {
-      id: "stock_turnover",
-      label: turnoverMeta.label,
-      description: turnoverMeta.description,
-      value: turnoverVal,
-      prevValue: Math.max(0, turnoverVal - 0.1),
-      unit: turnoverMeta.unit,
-      format: turnoverMeta.format,
-      goodDirection: turnoverMeta.goodDirection,
-      target: turnoverMeta.target,
-      status: resolveStatus(turnoverMeta, turnoverVal),
-      trend: "up",
-      sparkline: buildSparkline(turnoverMeta, turnoverVal),
-    };
+    const leadTimeKpi: KpiMetric | null =
+      leadTimeVal == null
+        ? null
+        : {
+          id: "purchase_lead_time",
+          label: leadTimeMeta.label,
+          description: leadTimeMeta.description,
+          value: leadTimeVal,
+          prevValue: leadTimeVal + 0.2,
+          unit: leadTimeMeta.unit,
+          format: leadTimeMeta.format,
+          goodDirection: leadTimeMeta.goodDirection,
+          target: leadTimeMeta.target,
+          status: resolveStatus(leadTimeMeta, leadTimeVal),
+          trend: "down",
+          sparkline: buildSparkline(leadTimeMeta, leadTimeVal),
+        };
+
+
+    // Stock turnover is omitted because average inventory history is unavailable.
 
     // 7. Late Deliveries
     const lateMeta = kpisMeta.get("late_deliveries")!;
@@ -200,31 +199,35 @@ export function useRealOpsIntel(): { ops: OpsIntelState; isFetching: boolean; re
 
     // 8. Order Fulfillment Rate
     const otifMeta = kpisMeta.get("order_fulfillment_rate")!;
-    const otifVal = kpisQuery.data?.otifPercent ?? otifMeta.baseline;
-    const otifKpi: KpiMetric = {
-      id: "order_fulfillment_rate",
-      label: otifMeta.label,
-      description: otifMeta.description,
-      value: otifVal,
-      prevValue: Math.max(0, otifVal - 0.5),
-      unit: otifMeta.unit,
-      format: otifMeta.format,
-      goodDirection: otifMeta.goodDirection,
-      target: otifMeta.target,
-      status: resolveStatus(otifMeta, otifVal),
-      trend: "up",
-      sparkline: buildSparkline(otifMeta, otifVal),
-    };
+    const otifVal =
+      kpisQuery.data?.otifPercent ?? null;
+
+    const otifKpi: KpiMetric | null =
+      otifVal == null
+        ? null
+        : {
+          id: "order_fulfillment_rate",
+          label: otifMeta.label,
+          description: otifMeta.description,
+          value: otifVal,
+          prevValue: Math.max(0, otifVal - 0.5),
+          unit: otifMeta.unit,
+          format: otifMeta.format,
+          goodDirection: otifMeta.goodDirection,
+          target: otifMeta.target,
+          status: resolveStatus(otifMeta, otifVal),
+          trend: "up",
+          sparkline: buildSparkline(otifMeta, otifVal),
+        };
 
     const kpis: KpiMetric[] = [
       invAccKpi,
       prodUtilKpi,
-      supPerfKpi,
+      ...(supPerfKpi ? [supPerfKpi] : []),
       whFillKpi,
-      leadTimeKpi,
-      turnoverKpi,
+      ...(leadTimeKpi ? [leadTimeKpi] : []),
       lateKpi,
-      otifKpi,
+      ...(otifKpi ? [otifKpi] : []),
     ];
 
     const healthScore = computeHealthScore(kpis);

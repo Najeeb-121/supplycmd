@@ -140,11 +140,21 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
   let consumptionStatus: "VERIFIED" | "ESTIMATED" | "MISSING" = "MISSING";
   if (productId) {
     const [inv] = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.id, productId), eq(inventoryItemsTable.companyId, req.user!.companyId)));
-    if (inv && inv.annualDemand > 0) {
-      dailyConsumption.rate = Number((inv.annualDemand / 365).toFixed(2));
-      dailyConsumption.sampleDays = 365;
-      dailyConsumption.confidence = "High";
-      consumptionStatus = "VERIFIED";
+    const hasSupportedAnnualDemand =
+      inv?.annualDemand != null &&
+      inv.annualDemand > 0 &&
+      !["UNKNOWN", "SCHEMA_DEFAULT"].includes(inv.annualDemandSource);
+
+    if (hasSupportedAnnualDemand) {
+      const isVerifiedHistory =
+        inv.annualDemandSource === "CALCULATED_FROM_VERIFIED_HISTORY";
+
+      dailyConsumption.rate = Number(
+        (inv.annualDemand! / 365).toFixed(2),
+      );
+      dailyConsumption.sampleDays = isVerifiedHistory ? 365 : 0;
+      dailyConsumption.confidence = isVerifiedHistory ? "High" : "Medium";
+      consumptionStatus = isVerifiedHistory ? "VERIFIED" : "ESTIMATED";
     }
   }
 

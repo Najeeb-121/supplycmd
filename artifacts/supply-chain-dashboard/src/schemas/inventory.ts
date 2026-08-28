@@ -1,5 +1,21 @@
 import { z } from "zod";
+const blankToUndefined = (value: unknown) =>
+  value === "" || value == null ? undefined : value;
 
+const optionalNonnegativeNumber = z.preprocess(
+  blankToUndefined,
+  z.coerce.number().min(0).optional(),
+);
+
+const optionalNonnegativeInteger = z.preprocess(
+  blankToUndefined,
+  z.coerce.number().int().min(0).optional(),
+);
+
+const optionalHoldingCostRate = z.preprocess(
+  blankToUndefined,
+  z.coerce.number().min(0).max(1).optional(),
+);
 export const itemSchema = z
   .object({
     name: z.string().min(2),
@@ -14,15 +30,15 @@ export const itemSchema = z
     binLocation: z.string().optional(),
     supplierName: z.string().optional(),
     unitCost: z.coerce.number().min(0),
-    sellingPrice: z.coerce.number().min(0).optional(),
+    sellingPrice: optionalNonnegativeNumber,
     currentStock: z.coerce.number().int().min(0),
     reservedQuantity: z.coerce.number().int().min(0).default(0),
     minStock: z.coerce.number().int().min(0).default(0),
-    maxStock: z.coerce.number().int().min(0).optional(),
-    annualDemand: z.coerce.number().min(0),
-    leadTimeDays: z.coerce.number().int().min(0),
-    orderingCost: z.coerce.number().min(0),
-    holdingCostRate: z.coerce.number().min(0).max(1),
+    maxStock: optionalNonnegativeInteger,
+    annualDemand: optionalNonnegativeNumber,
+    leadTimeDays: optionalNonnegativeInteger,
+    orderingCost: optionalNonnegativeNumber,
+    holdingCostRate: optionalHoldingCostRate,
   })
   .refine((d) => d.maxStock == null || d.maxStock >= d.minStock, {
     message: "Max Stock must be ≥ Min Stock",

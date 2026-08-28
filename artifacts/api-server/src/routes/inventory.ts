@@ -23,9 +23,11 @@ export const StrictInventoryBody = CreateInventoryItemBody
     reservedQuantity: z.number().int().min(0).optional(),
     minStock: z.number().int().min(0).optional(),
     maxStock: z.number().int().min(0).optional(),
-    leadTimeDays: z.number().int().min(0),
+    annualDemand: z.number().min(0).nullable().optional(),
+    orderingCost: z.number().min(0).nullable().optional(),
+    leadTimeDays: z.number().int().min(0).nullable().optional(),
     sellingPrice: z.number().min(0).optional(),
-    holdingCostRate: z.number().min(0).max(1),
+    holdingCostRate: z.number().min(0).max(1).nullable().optional(),
   })
   .refine(
     (d) => d.maxStock == null || d.maxStock >= (d.minStock ?? 0),
@@ -38,9 +40,11 @@ const StrictInventoryPatch = UpdateInventoryItemBody
     reservedQuantity: z.number().int().min(0).optional(),
     minStock: z.number().int().min(0).optional(),
     maxStock: z.number().int().min(0).optional(),
-    leadTimeDays: z.number().int().min(0).optional(),
+    annualDemand: z.number().min(0).nullable().optional(),
+    orderingCost: z.number().min(0).nullable().optional(),
+    leadTimeDays: z.number().int().min(0).nullable().optional(),
     sellingPrice: z.number().min(0).optional(),
-    holdingCostRate: z.number().min(0).max(1).optional(),
+    holdingCostRate: z.number().min(0).max(1).nullable().optional(),
   })
   .refine(
     (d) => {
@@ -52,23 +56,58 @@ const StrictInventoryPatch = UpdateInventoryItemBody
 
 const router: IRouter = Router();
 
-// ── Lean manufacturing equations ──────────────────────────────────────────────
-function calcEOQ(annualDemand: number, orderingCost: number, unitCost: number, holdingCostRate: number): number {
-  if (unitCost <= 0 || holdingCostRate <= 0) return 0;
+// ── Planning calculations ─────────────────────────────────────────────────────
+const unsupportedPlanningSources = new Set(["UNKNOWN", "SCHEMA_DEFAULT"]);
+
+function sourceForUserValue(value: number | null | undefined): "USER_PROVIDED" | "UNKNOWN" {
+  return value == null ? "UNKNOWN" : "USER_PROVIDED";
+}
+
+function isSupportedPlanningSource(source: string): boolean {
+  return !unsupportedPlanningSources.has(source);
+}
+
+function calcEOQ(
+  annualDemand: number,
+  orderingCost: number,
+  unitCost: number,
+  holdingCostRate: number,
+): number {
   return Math.sqrt((2 * annualDemand * orderingCost) / (unitCost * holdingCostRate));
 }
-function calcSafetyStock(leadTimeDays: number, annualDemand: number, zScore = 1.65): number {
-  const daily = annualDemand / 365;
-  return Math.ceil(zScore * (daily * 0.2) * Math.sqrt(leadTimeDays));
-}
-function calcReorderPoint(leadTimeDays: number, annualDemand: number): number {
-  return Math.ceil((annualDemand / 365) * leadTimeDays + calcSafetyStock(leadTimeDays, annualDemand));
-}
-function computeMetrics(d: { annualDemand: number; orderingCost: number; unitCost: number; holdingCostRate: number; leadTimeDays: number }) {
+
+function computeMetrics(d: {
+  annualDemand: number | null | undefined;
+  annualDemandSource: string;
+  orderingCost: number | null | undefined;
+  orderingCostSource: string;
+  unitCost: number;
+  holdingCostRate: number | null | undefined;
+  holdingCostRateSource: string;
+}) {
+  const canCalculateEoq =
+    d.annualDemand != null &&
+    d.annualDemand > 0 &&
+    isSupportedPlanningSource(d.annualDemandSource) &&
+    d.orderingCost != null &&
+    d.orderingCost > 0 &&
+    isSupportedPlanningSource(d.orderingCostSource) &&
+    d.unitCost > 0 &&
+    d.holdingCostRate != null &&
+    d.holdingCostRate > 0 &&
+    isSupportedPlanningSource(d.holdingCostRateSource);
+
+  const eoq = canCalculateEoq
+    ? calcEOQ(d.annualDemand!, d.orderingCost!, d.unitCost, d.holdingCostRate!)
+    : null;
+
   return {
-    eoq: calcEOQ(d.annualDemand, d.orderingCost, d.unitCost, d.holdingCostRate),
-    safetyStock: calcSafetyStock(d.leadTimeDays, d.annualDemand),
-    reorderPoint: calcReorderPoint(d.leadTimeDays, d.annualDemand),
+    eoq,
+    eoqSource: eoq == null ? "UNKNOWN" as const : "CALCULATED_FROM_VERIFIED_INPUTS" as const,
+    safetyStock: null,
+    safetyStockSource: "UNKNOWN" as const,
+    reorderPoint: null,
+    reorderPointSource: "UNKNOWN" as const,
   };
 }
 
@@ -77,19 +116,19 @@ function deriveStatus(item: {
   currentStock: number;
   availableQuantity: number;
   reservationShortage: number;
-  safetyStock: number;
-  reorderPoint: number;
+  safetyStock: number | null;
+  reorderPoint: number | null;
   maxStock: number | null | undefined;
 }) {
   if (item.reservationShortage > 0) return "critical";
 
   if (item.availableQuantity <= 0) return "out_of_stock";
 
-  if (item.safetyStock > 0 && item.availableQuantity <= item.safetyStock) {
+  if (item.safetyStock != null && item.safetyStock > 0 && item.availableQuantity <= item.safetyStock) {
     return "critical";
   }
 
-  if (item.reorderPoint > 0 && item.availableQuantity <= item.reorderPoint) {
+  if (item.reorderPoint != null && item.reorderPoint > 0 && item.availableQuantity <= item.reorderPoint) {
     return "low_stock";
   }
 
@@ -235,7 +274,7 @@ router.get("/inventory/kpis", async (req: Request, res: Response): Promise<void>
     else if (s === "low_stock") lowStockCount++;
     else if (s === "overstock") overstockCount++;
 
-    if (item.annualDemand > 0 && item.unitCost > 0 && item.maxStock != null) {
+    if (item.annualDemand != null && item.annualDemand > 0 && item.unitCost > 0 && item.maxStock != null) {
       const avgInventoryValue = (item.maxStock / 2) * item.unitCost;
       const cogsAnnual = item.annualDemand * item.unitCost;
 
@@ -360,9 +399,33 @@ router.post("/inventory", async (req: Request, res: Response): Promise<void> => 
   const result = validateBody(StrictInventoryBody, req, res);
   if (!result.ok) return;
   const parsed = result;
-  const { annualDemand, orderingCost, unitCost, holdingCostRate, leadTimeDays } = parsed.data;
-  const { eoq, safetyStock, reorderPoint } = computeMetrics({ annualDemand, orderingCost, unitCost, holdingCostRate, leadTimeDays });
-  const [item] = await db.insert(inventoryItemsTable).values({ ...parsed.data, companyId: req.user!.companyId, eoq, safetyStock, reorderPoint }).returning();
+  const planningSources = {
+    annualDemandSource: sourceForUserValue(parsed.data.annualDemand),
+    orderingCostSource: sourceForUserValue(parsed.data.orderingCost),
+    holdingCostRateSource: sourceForUserValue(parsed.data.holdingCostRate),
+    leadTimeSource: sourceForUserValue(parsed.data.leadTimeDays),
+  };
+
+  const metrics = computeMetrics({
+    annualDemand: parsed.data.annualDemand,
+    annualDemandSource: planningSources.annualDemandSource,
+    orderingCost: parsed.data.orderingCost,
+    orderingCostSource: planningSources.orderingCostSource,
+    unitCost: parsed.data.unitCost,
+    holdingCostRate: parsed.data.holdingCostRate,
+    holdingCostRateSource: planningSources.holdingCostRateSource,
+  });
+
+  const [item] = await db
+    .insert(inventoryItemsTable)
+    .values({
+      ...parsed.data,
+      companyId: req.user!.companyId,
+      ...planningSources,
+      ...metrics,
+    })
+    .returning();
+
   res.status(201).json(item);
 });
 
@@ -375,9 +438,66 @@ router.patch("/inventory/:id", async (req: Request, res: Response): Promise<void
   const parsed = result;
   const [existing] = await db.select().from(inventoryItemsTable).where(and(eq(inventoryItemsTable.id, params.data.id), eq(inventoryItemsTable.companyId, req.user!.companyId)));
   if (!existing) { res.status(404).json({ error: "Inventory item not found" }); return; }
-  const merged = { ...existing, ...parsed.data };
-  const { eoq, safetyStock, reorderPoint } = computeMetrics({ annualDemand: merged.annualDemand, orderingCost: merged.orderingCost, unitCost: merged.unitCost, holdingCostRate: merged.holdingCostRate, leadTimeDays: merged.leadTimeDays });
-  const [updated] = await db.update(inventoryItemsTable).set({ ...parsed.data, eoq, safetyStock, reorderPoint }).where(and(eq(inventoryItemsTable.id, params.data.id), eq(inventoryItemsTable.companyId, req.user!.companyId))).returning();
+  const planningSourceUpdates = {
+    ...(parsed.data.annualDemand !== undefined
+      ? { annualDemandSource: sourceForUserValue(parsed.data.annualDemand) }
+      : {}),
+    ...(parsed.data.orderingCost !== undefined
+      ? { orderingCostSource: sourceForUserValue(parsed.data.orderingCost) }
+      : {}),
+    ...(parsed.data.holdingCostRate !== undefined
+      ? { holdingCostRateSource: sourceForUserValue(parsed.data.holdingCostRate) }
+      : {}),
+    ...(parsed.data.leadTimeDays !== undefined
+      ? { leadTimeSource: sourceForUserValue(parsed.data.leadTimeDays) }
+      : {}),
+  };
+
+  const merged = {
+    ...existing,
+    ...parsed.data,
+    ...planningSourceUpdates,
+  };
+
+  const planningInputsChanged =
+    parsed.data.annualDemand !== undefined ||
+    parsed.data.orderingCost !== undefined ||
+    parsed.data.unitCost !== undefined ||
+    parsed.data.holdingCostRate !== undefined ||
+    parsed.data.leadTimeDays !== undefined;
+
+  const metrics = planningInputsChanged
+    ? computeMetrics({
+      annualDemand: merged.annualDemand,
+      annualDemandSource: merged.annualDemandSource,
+      orderingCost: merged.orderingCost,
+      orderingCostSource: merged.orderingCostSource,
+      unitCost: merged.unitCost,
+      holdingCostRate: merged.holdingCostRate,
+      holdingCostRateSource: merged.holdingCostRateSource,
+    })
+    : {
+      eoq: existing.eoq,
+      eoqSource: existing.eoqSource,
+      safetyStock: existing.safetyStock,
+      safetyStockSource: existing.safetyStockSource,
+      reorderPoint: existing.reorderPoint,
+      reorderPointSource: existing.reorderPointSource,
+    };
+
+  const [updated] = await db
+    .update(inventoryItemsTable)
+    .set({
+      ...parsed.data,
+      ...planningSourceUpdates,
+      ...metrics,
+    })
+    .where(and(
+      eq(inventoryItemsTable.id, params.data.id),
+      eq(inventoryItemsTable.companyId, req.user!.companyId),
+    ))
+    .returning();
+
   res.json(updated);
 });
 

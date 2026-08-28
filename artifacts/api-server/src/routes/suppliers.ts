@@ -12,21 +12,21 @@ import { validateBody } from "../lib/validate.js";
 
 // ── Stricter supplier schemas ──────────────────────────────────────────────────
 export const StrictSupplierBody = CreateSupplierBody.extend({
-  name:                z.string().min(1, "Supplier name is required"),
-  country:             z.string().min(1, "Country is required"),
-  leadTimeDays:        z.number().int().min(0).max(365).optional(),
-  onTimeDeliveryRate:  z.number().min(0).max(100).optional(),
-  qualityScore:        z.number().min(0).max(100).optional(),
-  fillRate:            z.number().min(0).max(100).optional(),
+  name: z.string().min(1, "Supplier name is required"),
+  country: z.string().min(1, "Country is required"),
+  leadTimeDays: z.number().int().min(0).max(365).nullable().optional(),
+  onTimeDeliveryRate: z.number().min(0).max(100).nullable().optional(),
+  qualityScore: z.number().min(0).max(100).nullable().optional(),
+  fillRate: z.number().min(0).max(100).nullable().optional(),
 });
 
 const StrictSupplierPatch = UpdateSupplierBody.extend({
-  name:                z.string().min(1, "Supplier name is required").optional(),
-  country:             z.string().min(1, "Country is required").optional(),
-  leadTimeDays:        z.number().int().min(0).max(365).optional(),
-  onTimeDeliveryRate:  z.number().min(0).max(100).optional(),
-  qualityScore:        z.number().min(0).max(100).optional(),
-  fillRate:            z.number().min(0).max(100).optional(),
+  name: z.string().min(1, "Supplier name is required").optional(),
+  country: z.string().min(1, "Country is required").optional(),
+  leadTimeDays: z.number().int().min(0).max(365).nullable().optional(),
+  onTimeDeliveryRate: z.number().min(0).max(100).nullable().optional(),
+  qualityScore: z.number().min(0).max(100).nullable().optional(),
+  fillRate: z.number().min(0).max(100).nullable().optional(),
 });
 
 const router: IRouter = Router();

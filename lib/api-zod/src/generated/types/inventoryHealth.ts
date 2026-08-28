@@ -8,8 +8,8 @@
 import type { CategoryBreakdown } from './categoryBreakdown';
 
 export interface InventoryHealth {
-  avgTurnoverRate: number;
-  avgDaysOfSupply: number;
+  avgTurnoverRate: number | null;
+  avgDaysOfSupply: number | null;
   overstockCount: number;
   stockoutCount: number;
   healthyCount: number;

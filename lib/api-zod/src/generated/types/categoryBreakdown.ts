@@ -10,5 +10,5 @@ export interface CategoryBreakdown {
   category: string;
   count: number;
   value: number;
-  avgTurnover: number;
+  avgTurnover: number | null;
 }
