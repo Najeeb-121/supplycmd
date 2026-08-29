@@ -47,7 +47,8 @@ import { Separator } from "@/components/ui/separator";
 const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const fmtNum = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 const formatCurrency = (v: number) => fmt.format(v);
-const formatNum = (v: number) => fmtNum.format(v);
+const formatNum = (v: number | null | undefined) =>
+  v == null ? "Unknown" : fmtNum.format(v);
 
 type StockStatus = "healthy" | "low_stock" | "critical" | "out_of_stock" | "overstock";
 
@@ -399,9 +400,41 @@ export default function InventoryPage() {
   };
 
   const exportMovements = () => {
-    const headers = ["Date", "Item", "SKU", "Type", "Action", "Reference", "Qty Before", "Qty Changed", "Qty After", "Warehouse", "User"];
-    const rows = movements.map((m: any) => [m.movedAt ? new Date(m.movedAt).toLocaleString() : "", m.itemName ?? "", m.itemSku ?? "", m.movementType, m.action, m.referenceNumber ?? "", m.quantityBefore, m.quantityChanged, m.quantityAfter, m.warehouse ?? "", m.user].map(String));
-    exportCSV(`movements-${new Date().toISOString().slice(0, 10)}.csv`, rows, headers);
+    const headers = [
+      "Date",
+      "Item",
+      "SKU",
+      "Type",
+      "Action",
+      "Reference",
+      "Qty Before",
+      "Qty Changed",
+      "Qty After",
+      "Warehouse",
+      "User",
+    ];
+
+    const rows = movements.map((m: any) =>
+      [
+        m.movedAt ? new Date(m.movedAt).toLocaleString() : "",
+        m.itemName ?? "",
+        m.itemSku ?? "",
+        m.movementType,
+        m.action,
+        m.referenceNumber ?? "",
+        m.quantityBefore ?? "Unknown",
+        m.quantityChanged,
+        m.quantityAfter ?? "Unknown",
+        m.warehouse ?? "",
+        m.user,
+      ].map(String),
+    );
+
+    exportCSV(
+      `movements-${new Date().toISOString().slice(0, 10)}.csv`,
+      rows,
+      headers,
+    );
   };
 
   // ── warehouse grouping ──────────────────────────────────────────────────────

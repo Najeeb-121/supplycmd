@@ -24,9 +24,9 @@ export const stockMovementsTable = pgTable("stock_movements", {
   // Where
   warehouse: text("warehouse"),
   // Quantities
-  quantityBefore: real("quantity_before").notNull(),
+  quantityBefore: real("quantity_before"),
   quantityChanged: real("quantity_changed").notNull(),
-  quantityAfter: real("quantity_after").notNull(),
+  quantityAfter: real("quantity_after"),
 }, (table) => [
   unique().on(table.companyId, table.odooId),
 ]);

@@ -942,9 +942,9 @@ components:
         referenceNumber:  { type: string }
         reason:           { type: string }
         warehouse:        { type: string }
-        quantityBefore:   { type: number }
+        quantityBefore:   { type: number, nullable: true }
         quantityChanged:  { type: number }
-        quantityAfter:    { type: number }
+        quantityAfter:    { type: number, nullable: true }
 
     StockMovementInput:
       type: object

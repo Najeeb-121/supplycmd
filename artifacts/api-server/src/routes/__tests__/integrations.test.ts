@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   mapOdooPurchaseState,
   num,
+  parseOdooStockMovementQuantities,
 } from "../integrations";
 
 describe("Integrations Sync Safety", () => {
@@ -70,5 +71,27 @@ describe("Odoo integration parsing", () => {
   it("rejects missing and unsupported Odoo purchase states", () => {
     expect(mapOdooPurchaseState(null)).toBeNull();
     expect(mapOdooPurchaseState("unknown")).toBeNull();
+  });
+
+  it("preserves moved quantity without fabricating stock balances", () => {
+    expect(parseOdooStockMovementQuantities(0)).toEqual({
+      quantityBefore: null,
+      quantityChanged: 0,
+      quantityAfter: null,
+    });
+
+    expect(parseOdooStockMovementQuantities("125.5")).toEqual({
+      quantityBefore: null,
+      quantityChanged: 125.5,
+      quantityAfter: null,
+    });
+  });
+
+  it("rejects missing and invalid stock movement quantities", () => {
+    expect(parseOdooStockMovementQuantities(null)).toBeNull();
+    expect(parseOdooStockMovementQuantities(false)).toBeNull();
+    expect(parseOdooStockMovementQuantities("")).toBeNull();
+    expect(parseOdooStockMovementQuantities("invalid")).toBeNull();
+    expect(parseOdooStockMovementQuantities("Infinity")).toBeNull();
   });
 });

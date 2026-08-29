@@ -289,9 +289,9 @@ export const ListStockMovementsResponseItem = zod.object({
   "referenceNumber": zod.string().optional(),
   "reason": zod.string().optional(),
   "warehouse": zod.string().optional(),
-  "quantityBefore": zod.number(),
+  "quantityBefore": zod.number().nullable(),
   "quantityChanged": zod.number(),
-  "quantityAfter": zod.number()
+  "quantityAfter": zod.number().nullable()
 })
 export const ListStockMovementsResponse = zod.array(ListStockMovementsResponseItem)
 
@@ -455,9 +455,9 @@ export const CreateStockMovementResponse = zod.object({
   "referenceNumber": zod.string().optional(),
   "reason": zod.string().optional(),
   "warehouse": zod.string().optional(),
-  "quantityBefore": zod.number(),
+  "quantityBefore": zod.number().nullable(),
   "quantityChanged": zod.number(),
-  "quantityAfter": zod.number()
+  "quantityAfter": zod.number().nullable()
 })
 
 

@@ -21,6 +21,27 @@ export function num(v: unknown): number {
   const parsed = Number(v);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
+export type OdooStockMovementQuantities = {
+  quantityBefore: null;
+  quantityChanged: number;
+  quantityAfter: null;
+};
+
+export function parseOdooStockMovementQuantities(
+  value: unknown,
+): OdooStockMovementQuantities | null {
+  const quantityChanged = num(value);
+
+  if (!Number.isFinite(quantityChanged)) {
+    return null;
+  }
+
+  return {
+    quantityBefore: null,
+    quantityChanged,
+    quantityAfter: null,
+  };
+}
 
 export type OdooOrderStatus =
   | "pending"
@@ -721,15 +742,33 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
       if (!inventoryItemId) {
         failed++; errors.push(`Move #${odooId}: Product not synced.`); continue;
       }
+      const quantities = parseOdooStockMovementQuantities(
+        m.product_uom_qty,
+      );
+
+      if (!quantities) {
+        failed++;
+        errors.push(`Move #${odooId}: Missing or invalid moved quantity.`);
+        continue;
+      }
+
       try {
         await db.insert(stockMovementsTable).values({
-          companyId, odooId, inventoryItemId,
-          movementType: "transfer", action: "completed",
+          companyId,
+          odooId,
+          inventoryItemId,
+          movementType: "transfer",
+          action: "completed",
           referenceNumber: String(m.reference ?? ""),
-          quantityBefore: 0, quantityChanged: num(m.product_uom_qty), quantityAfter: num(m.product_uom_qty),
+          ...quantities,
         }).onConflictDoUpdate({
-          target: [stockMovementsTable.companyId, stockMovementsTable.odooId],
-          set: { quantityChanged: num(m.product_uom_qty) },
+          target: [
+            stockMovementsTable.companyId,
+            stockMovementsTable.odooId,
+          ],
+          set: {
+            ...quantities,
+          },
         });
         synced++;
       } catch (err) { failed++; errors.push(`Move #${odooId}: ${(err as Error).message}`); }

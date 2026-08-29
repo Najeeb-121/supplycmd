@@ -16,7 +16,7 @@ export interface StockMovement {
   referenceNumber?: string;
   reason?: string;
   warehouse?: string;
-  quantityBefore: number;
+  quantityBefore: number | null;
   quantityChanged: number;
-  quantityAfter: number;
+  quantityAfter: number | null;
 }
