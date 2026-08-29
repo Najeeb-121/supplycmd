@@ -11,10 +11,10 @@ export interface ProductionRun {
   productName: string;
   plannedUnits: number;
   actualUnits: number;
-  plannedTimeMin: number;
-  actualTimeMin: number;
-  defects: number;
-  downtimeMin: number;
-  runDate: string;
+  plannedTimeMin: number | null;
+  actualTimeMin: number | null;
+  defects: number | null;
+  downtimeMin: number | null;
+  runDate: string | null;
   createdAt: string;
 }

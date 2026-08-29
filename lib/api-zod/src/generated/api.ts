@@ -547,11 +547,11 @@ export const ListProductionRunsResponseItem = zod.object({
   "productName": zod.string(),
   "plannedUnits": zod.number(),
   "actualUnits": zod.number(),
-  "plannedTimeMin": zod.number(),
-  "actualTimeMin": zod.number(),
-  "defects": zod.number(),
-  "downtimeMin": zod.number(),
-  "runDate": zod.string(),
+  "plannedTimeMin": zod.number().nullable(),
+  "actualTimeMin": zod.number().nullable(),
+  "defects": zod.number().nullable(),
+  "downtimeMin": zod.number().nullable(),
+  "runDate": zod.string().nullable(),
   "createdAt": zod.string()
 })
 export const ListProductionRunsResponse = zod.array(ListProductionRunsResponseItem)
@@ -576,11 +576,11 @@ export const CreateProductionRunResponse = zod.object({
   "productName": zod.string(),
   "plannedUnits": zod.number(),
   "actualUnits": zod.number(),
-  "plannedTimeMin": zod.number(),
-  "actualTimeMin": zod.number(),
-  "defects": zod.number(),
-  "downtimeMin": zod.number(),
-  "runDate": zod.string(),
+  "plannedTimeMin": zod.number().nullable(),
+  "actualTimeMin": zod.number().nullable(),
+  "defects": zod.number().nullable(),
+  "downtimeMin": zod.number().nullable(),
+  "runDate": zod.string().nullable(),
   "createdAt": zod.string()
 })
 
@@ -594,9 +594,9 @@ export const UpdateProductionRunParams = zod.object({
 
 export const UpdateProductionRunBody = zod.object({
   "actualUnits": zod.number().optional(),
-  "actualTimeMin": zod.number().optional(),
-  "defects": zod.number().optional(),
-  "downtimeMin": zod.number().optional()
+  "actualTimeMin": zod.number().nullish(),
+  "defects": zod.number().nullish(),
+  "downtimeMin": zod.number().nullish()
 })
 
 export const UpdateProductionRunResponse = zod.object({
@@ -604,11 +604,11 @@ export const UpdateProductionRunResponse = zod.object({
   "productName": zod.string(),
   "plannedUnits": zod.number(),
   "actualUnits": zod.number(),
-  "plannedTimeMin": zod.number(),
-  "actualTimeMin": zod.number(),
-  "defects": zod.number(),
-  "downtimeMin": zod.number(),
-  "runDate": zod.string(),
+  "plannedTimeMin": zod.number().nullable(),
+  "actualTimeMin": zod.number().nullable(),
+  "defects": zod.number().nullable(),
+  "downtimeMin": zod.number().nullable(),
+  "runDate": zod.string().nullable(),
   "createdAt": zod.string()
 })
 
@@ -617,13 +617,13 @@ export const UpdateProductionRunResponse = zod.object({
  * @summary OEE and production KPIs aggregated
  */
 export const GetOeeMetricsResponse = zod.object({
-  "oeePercent": zod.number(),
-  "availabilityPercent": zod.number(),
-  "performancePercent": zod.number(),
-  "qualityPercent": zod.number(),
-  "avgTaktTimeSec": zod.number(),
-  "avgCycleTimeSec": zod.number(),
-  "throughputPerHour": zod.number(),
+  "oeePercent": zod.number().nullable(),
+  "availabilityPercent": zod.number().nullable(),
+  "performancePercent": zod.number().nullable(),
+  "qualityPercent": zod.number().nullable(),
+  "avgTaktTimeSec": zod.number().nullable(),
+  "avgCycleTimeSec": zod.number().nullable(),
+  "throughputPerHour": zod.number().nullable(),
   "totalRuns": zod.number()
 })
 
@@ -760,7 +760,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "activeSuppliers": zod.number(),
   "openOrders": zod.number(),
   "pendingOrderValue": zod.number(),
-  "oeePercent": zod.number(),
+  "oeePercent": zod.number().nullable(),
   "forecastAccuracy": zod.number().nullable(),
   "fillRate": zod.number().nullable(),
   "otifPercent": zod.number().nullable()

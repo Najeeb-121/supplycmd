@@ -86,25 +86,63 @@ export default function DashboardPage() {
     });
 
     return last7Days.map(({ dateStr, display }) => {
-      const dayRuns = productionRuns.filter(r => r.runDate.startsWith(dateStr));
-      let totalAvail = 0;
-      let totalPerf = 0;
-      let totalQual = 0;
+      const dayRuns = productionRuns.filter(
+        (run) => run.runDate?.startsWith(dateStr),
+      );
 
-      if (dayRuns.length > 0) {
-        dayRuns.forEach(run => {
-          const avail = run.plannedTimeMin > 0 ? Math.max(0, Math.min(1, (run.actualTimeMin - run.downtimeMin) / run.plannedTimeMin)) : 0;
-          const perf = run.plannedUnits > 0 ? Math.min(1, run.actualUnits / run.plannedUnits) : 0;
-          const qual = run.actualUnits > 0 ? Math.max(0, (run.actualUnits - run.defects) / run.actualUnits) : 0;
-          totalAvail += avail;
-          totalPerf += perf;
-          totalQual += qual;
-        });
-        const n = dayRuns.length;
-        const oee = (totalAvail / n) * (totalPerf / n) * (totalQual / n) * 100;
-        return { day: display, oee: Math.round(oee * 10) / 10 };
+      const oeeValues: number[] = [];
+
+      for (const run of dayRuns) {
+        if (
+          run.plannedTimeMin == null ||
+          run.plannedTimeMin <= 0 ||
+          run.actualTimeMin == null ||
+          run.downtimeMin == null ||
+          run.plannedUnits <= 0 ||
+          run.actualUnits <= 0 ||
+          run.defects == null
+        ) {
+          continue;
+        }
+
+        const availability = Math.max(
+          0,
+          Math.min(
+            1,
+            (run.actualTimeMin - run.downtimeMin) /
+            run.plannedTimeMin,
+          ),
+        );
+
+        const performance = Math.max(
+          0,
+          Math.min(1, run.actualUnits / run.plannedUnits),
+        );
+
+        const quality = Math.max(
+          0,
+          Math.min(
+            1,
+            (run.actualUnits - run.defects) / run.actualUnits,
+          ),
+        );
+
+        oeeValues.push(availability * performance * quality);
       }
-      return { day: display, oee: null as number | null };
+
+      if (oeeValues.length === 0) {
+        return { day: display, oee: null as number | null };
+      }
+
+      const oee =
+        (oeeValues.reduce((sum, value) => sum + value, 0) /
+          oeeValues.length) *
+        100;
+
+      return {
+        day: display,
+        oee: Math.round(oee * 10) / 10,
+      };
     });
   }, [productionRuns]);
 

@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
-import { 
-  useListProductionRuns, 
+import {
+  useListProductionRuns,
   useCreateProductionRun,
   useGetOeeMetrics,
   getListProductionRunsQueryKey,
@@ -13,13 +13,13 @@ import { Plus, Activity, Clock, Zap, Target } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -83,13 +83,13 @@ function OeeGauge({ value }: { value: number }) {
 
 export default function ProductionPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   const { data: runs, isLoading: runsLoading } = useListProductionRuns();
   const { data: metrics, isLoading: metricsLoading } = useGetOeeMetrics();
-  
+
   const createMutationRef = useRef(useCreateProductionRun().mutate);
   const createMutation = useCreateProductionRun();
   createMutationRef.current = createMutation.mutate;
@@ -115,7 +115,7 @@ export default function ProductionPage() {
       ...values,
       runDate: new Date(values.runDate).toISOString()
     };
-    
+
     createMutationRef.current({ data: payload }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListProductionRunsQueryKey() });
@@ -159,7 +159,13 @@ export default function ProductionPage() {
             {metricsLoading ? (
               <div className="h-48 flex items-center justify-center animate-pulse text-muted-foreground">Calibrating...</div>
             ) : (
-              <OeeGauge value={metrics?.oeePercent || 0} />
+              metrics?.oeePercent == null ? (
+                <div className="h-48 flex items-center justify-center text-muted-foreground">
+                  OEE unavailable
+                </div>
+              ) : (
+                <OeeGauge value={metrics.oeePercent} />
+              )
             )}
           </CardContent>
         </Card>
@@ -174,8 +180,17 @@ export default function ProductionPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold">{(metrics?.availabilityPercent ?? 0).toFixed(1)}%</div>
-              <Progress value={metrics?.availabilityPercent || 0} className="h-2 mt-4" />
+              <div className="text-3xl font-mono font-bold">
+                {metrics?.availabilityPercent == null
+                  ? "Unknown"
+                  : `${metrics.availabilityPercent.toFixed(1)}%`}
+              </div>
+              {metrics?.availabilityPercent != null && (
+                <Progress
+                  value={metrics.availabilityPercent}
+                  className="h-2 mt-4"
+                />
+              )}
               <p className="text-xs text-muted-foreground mt-2">Uptime vs Planned Time</p>
             </CardContent>
           </Card>
@@ -188,8 +203,17 @@ export default function ProductionPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold">{(metrics?.performancePercent ?? 0).toFixed(1)}%</div>
-              <Progress value={metrics?.performancePercent || 0} className="h-2 mt-4" />
+              <div className="text-3xl font-mono font-bold">
+                {metrics?.performancePercent == null
+                  ? "Unknown"
+                  : `${metrics.performancePercent.toFixed(1)}%`}
+              </div>
+              {metrics?.performancePercent != null && (
+                <Progress
+                  value={metrics.performancePercent}
+                  className="h-2 mt-4"
+                />
+              )}
               <p className="text-xs text-muted-foreground mt-2">Actual vs Ideal Cycle Time</p>
             </CardContent>
           </Card>
@@ -202,8 +226,17 @@ export default function ProductionPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold">{(metrics?.qualityPercent ?? 0).toFixed(1)}%</div>
-              <Progress value={metrics?.qualityPercent || 0} className="h-2 mt-4" />
+              <div className="text-3xl font-mono font-bold">
+                {metrics?.qualityPercent == null
+                  ? "Unknown"
+                  : `${metrics.qualityPercent.toFixed(1)}%`}
+              </div>
+              {metrics?.qualityPercent != null && (
+                <Progress
+                  value={metrics.qualityPercent}
+                  className="h-2 mt-4"
+                />
+              )}
               <p className="text-xs text-muted-foreground mt-2">Good Units vs Total Units</p>
             </CardContent>
           </Card>
@@ -214,19 +247,34 @@ export default function ProductionPage() {
               <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Takt Time</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-mono font-bold">{(metrics?.avgTaktTimeSec ?? 0).toFixed(1)}s</div>
+              <div className="text-2xl font-mono font-bold">
+                {metrics?.avgTaktTimeSec == null
+                  ? "Unknown"
+                  : `${metrics.avgTaktTimeSec.toFixed(1)}s`}
+              </div>
               <p className="text-xs text-muted-foreground mt-1">Target pace to meet demand</p>
             </CardContent>
           </Card>
-          
+
           <Card className="border-border shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Cycle Time</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-mono font-bold">
-                <span className={metrics && metrics.avgCycleTimeSec > metrics.avgTaktTimeSec ? "text-destructive" : "text-emerald-600"}>
-                  {(metrics?.avgCycleTimeSec ?? 0).toFixed(1)}s
+                <span
+                  className={
+                    metrics?.avgCycleTimeSec == null ||
+                      metrics.avgTaktTimeSec == null
+                      ? "text-muted-foreground"
+                      : metrics.avgCycleTimeSec > metrics.avgTaktTimeSec
+                        ? "text-destructive"
+                        : "text-emerald-600"
+                  }
+                >
+                  {metrics?.avgCycleTimeSec == null
+                    ? "Unknown"
+                    : `${metrics.avgCycleTimeSec.toFixed(1)}s`}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Actual pace of production</p>
@@ -235,7 +283,18 @@ export default function ProductionPage() {
 
           <Card className="border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Throughput</CardTitle>
+              <div className="text-2xl font-mono font-bold">
+                {metrics?.throughputPerHour == null ? (
+                  "Unknown"
+                ) : (
+                  <>
+                    {metrics.throughputPerHour.toFixed(0)}{" "}
+                    <span className="text-sm font-sans font-normal text-muted-foreground">
+                      units/hr
+                    </span>
+                  </>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-mono font-bold">{(metrics?.throughputPerHour ?? 0).toFixed(0)} <span className="text-sm font-sans font-normal text-muted-foreground">units/hr</span></div>
@@ -278,24 +337,72 @@ export default function ProductionPage() {
                     </TableRow>
                   ) : (
                     runs.map((run) => {
-                      const yieldPercent = run.actualUnits > 0 ? ((run.actualUnits - run.defects) / run.actualUnits) * 100 : 0;
+                      const yieldPercent =
+                        run.actualUnits > 0 && run.defects != null
+                          ? ((run.actualUnits - run.defects) / run.actualUnits) * 100
+                          : null;
                       return (
                         <TableRow key={run.id} className="hover:bg-muted/10">
-                          <TableCell className="font-mono text-xs">{format(new Date(run.runDate), 'MMM dd, yyyy')}</TableCell>
-                          <TableCell className="font-medium text-foreground">{run.productName}</TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {run.runDate
+                              ? format(new Date(run.runDate), "MMM dd, yyyy")
+                              : "Unknown"}
+                          </TableCell>
+
+                          <TableCell className="font-medium text-foreground">
+                            {run.productName}
+                          </TableCell>
+
                           <TableCell className="text-right font-mono">
-                            <span className={run.actualUnits < run.plannedUnits ? "text-amber-600" : ""}>{run.actualUnits}</span> / <span className="text-muted-foreground">{run.plannedUnits}</span>
+                            <span
+                              className={
+                                run.actualUnits < run.plannedUnits
+                                  ? "text-amber-600"
+                                  : ""
+                              }
+                            >
+                              {run.actualUnits}
+                            </span>{" "}
+                            /{" "}
+                            <span className="text-muted-foreground">
+                              {run.plannedUnits}
+                            </span>
                           </TableCell>
-                          <TableCell className="text-right font-mono text-destructive">{run.defects}</TableCell>
-                          <TableCell className="text-right font-mono text-muted-foreground">
-                            {run.actualTimeMin}m / {run.plannedTimeMin}m
-                          </TableCell>
+
                           <TableCell className="text-right font-mono text-destructive">
-                            {run.downtimeMin}m
+                            {run.defects ?? "Unknown"}
                           </TableCell>
+
+                          <TableCell className="text-right font-mono text-muted-foreground">
+                            {run.actualTimeMin != null
+                              ? `${run.actualTimeMin}m`
+                              : "Unknown"}{" "}
+                            /{" "}
+                            {run.plannedTimeMin != null
+                              ? `${run.plannedTimeMin}m`
+                              : "Unknown"}
+                          </TableCell>
+
+                          <TableCell className="text-right font-mono text-destructive">
+                            {run.downtimeMin != null
+                              ? `${run.downtimeMin}m`
+                              : "Unknown"}
+                          </TableCell>
+
                           <TableCell className="text-right">
-                            <Badge variant="outline" className={yieldPercent >= 99 ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" : "bg-amber-500/10 text-amber-700 border-amber-500/20"}>
-                              {yieldPercent.toFixed(1)}%
+                            <Badge
+                              variant="outline"
+                              className={
+                                yieldPercent == null
+                                  ? "bg-muted text-muted-foreground"
+                                  : yieldPercent >= 99
+                                    ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20"
+                                    : "bg-amber-500/10 text-amber-700 border-amber-500/20"
+                              }
+                            >
+                              {yieldPercent == null
+                                ? "Unknown"
+                                : `${yieldPercent.toFixed(1)}%`}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -317,7 +424,7 @@ export default function ProductionPage() {
               Enter the actual metrics from the shift or batch to update OEE.
             </DialogDescription>
           </DialogHeader>
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -346,7 +453,7 @@ export default function ProductionPage() {
                   </FormItem>
                 )}
               />
-              
+
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
                 <FormField
                   control={form.control}
@@ -427,7 +534,7 @@ export default function ProductionPage() {
                   )}
                 />
               </div>
-              
+
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
                 <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={createMutation.isPending || !form.formState.isValid}>

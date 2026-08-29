@@ -12,12 +12,12 @@ import { validateBody } from "../lib/validate.js";
 // ── Stricter production schema with cross-field rule ──────────────────────────
 export const StrictProductionBody = CreateProductionRunBody
   .extend({
-    plannedUnits:   z.number().int().min(0),
-    actualUnits:    z.number().int().min(0),
+    plannedUnits: z.number().int().min(0),
+    actualUnits: z.number().int().min(0),
     plannedTimeMin: z.number().int().min(0),
-    actualTimeMin:  z.number().int().min(0),
-    defects:        z.number().int().min(0),
-    downtimeMin:    z.number().int().min(0),
+    actualTimeMin: z.number().int().min(0),
+    defects: z.number().int().min(0),
+    downtimeMin: z.number().int().min(0),
   })
   .refine(
     (d) => d.defects <= d.actualUnits,
@@ -32,74 +32,102 @@ router.get("/production", async (req, res): Promise<void> => {
 });
 
 router.get("/production/metrics/oee", async (req, res): Promise<void> => {
-  const runs = await db.select().from(productionRunsTable).where(eq(productionRunsTable.companyId, req.user!.companyId));
-  const totalRuns = runs.length;
+  const runs = await db
+    .select()
+    .from(productionRunsTable)
+    .where(eq(productionRunsTable.companyId, req.user!.companyId));
 
-  if (totalRuns === 0) {
-    res.json({
-      oeePercent: 0,
-      availabilityPercent: 0,
-      performancePercent: 0,
-      qualityPercent: 0,
-      avgTaktTimeSec: 0,
-      avgCycleTimeSec: 0,
-      throughputPerHour: 0,
-      totalRuns: 0,
-    });
-    return;
-  }
+  const average = (values: number[]): number | null =>
+    values.length > 0
+      ? values.reduce((sum, value) => sum + value, 0) / values.length
+      : null;
 
-  // OEE = Availability × Performance × Quality
-  // Availability = (Actual Time - Downtime) / Planned Time
-  // Performance = Actual Units / (Actual Units + what could have been made in lost time)
-  // Quality = (Actual Units - Defects) / Actual Units
-  let totalAvailability = 0;
-  let totalPerformance = 0;
-  let totalQuality = 0;
-  let totalTaktSec = 0;
-  let totalCycleSec = 0;
-  let totalThroughput = 0;
+  const roundMetric = (value: number | null): number | null =>
+    value === null ? null : Math.round(value * 10) / 10;
+
+  const roundPercent = (value: number | null): number | null =>
+    value === null ? null : Math.round(value * 1000) / 10;
+
+  const availabilityValues: number[] = [];
+  const performanceValues: number[] = [];
+  const qualityValues: number[] = [];
+  const oeeValues: number[] = [];
+  const taktValues: number[] = [];
+  const cycleValues: number[] = [];
+  const throughputValues: number[] = [];
 
   for (const run of runs) {
-    const availability = run.plannedTimeMin > 0
-      ? Math.max(0, Math.min(1, (run.actualTimeMin - run.downtimeMin) / run.plannedTimeMin))
-      : 0;
-    const performance = run.plannedUnits > 0
-      ? Math.min(1, run.actualUnits / run.plannedUnits)
-      : 0;
-    const quality = run.actualUnits > 0
-      ? Math.max(0, (run.actualUnits - run.defects) / run.actualUnits)
-      : 0;
+    const availability =
+      run.plannedTimeMin !== null &&
+        run.plannedTimeMin > 0 &&
+        run.actualTimeMin !== null &&
+        run.downtimeMin !== null
+        ? Math.max(
+          0,
+          Math.min(
+            1,
+            (run.actualTimeMin - run.downtimeMin) /
+            run.plannedTimeMin,
+          ),
+        )
+        : null;
 
-    totalAvailability += availability;
-    totalPerformance += performance;
-    totalQuality += quality;
+    const performance =
+      run.plannedUnits > 0
+        ? Math.max(0, Math.min(1, run.actualUnits / run.plannedUnits))
+        : null;
 
-    // Takt time = Available time (min) / demand units, in seconds
-    const taktSec = run.plannedUnits > 0 ? (run.plannedTimeMin * 60) / run.plannedUnits : 0;
-    const cycleSec = run.actualUnits > 0 ? (run.actualTimeMin * 60) / run.actualUnits : 0;
-    totalTaktSec += taktSec;
-    totalCycleSec += cycleSec;
+    const quality =
+      run.actualUnits > 0 && run.defects !== null
+        ? Math.max(
+          0,
+          Math.min(
+            1,
+            (run.actualUnits - run.defects) / run.actualUnits,
+          ),
+        )
+        : null;
 
-    // Throughput per hour
-    const throughput = run.actualTimeMin > 0 ? (run.actualUnits / run.actualTimeMin) * 60 : 0;
-    totalThroughput += throughput;
+    if (availability !== null) availabilityValues.push(availability);
+    if (performance !== null) performanceValues.push(performance);
+    if (quality !== null) qualityValues.push(quality);
+
+    if (
+      availability !== null &&
+      performance !== null &&
+      quality !== null
+    ) {
+      oeeValues.push(availability * performance * quality);
+    }
+
+    if (run.plannedTimeMin !== null && run.plannedUnits > 0) {
+      taktValues.push(
+        (run.plannedTimeMin * 60) / run.plannedUnits,
+      );
+    }
+
+    if (run.actualTimeMin !== null && run.actualUnits > 0) {
+      cycleValues.push(
+        (run.actualTimeMin * 60) / run.actualUnits,
+      );
+    }
+
+    if (run.actualTimeMin !== null && run.actualTimeMin > 0) {
+      throughputValues.push(
+        (run.actualUnits / run.actualTimeMin) * 60,
+      );
+    }
   }
 
-  const avgAvailability = totalAvailability / totalRuns;
-  const avgPerformance = totalPerformance / totalRuns;
-  const avgQuality = totalQuality / totalRuns;
-  const oee = avgAvailability * avgPerformance * avgQuality;
-
   res.json({
-    oeePercent: Math.round(oee * 1000) / 10,
-    availabilityPercent: Math.round(avgAvailability * 1000) / 10,
-    performancePercent: Math.round(avgPerformance * 1000) / 10,
-    qualityPercent: Math.round(avgQuality * 1000) / 10,
-    avgTaktTimeSec: Math.round((totalTaktSec / totalRuns) * 10) / 10,
-    avgCycleTimeSec: Math.round((totalCycleSec / totalRuns) * 10) / 10,
-    throughputPerHour: Math.round((totalThroughput / totalRuns) * 10) / 10,
-    totalRuns,
+    oeePercent: roundPercent(average(oeeValues)),
+    availabilityPercent: roundPercent(average(availabilityValues)),
+    performancePercent: roundPercent(average(performanceValues)),
+    qualityPercent: roundPercent(average(qualityValues)),
+    avgTaktTimeSec: roundMetric(average(taktValues)),
+    avgCycleTimeSec: roundMetric(average(cycleValues)),
+    throughputPerHour: roundMetric(average(throughputValues)),
+    totalRuns: runs.length,
   });
 });
 

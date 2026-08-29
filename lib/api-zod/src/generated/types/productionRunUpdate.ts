@@ -8,7 +8,7 @@
 
 export interface ProductionRunUpdate {
   actualUnits?: number;
-  actualTimeMin?: number;
-  defects?: number;
-  downtimeMin?: number;
+  actualTimeMin?: number | null;
+  defects?: number | null;
+  downtimeMin?: number | null;
 }

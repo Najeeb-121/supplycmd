@@ -13,7 +13,7 @@ export interface DashboardSummary {
   activeSuppliers: number;
   openOrders: number;
   pendingOrderValue: number;
-  oeePercent: number;
+  oeePercent: number | null;
   forecastAccuracy: number | null;
   fillRate: number | null;
   otifPercent: number | null;

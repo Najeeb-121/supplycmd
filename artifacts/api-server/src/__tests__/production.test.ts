@@ -3,17 +3,28 @@ import request from "supertest";
 
 // ── DB mock ───────────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => {
+  const mockWhere = vi.fn();
   const mockReturning = vi.fn();
   const mockValues = vi.fn(() => ({ returning: mockReturning }));
   const mockInsert = vi.fn(() => ({ values: mockValues }));
 
-  return { mockReturning, mockValues, mockInsert };
+  return {
+    mockReturning,
+    mockValues,
+    mockInsert,
+    mockWhere,
+  };
 });
 
 vi.mock("@workspace/db", () => ({
   db: {
     insert: mocks.mockInsert,
-    select: vi.fn(() => ({ from: vi.fn(() => ({ orderBy: vi.fn(() => Promise.resolve([])) })) })),
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        orderBy: vi.fn(() => Promise.resolve([])),
+        where: mocks.mockWhere,
+      })),
+    })),
   },
   inventoryItemsTable: {},
   stockMovementsTable: {},
@@ -43,6 +54,11 @@ function postProduction(body: object) {
     .post("/api/production")
     .set("x-e2e-test-company-id", "1")
     .send(body);
+}
+function getOeeMetrics() {
+  return request(app)
+    .get("/api/production/metrics/oee")
+    .set("x-e2e-test-company-id", "1");
 }
 describe("POST /api/production", () => {
   beforeEach(() => {
@@ -137,5 +153,70 @@ describe("POST /api/production", () => {
     const res = await postProduction({ ...validBody, defects: 0 });
 
     expect(res.status).toBe(201);
+  });
+});
+describe("GET /api/production/metrics/oee", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns null metrics when no production runs exist", async () => {
+    mocks.mockWhere.mockResolvedValueOnce([]);
+
+    const res = await getOeeMetrics();
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      oeePercent: null,
+      availabilityPercent: null,
+      performancePercent: null,
+      qualityPercent: null,
+      avgTaktTimeSec: null,
+      avgCycleTimeSec: null,
+      throughputPerHour: null,
+      totalRuns: 0,
+    });
+  });
+
+  it("does not fabricate OEE from missing timing and quality data", async () => {
+    mocks.mockWhere.mockResolvedValueOnce([
+      {
+        ...fakeRun,
+        plannedTimeMin: null,
+        actualTimeMin: null,
+        defects: null,
+        downtimeMin: null,
+      },
+    ]);
+
+    const res = await getOeeMetrics();
+
+    expect(res.status).toBe(200);
+    expect(res.body.oeePercent).toBeNull();
+    expect(res.body.availabilityPercent).toBeNull();
+    expect(res.body.performancePercent).toBe(96);
+    expect(res.body.qualityPercent).toBeNull();
+    expect(res.body.avgTaktTimeSec).toBeNull();
+    expect(res.body.avgCycleTimeSec).toBeNull();
+    expect(res.body.throughputPerHour).toBeNull();
+    expect(res.body.totalRuns).toBe(1);
+  });
+
+  it("calculates metrics when all required values are known", async () => {
+    mocks.mockWhere.mockResolvedValueOnce([fakeRun]);
+
+    const res = await getOeeMetrics();
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      oeePercent: 95,
+      availabilityPercent: 100,
+      performancePercent: 96,
+      qualityPercent: 99,
+      avgTaktTimeSec: 28.8,
+      avgCycleTimeSec: 31.3,
+      throughputPerHour: 115.2,
+      totalRuns: 1,
+    });
   });
 });

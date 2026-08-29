@@ -1002,11 +1002,11 @@ components:
         productName:    { type: string }
         plannedUnits:   { type: number }
         actualUnits:    { type: number }
-        plannedTimeMin: { type: number }
-        actualTimeMin:  { type: number }
-        defects:        { type: number }
-        downtimeMin:    { type: number }
-        runDate:        { type: string }
+        plannedTimeMin: { type: number, nullable: true }
+        actualTimeMin:  { type: number, nullable: true }
+        defects:        { type: number, nullable: true }
+        downtimeMin:    { type: number, nullable: true }
+        runDate:        { type: string, nullable: true }
         createdAt:      { type: string }
 
     ProductionRunInput:
@@ -1026,21 +1026,21 @@ components:
       type: object
       properties:
         actualUnits:    { type: number }
-        actualTimeMin:  { type: number }
-        defects:        { type: number }
-        downtimeMin:    { type: number }
+        actualTimeMin:  { type: number, nullable: true }
+        defects:        { type: number, nullable: true }
+        downtimeMin:    { type: number, nullable: true }
 
     OeeMetrics:
       type: object
       required: [oeePercent, availabilityPercent, performancePercent, qualityPercent, avgTaktTimeSec, avgCycleTimeSec, throughputPerHour, totalRuns]
       properties:
-        oeePercent:           { type: number }
-        availabilityPercent:  { type: number }
-        performancePercent:   { type: number }
-        qualityPercent:       { type: number }
-        avgTaktTimeSec:       { type: number }
-        avgCycleTimeSec:      { type: number }
-        throughputPerHour:    { type: number }
+        oeePercent:           { type: number, nullable: true }
+        availabilityPercent:  { type: number, nullable: true }
+        performancePercent:   { type: number, nullable: true }
+        qualityPercent:       { type: number, nullable: true }
+        avgTaktTimeSec:       { type: number, nullable: true }
+        avgCycleTimeSec:      { type: number, nullable: true }
+        throughputPerHour:    { type: number, nullable: true }
         totalRuns:            { type: number }
 
         # --- Demand ---
@@ -1121,7 +1121,7 @@ components:
         activeSuppliers:     { type: number }
         openOrders:          { type: number }
         pendingOrderValue:   { type: number }
-        oeePercent:          { type: number }
+        oeePercent:          { type: number, nullable: true }
         forecastAccuracy:    { type: number, nullable: true }
         fillRate:            { type: number, nullable: true }
         otifPercent:         { type: number, nullable: true }

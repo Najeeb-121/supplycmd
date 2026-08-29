@@ -7,12 +7,12 @@
  */
 
 export interface OeeMetrics {
-  oeePercent: number;
-  availabilityPercent: number;
-  performancePercent: number;
-  qualityPercent: number;
-  avgTaktTimeSec: number;
-  avgCycleTimeSec: number;
-  throughputPerHour: number;
+  oeePercent: number | null;
+  availabilityPercent: number | null;
+  performancePercent: number | null;
+  qualityPercent: number | null;
+  avgTaktTimeSec: number | null;
+  avgCycleTimeSec: number | null;
+  throughputPerHour: number | null;
   totalRuns: number;
 }

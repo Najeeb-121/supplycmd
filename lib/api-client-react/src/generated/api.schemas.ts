@@ -272,11 +272,11 @@ export interface ProductionRun {
   productName: string;
   plannedUnits: number;
   actualUnits: number;
-  plannedTimeMin: number;
-  actualTimeMin: number;
-  defects: number;
-  downtimeMin: number;
-  runDate: string;
+  plannedTimeMin: number | null;
+  actualTimeMin: number | null;
+  defects: number | null;
+  downtimeMin: number | null;
+  runDate: string | null;
   createdAt: string;
 }
 
@@ -293,19 +293,19 @@ export interface ProductionRunInput {
 
 export interface ProductionRunUpdate {
   actualUnits?: number;
-  actualTimeMin?: number;
-  defects?: number;
-  downtimeMin?: number;
+  actualTimeMin?: number | null;
+  defects?: number | null;
+  downtimeMin?: number | null;
 }
 
 export interface OeeMetrics {
-  oeePercent: number;
-  availabilityPercent: number;
-  performancePercent: number;
-  qualityPercent: number;
-  avgTaktTimeSec: number;
-  avgCycleTimeSec: number;
-  throughputPerHour: number;
+  oeePercent: number | null;
+  availabilityPercent: number | null;
+  performancePercent: number | null;
+  qualityPercent: number | null;
+  avgTaktTimeSec: number | null;
+  avgCycleTimeSec: number | null;
+  throughputPerHour: number | null;
   totalRuns: number;
 }
 
@@ -405,7 +405,7 @@ export interface DashboardSummary {
   activeSuppliers: number;
   openOrders: number;
   pendingOrderValue: number;
-  oeePercent: number;
+  oeePercent: number | null;
   forecastAccuracy: number | null;
   fillRate: number | null;
   otifPercent: number | null;

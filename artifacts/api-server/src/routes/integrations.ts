@@ -9,8 +9,42 @@ import { z } from "zod";
 
 const router: IRouter = Router();
 
-function num(v: unknown): number {
-  return typeof v === "number" ? v : parseFloat(String(v)) || 0;
+export function num(v: unknown): number {
+  if (typeof v === "number") {
+    return Number.isFinite(v) ? v : Number.NaN;
+  }
+
+  if (typeof v !== "string" || !v.trim()) {
+    return Number.NaN;
+  }
+
+  const parsed = Number(v);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+export type OdooOrderStatus =
+  | "pending"
+  | "confirmed"
+  | "delivered"
+  | "cancelled";
+
+export function mapOdooPurchaseState(
+  value: unknown,
+): OdooOrderStatus | null {
+  switch (value) {
+    case "draft":
+    case "sent":
+    case "to approve":
+      return "pending";
+    case "purchase":
+      return "confirmed";
+    case "done":
+      return "delivered";
+    case "cancel":
+      return "cancelled";
+    default:
+      return null;
+  }
 }
 
 // Odoo represents an empty many2one as `false`, not null — normalize to a
@@ -456,7 +490,16 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
     const purchases = await client.searchRead<Record<string, unknown>>(
       "purchase.order",
       [],
-      ["id", "name", "partner_id", "amount_total", "state", "date_order", "date_planned"]
+      [
+        "id",
+        "name",
+        "partner_id",
+        "amount_total",
+        "state",
+        "date_order",
+        "date_planned",
+        "order_line",
+      ]
     );
 
     const suppliers = await db.select().from(suppliersTable).where(eq(suppliersTable.companyId, companyId));
@@ -522,13 +565,47 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
         continue;
       }
 
-      const dateOrder = typeof p.date_order === "string" ? p.date_order.split(" ")[0] : new Date().toISOString().split("T")[0];
-      const datePlanned = typeof p.date_planned === "string" ? p.date_planned.split(" ")[0] : dateOrder;
+      const dateOrder =
+        typeof p.date_order === "string" && p.date_order.trim()
+          ? p.date_order.split(" ")[0]
+          : null;
 
-      let status = "pending";
-      if (p.state === "purchase" || p.state === "done") status = "confirmed";
-      if (p.state === "done") status = "delivered";
-      if (p.state === "cancel") status = "cancelled";
+      if (!dateOrder) {
+        failed++;
+        errors.push(`PO #${odooId}: Missing date_order.`);
+        continue;
+      }
+
+      const datePlanned =
+        typeof p.date_planned === "string" && p.date_planned.trim()
+          ? p.date_planned.split(" ")[0]
+          : null;
+
+      if (!datePlanned) {
+        failed++;
+        errors.push(`PO #${odooId}: Missing date_planned.`);
+        continue;
+      }
+
+      const orderLineIds = Array.isArray(p.order_line)
+        ? p.order_line
+        : null;
+
+      if (!orderLineIds || orderLineIds.length === 0) {
+        failed++;
+        errors.push(`PO #${odooId}: No purchase order lines were returned.`);
+        continue;
+      }
+
+      const status = mapOdooPurchaseState(p.state);
+
+      if (!status) {
+        failed++;
+        errors.push(
+          `PO #${odooId}: Unsupported Odoo state "${String(p.state)}".`,
+        );
+        continue;
+      }
 
       const candidate = {
         companyId,
@@ -539,7 +616,7 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
         status,
         orderDate: dateOrder,
         expectedDelivery: datePlanned,
-        itemCount: 1,
+        itemCount: orderLineIds.length,
       };
 
       try {
@@ -706,7 +783,16 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
       const odooId = mo.id as number;
       const productName = many2oneLabel(mo.product_id, "Unknown Product");
       const bomId = many2oneId(mo.bom_id);
-      const moState = typeof mo.state === "string" ? mo.state : "draft";
+      const moState =
+        typeof mo.state === "string" && mo.state.trim()
+          ? mo.state
+          : null;
+
+      if (!moState) {
+        failed++;
+        errors.push(`MO #${odooId}: Missing manufacturing-order state.`);
+        continue;
+      }
       const dateDeadline =
         typeof mo.date_deadline === "string"
           ? mo.date_deadline.split(" ")[0]
@@ -716,11 +802,22 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
           ? mo.date_start.split(" ")[0]
           : null;
 
-      let actualTimeMin: number = 0;
-      if (typeof mo.date_start === "string" && typeof mo.date_finished === "string") {
+      let actualTimeMin: number | null = null;
+
+      if (
+        typeof mo.date_start === "string" &&
+        typeof mo.date_finished === "string"
+      ) {
         const start = new Date(mo.date_start).getTime();
         const end = new Date(mo.date_finished).getTime();
-        actualTimeMin = Math.round((end - start) / 60000);
+
+        if (
+          Number.isFinite(start) &&
+          Number.isFinite(end) &&
+          end >= start
+        ) {
+          actualTimeMin = Math.round((end - start) / 60000);
+        }
       }
 
       try {
@@ -731,8 +828,10 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
           runDate,
           plannedUnits: num(mo.product_qty),
           actualUnits: num(mo.qty_producing),
-          plannedTimeMin: 0,
+          plannedTimeMin: null,
           actualTimeMin,
+          defects: null,
+          downtimeMin: null,
           bomId,
           dateDeadline,
           moState,
@@ -741,6 +840,9 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
           set: {
             actualUnits: num(mo.qty_producing),
             actualTimeMin,
+            plannedTimeMin: null,
+            defects: null,
+            downtimeMin: null,
             runDate,
             bomId,
             dateDeadline,
@@ -996,19 +1098,35 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
         syncedMps = true;
         for (const line of forecasts) {
           const odooId = line.id as number;
-          const scheduleId = Array.isArray(line.production_schedule_id) ? line.production_schedule_id[0] : 0;
-          const productId = scheduleToProduct.get(scheduleId);
-          const productName = many2oneLabel(productId, "Unknown Product");
+          const scheduleId = many2oneId(line.production_schedule_id);
 
-          const dateVal = line.date || line.create_date;
-
-          if (typeof dateVal !== "string" || dateVal.length < 7) {
+          if (scheduleId === null) {
             failed++;
-            errors.push(`MPS Forecast #${odooId}: missing valid date`);
+            errors.push(`MPS Forecast #${odooId}: missing production schedule.`);
             continue;
           }
 
-          const period = dateVal.substring(0, 7);
+          const productReference = scheduleToProduct.get(scheduleId);
+          const productName = many2oneLabel(productReference, "");
+
+          if (!productName) {
+            failed++;
+            errors.push(`MPS Forecast #${odooId}: missing mapped product.`);
+            continue;
+          }
+
+          const dateVal = line.date;
+
+          if (
+            typeof dateVal !== "string" ||
+            !/^\d{4}-(0[1-9]|1[0-2])(?:-\d{2})?$/.test(dateVal)
+          ) {
+            failed++;
+            errors.push(`MPS Forecast #${odooId}: missing valid forecast date.`);
+            continue;
+          }
+
+          const period = dateVal.slice(0, 7);
 
           const targetQty =
             line.forecast_qty == null ? null : num(line.forecast_qty);

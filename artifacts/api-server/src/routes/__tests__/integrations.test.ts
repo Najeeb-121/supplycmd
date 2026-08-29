@@ -1,25 +1,23 @@
-import { describe, it, expect, vi } from "vitest";
-
-// Mocking OdooClient and db to prevent actual network/DB calls during tests
-vi.mock("../integrations", () => ({
-  // We can write tests here if we export internal functions,
-  // or use supertest for integration testing the express router.
-}));
+import { describe, it, expect } from "vitest";
+import {
+  mapOdooPurchaseState,
+  num,
+} from "../integrations";
 
 describe("Integrations Sync Safety", () => {
   it("should block empty result deletions (suspicious empty result) if local records > 5", async () => {
     // This is a placeholder test for the safe delete logic implemented in integrations.ts
     // In a real environment, we would use an in-memory DB or a mocked db.delete() spy
     // to verify that db.delete is NOT called when Odoo returns 0 records and local > 5.
-    
+
     const localRecords = 10;
     const fetchedFromOdoo = 0;
     const errors = 0;
-    
+
     // Simulate safe delete condition
     let syncStatus = "success";
     let dbDeleteCalled = false;
-    
+
     if (fetchedFromOdoo === 0 && errors === 0) {
       if (localRecords > 5) {
         syncStatus = "suspicious_empty_result";
@@ -28,18 +26,49 @@ describe("Integrations Sync Safety", () => {
         dbDeleteCalled = true;
       }
     }
-    
+
     expect(syncStatus).toBe("suspicious_empty_result");
     expect(dbDeleteCalled).toBe(false);
   });
-  
+
   it("should calculate lead time correctly based on historical orders", () => {
     // Lead time = deliveryDate - createdAt
     const createdAt = new Date("2024-01-01T00:00:00Z").getTime();
     const deliveredAt = new Date("2024-01-10T00:00:00Z").getTime();
-    
+
     const leadTimeDays = (deliveredAt - createdAt) / (1000 * 60 * 60 * 24);
-    
+
     expect(leadTimeDays).toBe(9);
+  });
+});
+describe("Odoo integration parsing", () => {
+  it("preserves real zero and valid numeric values", () => {
+    expect(num(0)).toBe(0);
+    expect(num("0")).toBe(0);
+    expect(num(125.5)).toBe(125.5);
+    expect(num("125.5")).toBe(125.5);
+  });
+
+  it("rejects missing, false, malformed, and infinite values", () => {
+    expect(num(null)).toBeNaN();
+    expect(num(undefined)).toBeNaN();
+    expect(num(false)).toBeNaN();
+    expect(num("")).toBeNaN();
+    expect(num("invalid")).toBeNaN();
+    expect(num("Infinity")).toBeNaN();
+  });
+
+  it("maps supported Odoo purchase states explicitly", () => {
+    expect(mapOdooPurchaseState("draft")).toBe("pending");
+    expect(mapOdooPurchaseState("sent")).toBe("pending");
+    expect(mapOdooPurchaseState("to approve")).toBe("pending");
+    expect(mapOdooPurchaseState("purchase")).toBe("confirmed");
+    expect(mapOdooPurchaseState("done")).toBe("delivered");
+    expect(mapOdooPurchaseState("cancel")).toBe("cancelled");
+  });
+
+  it("rejects missing and unsupported Odoo purchase states", () => {
+    expect(mapOdooPurchaseState(null)).toBeNull();
+    expect(mapOdooPurchaseState("unknown")).toBeNull();
   });
 });

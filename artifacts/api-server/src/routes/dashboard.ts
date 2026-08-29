@@ -50,16 +50,61 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     .filter((o) => ["pending", "confirmed"].includes(o.status))
     .reduce((s, o) => s + o.totalValue, 0);
 
-  // OEE
-  let oeePercent = 0;
-  if (productionRuns.length > 0) {
-    const oees = productionRuns.map((run) => {
-      const avail = run.plannedTimeMin > 0 ? Math.max(0, Math.min(1, (run.actualTimeMin - run.downtimeMin) / run.plannedTimeMin)) : 0;
-      const perf = run.plannedUnits > 0 ? Math.min(1, run.actualUnits / run.plannedUnits) : 0;
-      const qual = run.actualUnits > 0 ? Math.max(0, (run.actualUnits - run.defects) / run.actualUnits) : 0;
-      return avail * perf * qual;
-    });
-    oeePercent = Math.round((oees.reduce((s, v) => s + v, 0) / oees.length) * 1000) / 10;
+  // OEE is only calculable for runs with complete timing and quality data.
+  let oeePercent: number | null = null;
+  const oeeValues: number[] = [];
+
+  for (const run of productionRuns) {
+    const {
+      plannedTimeMin,
+      actualTimeMin,
+      downtimeMin,
+      defects,
+    } = run;
+
+    if (
+      plannedTimeMin === null ||
+      plannedTimeMin <= 0 ||
+      actualTimeMin === null ||
+      downtimeMin === null ||
+      run.plannedUnits <= 0 ||
+      run.actualUnits <= 0 ||
+      defects === null
+    ) {
+      continue;
+    }
+
+    const availability = Math.max(
+      0,
+      Math.min(
+        1,
+        (actualTimeMin - downtimeMin) / plannedTimeMin,
+      ),
+    );
+
+    const performance = Math.max(
+      0,
+      Math.min(1, run.actualUnits / run.plannedUnits),
+    );
+
+    const quality = Math.max(
+      0,
+      Math.min(
+        1,
+        (run.actualUnits - defects) / run.actualUnits,
+      ),
+    );
+
+    oeeValues.push(availability * performance * quality);
+  }
+
+  if (oeeValues.length > 0) {
+    oeePercent =
+      Math.round(
+        (oeeValues.reduce((sum, value) => sum + value, 0) /
+          oeeValues.length) *
+        1000,
+      ) / 10;
   }
 
   // Forecast accuracy (avg MAPE)
