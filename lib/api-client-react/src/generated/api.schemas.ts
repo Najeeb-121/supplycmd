@@ -216,7 +216,7 @@ export interface InventoryKpis {
 export interface StockMovement {
   id: number;
   inventoryItemId: number;
-  movedAt: string;
+  movedAt: string | null;
   user: string;
   movementType: string;
   action: string;

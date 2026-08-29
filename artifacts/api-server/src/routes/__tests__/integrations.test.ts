@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   mapOdooPurchaseState,
   num,
+  parseOdooDateTime,
   parseOdooStockMovementQuantities,
 } from "../integrations";
 
@@ -94,4 +95,24 @@ describe("Odoo integration parsing", () => {
     expect(parseOdooStockMovementQuantities("invalid")).toBeNull();
     expect(parseOdooStockMovementQuantities("Infinity")).toBeNull();
   });
+
+  it("parses valid Odoo movement datetimes as UTC", () => {
+    expect(
+      parseOdooDateTime("2026-08-12 11:52:59")?.toISOString(),
+    ).toBe("2026-08-12T11:52:59.000Z");
+
+    expect(
+      parseOdooDateTime("2024-02-29 00:00:00")?.toISOString(),
+    ).toBe("2024-02-29T00:00:00.000Z");
+  });
+
+  it("rejects missing, malformed, and impossible Odoo datetimes", () => {
+    expect(parseOdooDateTime(null)).toBeNull();
+    expect(parseOdooDateTime(false)).toBeNull();
+    expect(parseOdooDateTime("")).toBeNull();
+    expect(parseOdooDateTime("2026-02-29 00:00:00")).toBeNull();
+    expect(parseOdooDateTime("2026-13-01 00:00:00")).toBeNull();
+    expect(parseOdooDateTime("not-a-date")).toBeNull();
+  });
+
 });

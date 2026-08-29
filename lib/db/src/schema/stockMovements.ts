@@ -14,7 +14,7 @@ export const stockMovementsTable = pgTable("stock_movements", {
     .notNull()
     .references(() => inventoryItemsTable.id, { onDelete: "cascade" }),
   // Who / when
-  movedAt: timestamp("moved_at", { withTimezone: true }).notNull().defaultNow(),
+  movedAt: timestamp("moved_at", { withTimezone: true }).defaultNow(),
   user: text("user").notNull().default("system"),
   // What
   movementType: text("movement_type").notNull(), // goods_receipt | goods_issue | transfer | adjustment | return | production_consumption | production_output

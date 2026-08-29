@@ -43,6 +43,48 @@ export function parseOdooStockMovementQuantities(
   };
 }
 
+export function parseOdooDateTime(value: unknown): Date | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const match = value.trim().match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] =
+    match;
+
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+
+  // Odoo stores datetime fields in UTC and returns them without a timezone.
+  const parsed = new Date(
+    Date.UTC(year, month - 1, day, hour, minute, second),
+  );
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day ||
+    parsed.getUTCHours() !== hour ||
+    parsed.getUTCMinutes() !== minute ||
+    parsed.getUTCSeconds() !== second
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
 export type OdooOrderStatus =
   | "pending"
   | "confirmed"
@@ -752,11 +794,20 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
         continue;
       }
 
+      const movedAt = parseOdooDateTime(m.date);
+
+      if (!movedAt) {
+        failed++;
+        errors.push(`Move #${odooId}: Missing or invalid movement date.`);
+        continue;
+      }
+
       try {
         await db.insert(stockMovementsTable).values({
           companyId,
           odooId,
           inventoryItemId,
+          movedAt,
           movementType: "transfer",
           action: "completed",
           referenceNumber: String(m.reference ?? ""),
@@ -767,6 +818,7 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
             stockMovementsTable.odooId,
           ],
           set: {
+            movedAt,
             ...quantities,
           },
         });

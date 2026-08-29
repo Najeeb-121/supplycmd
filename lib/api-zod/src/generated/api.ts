@@ -282,7 +282,7 @@ export const ListStockMovementsQueryParams = zod.object({
 export const ListStockMovementsResponseItem = zod.object({
   "id": zod.number(),
   "inventoryItemId": zod.number(),
-  "movedAt": zod.string(),
+  "movedAt": zod.string().nullable(),
   "user": zod.string(),
   "movementType": zod.string(),
   "action": zod.string(),
@@ -448,7 +448,7 @@ export const CreateStockMovementBody = zod.object({
 export const CreateStockMovementResponse = zod.object({
   "id": zod.number(),
   "inventoryItemId": zod.number(),
-  "movedAt": zod.string(),
+  "movedAt": zod.string().nullable(),
   "user": zod.string(),
   "movementType": zod.string(),
   "action": zod.string(),
