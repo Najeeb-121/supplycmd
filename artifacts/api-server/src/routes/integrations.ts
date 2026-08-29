@@ -85,6 +85,32 @@ export function parseOdooDateTime(value: unknown): Date | null {
   return parsed;
 }
 
+export type VerifiedOdooStockMovementType =
+  | "goods_receipt"
+  | "goods_issue"
+  | "transfer"
+  | "return";
+
+export function mapOdooStockMovementType(
+  pickingTypeCode: unknown,
+  originReturnedMove: unknown,
+): VerifiedOdooStockMovementType | null {
+  if (many2oneId(originReturnedMove) !== null) {
+    return "return";
+  }
+
+  switch (pickingTypeCode) {
+    case "incoming":
+      return "goods_receipt";
+    case "outgoing":
+      return "goods_issue";
+    case "internal":
+      return "transfer";
+    default:
+      return null;
+  }
+}
+
 export type OdooOrderStatus =
   | "pending"
   | "confirmed"
@@ -771,8 +797,55 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
   try {
     const client = new OdooClient(config);
     const moves = await client.searchRead<Record<string, unknown>>(
-      "stock.move", [["state", "=", "done"]], ["id", "product_id", "date", "picking_type_id", "product_uom_qty", "reference"]
+      "stock.move",
+      [["state", "=", "done"]],
+      [
+        "id",
+        "product_id",
+        "date",
+        "picking_type_id",
+        "origin_returned_move_id",
+        "product_uom_qty",
+        "reference",
+      ],
+
     );
+    const pickingTypeIds = Array.from(
+      new Set(
+        moves
+          .map((move) => many2oneId(move.picking_type_id))
+          .filter((id): id is number => id !== null),
+      ),
+    );
+
+    const pickingTypeCodeById = new Map<number, string>();
+
+    if (pickingTypeIds.length > 0) {
+      const pickingTypes = await client.searchRead<
+        Record<string, unknown>
+      >(
+        "stock.picking.type",
+        [["id", "in", pickingTypeIds]],
+        ["id", "code"],
+      );
+
+      for (const pickingType of pickingTypes) {
+        const id =
+          typeof pickingType.id === "number"
+            ? pickingType.id
+            : null;
+        const code =
+          typeof pickingType.code === "string" &&
+            pickingType.code.trim()
+            ? pickingType.code
+            : null;
+
+        if (id !== null && code !== null) {
+          pickingTypeCodeById.set(id, code);
+        }
+      }
+    }
+
     const items = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.companyId, companyId));
     const itemMap = new Map<number, number>();
     for (const item of items) if (item.odooId) itemMap.set(item.odooId, item.id);
@@ -801,6 +874,16 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
         errors.push(`Move #${odooId}: Missing or invalid movement date.`);
         continue;
       }
+      const pickingTypeId = many2oneId(m.picking_type_id);
+      const pickingTypeCode =
+        pickingTypeId === null
+          ? null
+          : pickingTypeCodeById.get(pickingTypeId) ?? null;
+
+      const movementType = mapOdooStockMovementType(
+        pickingTypeCode,
+        m.origin_returned_move_id,
+      );
 
       try {
         await db.insert(stockMovementsTable).values({
@@ -808,7 +891,7 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
           odooId,
           inventoryItemId,
           movedAt,
-          movementType: "transfer",
+          movementType,
           action: "completed",
           referenceNumber: String(m.reference ?? ""),
           ...quantities,
@@ -819,6 +902,7 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
           ],
           set: {
             movedAt,
+            movementType,
             ...quantities,
           },
         });

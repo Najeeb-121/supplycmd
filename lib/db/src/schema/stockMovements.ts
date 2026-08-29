@@ -17,7 +17,7 @@ export const stockMovementsTable = pgTable("stock_movements", {
   movedAt: timestamp("moved_at", { withTimezone: true }).defaultNow(),
   user: text("user").notNull().default("system"),
   // What
-  movementType: text("movement_type").notNull(), // goods_receipt | goods_issue | transfer | adjustment | return | production_consumption | production_output
+  movementType: text("movement_type"),// goods_receipt | goods_issue | transfer | adjustment | return | production_consumption | production_output
   action: text("action").notNull(),
   referenceNumber: text("reference_number"),
   reason: text("reason"),

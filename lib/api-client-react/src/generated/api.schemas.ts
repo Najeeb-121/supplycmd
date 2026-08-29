@@ -218,7 +218,7 @@ export interface StockMovement {
   inventoryItemId: number;
   movedAt: string | null;
   user: string;
-  movementType: string;
+  movementType: string | null;
   action: string;
   referenceNumber?: string;
   reason?: string;

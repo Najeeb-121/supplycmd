@@ -937,7 +937,7 @@ components:
         inventoryItemId:  { type: number }
         movedAt:          { type: string, nullable: true }
         user:             { type: string }
-        movementType:     { type: string }
+        movementType:     { type: string, nullable: true }
         action:           { type: string }
         referenceNumber:  { type: string }
         reason:           { type: string }

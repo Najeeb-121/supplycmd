@@ -419,7 +419,7 @@ export default function InventoryPage() {
         m.movedAt ? new Date(m.movedAt).toLocaleString() : "",
         m.itemName ?? "",
         m.itemSku ?? "",
-        m.movementType,
+        m.movementType ?? "Unknown",
         m.action,
         m.referenceNumber ?? "",
         m.quantityBefore ?? "Unknown",
@@ -711,7 +711,11 @@ export default function InventoryPage() {
                         <div className="font-mono text-xs text-muted-foreground">{m.itemSku ?? ""}</div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-xs capitalize">{MOVEMENT_TYPES.find(t => t.value === m.movementType)?.label ?? m.movementType}</Badge>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {MOVEMENT_TYPES.find((t) => t.value === m.movementType)?.label ??
+                            m.movementType ??
+                            "Unknown"}
+                        </Badge>
                       </TableCell>
                       <TableCell className="max-w-[140px] truncate">{m.action}</TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">{m.referenceNumber ?? "—"}</TableCell>

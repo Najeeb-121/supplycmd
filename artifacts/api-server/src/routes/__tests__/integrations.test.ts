@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   mapOdooPurchaseState,
+  mapOdooStockMovementType,
   num,
   parseOdooDateTime,
   parseOdooStockMovementQuantities,
@@ -113,6 +114,36 @@ describe("Odoo integration parsing", () => {
     expect(parseOdooDateTime("2026-02-29 00:00:00")).toBeNull();
     expect(parseOdooDateTime("2026-13-01 00:00:00")).toBeNull();
     expect(parseOdooDateTime("not-a-date")).toBeNull();
+  });
+
+  it("maps verified Odoo picking codes to movement types", () => {
+    expect(mapOdooStockMovementType("incoming", false)).toBe(
+      "goods_receipt",
+    );
+    expect(mapOdooStockMovementType("outgoing", false)).toBe(
+      "goods_issue",
+    );
+    expect(mapOdooStockMovementType("internal", false)).toBe(
+      "transfer",
+    );
+  });
+
+  it("classifies returned moves before their picking direction", () => {
+    expect(
+      mapOdooStockMovementType(
+        "incoming",
+        [42, "Original Delivery"],
+      ),
+    ).toBe("return");
+  });
+
+  it("does not guess unsupported or missing movement types", () => {
+    expect(mapOdooStockMovementType("mrp_operation", false)).toBeNull();
+    expect(mapOdooStockMovementType("repair_operation", false)).toBeNull();
+    expect(mapOdooStockMovementType(null, false)).toBeNull();
+    expect(mapOdooStockMovementType("incoming", false)).not.toBe(
+      "transfer",
+    );
   });
 
 });
