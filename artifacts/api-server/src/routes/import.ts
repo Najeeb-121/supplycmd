@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import type { ZodType } from "zod";
+import { z, type ZodType } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, inventoryItemsTable, suppliersTable, productionRunsTable, demandRecordsTable, ordersTable } from "@workspace/db";
 import { logger } from "../lib/logger";
@@ -22,6 +22,13 @@ function validateRow<T>(schema: ZodType<T>, candidate: unknown): { ok: true; dat
   if (!result.success) return { ok: false, error: formatZodError(result.error) };
   return { ok: true, data: result.data };
 }
+export const ImportOrderStatus = z.enum([
+  "pending",
+  "confirmed",
+  "shipped",
+  "delivered",
+  "cancelled",
+]);
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -75,51 +82,76 @@ function parseFile(buffer: Buffer, mimetype: string, originalname: string): Reco
   return XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
 }
 
-function num(v: unknown): number { return parseFloat(String(v)) || 0; }
-function optionalNum(v: unknown): number | undefined {
+export function optionalNum(v: unknown): number | undefined {
   const value = str(v);
   if (!value) return undefined;
-  return Number(value);
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
-function requiredNum(v: unknown): number {
+
+export function requiredNum(v: unknown): number {
   const value = str(v);
-  return value ? Number(value) : Number.NaN;
+  if (!value) return Number.NaN;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 function str(v: unknown): string { return String(v ?? "").trim(); }
 
-// ─── Date normalizer ───────────────────────────────────────────────────────────
-// Accepts YYYY-MM-DD, MM/DD/YYYY, DD-MM-YYYY, DD/MM/YYYY, or JS-parseable strings.
-// Returns YYYY-MM-DD or null if unparseable.
-function parseDate(v: unknown): string | null {
+// Date normalizer.
+// Accepts YYYY-MM-DD, MM/DD/YYYY, DD-MM-YYYY, and Excel serial dates.
+// Returns YYYY-MM-DD or null. Ambiguous DD/MM/YYYY input is not accepted.
+function validDate(
+  year: number,
+  month: number,
+  day: number,
+): string | null {
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return [
+    String(year).padStart(4, "0"),
+    String(month).padStart(2, "0"),
+    String(day).padStart(2, "0"),
+  ].join("-");
+}
+
+export function parseDate(v: unknown): string | null {
   const s = str(v);
   if (!s) return null;
 
-  // Already YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-
-  // MM/DD/YYYY
-  const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
-
-  // DD-MM-YYYY
-  const dmy1 = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-  if (dmy1) return `${dmy1[3]}-${dmy1[2].padStart(2, "0")}-${dmy1[1].padStart(2, "0")}`;
-
-  // DD/MM/YYYY
-  const dmy2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (dmy2) return `${dmy2[3]}-${dmy2[2].padStart(2, "0")}-${dmy2[1].padStart(2, "0")}`;
-
-  // XLSX serial date number (days since 1900-01-01)
-  const serial = parseFloat(s);
-  if (!isNaN(serial) && serial > 0 && serial < 100000) {
-    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-    const d = new Date(excelEpoch.getTime() + serial * 86400000);
-    if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    return validDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
   }
 
-  // Fallback: JS Date parse
-  const d = new Date(s);
-  if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+  const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) {
+    return validDate(Number(mdy[3]), Number(mdy[1]), Number(mdy[2]));
+  }
+
+  const dmy = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dmy) {
+    return validDate(Number(dmy[3]), Number(dmy[2]), Number(dmy[1]));
+  }
+
+  if (/^\d+(?:\.\d+)?$/.test(s)) {
+    const serial = Number(s);
+
+    if (Number.isFinite(serial) && serial > 0 && serial < 100000) {
+      const excelEpoch = Date.UTC(1899, 11, 30);
+      const date = new Date(excelEpoch + serial * 86400000);
+      return date.toISOString().slice(0, 10);
+    }
+  }
 
   return null;
 }
@@ -453,12 +485,14 @@ router.post(
           }
           const candidate = {
             productName,
-            plannedUnits: num(get(r, "plannedUnits", "planned_units", "plannedunits")),
-            actualUnits: num(get(r, "actualUnits", "actual_units", "actualunits")),
-            plannedTimeMin: num(get(r, "plannedTimeMin", "planned_time_min", "plannedtimemin")),
-            actualTimeMin: num(get(r, "actualTimeMin", "actual_time_min", "actualtimemin")),
-            defects: num(get(r, "defects")) || 0,
-            downtimeMin: num(get(r, "downtimeMin", "downtime_min", "downtimemin")) || 0,
+            plannedUnits: requiredNum(get(r, "plannedUnits", "planned_units", "plannedunits")),
+            actualUnits: requiredNum(get(r, "actualUnits", "actual_units", "actualunits")),
+            plannedTimeMin: requiredNum(get(r, "plannedTimeMin", "planned_time_min", "plannedtimemin")),
+            actualTimeMin: requiredNum(get(r, "actualTimeMin", "actual_time_min", "actualtimemin")),
+            defects: requiredNum(get(r, "defects")),
+            downtimeMin: requiredNum(
+              get(r, "downtimeMin", "downtime_min", "downtimemin"),
+            ),
             runDate,
           };
           const validated = validateRow(StrictProductionBody, candidate);
@@ -476,8 +510,8 @@ router.post(
           if (!productName || !period) { errors.push(`Row ${i + 2}: productName and period are required`); continue; }
           const candidate = {
             productName, period,
-            actualDemand: num(get(r, "actualDemand", "actual_demand", "actualdemand")),
-            forecastedDemand: num(get(r, "forecastedDemand", "forecasted_demand", "forecasteddemand")),
+            actualDemand: requiredNum(get(r, "actualDemand", "actual_demand", "actualdemand")),
+            forecastedDemand: requiredNum(get(r, "forecastedDemand", "forecasted_demand", "forecasteddemand")),
           };
           const validated = validateRow(StrictDemandBody, candidate);
           if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
@@ -511,17 +545,29 @@ router.post(
             errors.push(`Row ${i + 2}: expectedDelivery "${rawExpectedDelivery}" is not a valid date — use YYYY-MM-DD or MM/DD/YYYY`);
             continue;
           }
+          const statusResult = ImportOrderStatus.safeParse(
+            get(r, "status"),
+          );
 
-          const supplierId = num(get(r, "supplierId", "supplier_id", "supplierid"));
+          if (!statusResult.success) {
+            errors.push(
+              `Row ${i + 2}: status must be pending, confirmed, shipped, delivered, or cancelled`,
+            );
+            continue;
+          }
+
+          const supplierId = requiredNum(get(r, "supplierId", "supplier_id", "supplierid"));
           const supplier = allSuppliers.find((s) => s.id === supplierId);
           if (!supplier) { errors.push(`Row ${i + 2}: supplierId ${supplierId} does not match any known supplier`); continue; }
 
           const candidate = {
             supplierId,
-            totalValue: num(get(r, "totalValue", "total_value", "totalvalue")),
+            totalValue: requiredNum(get(r, "totalValue", "total_value", "totalvalue")),
             orderDate,
             expectedDelivery,
-            itemCount: num(get(r, "itemCount", "item_count", "itemcount")) || 1,
+            itemCount: requiredNum(
+              get(r, "itemCount", "item_count", "itemcount"),
+            ),
           };
           const validated = validateRow(StrictOrderBody, candidate);
           if (!validated.ok) { errors.push(`Row ${i + 2}: ${validated.error}`); continue; }
@@ -530,7 +576,7 @@ router.post(
             ...validated.data,
             companyId: req.user!.companyId,
             supplierName: supplier.name,
-            status: get(r, "status") || "pending",
+            status: statusResult.data,
           });
           imported++;
         } catch (err) { errors.push(`Row ${i + 2}: ${(err as Error).message}`); }
