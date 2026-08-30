@@ -19,7 +19,7 @@ class InsufficientStockError extends Error { }
 // ── Stricter inventory schema with cross-field rules ───────────────────────────
 export const StrictInventoryBody = CreateInventoryItemBody
   .extend({
-    currentStock: z.number().int().min(0),
+    currentStock: z.number().min(0),
     reservedQuantity: z.number().int().min(0).optional(),
     minStock: z.number().int().min(0).optional(),
     maxStock: z.number().int().min(0).optional(),
@@ -36,7 +36,7 @@ export const StrictInventoryBody = CreateInventoryItemBody
 
 const StrictInventoryPatch = UpdateInventoryItemBody
   .extend({
-    currentStock: z.number().int().min(0).optional(),
+    currentStock: z.number().min(0).optional(),
     reservedQuantity: z.number().int().min(0).optional(),
     minStock: z.number().int().min(0).optional(),
     maxStock: z.number().int().min(0).optional(),

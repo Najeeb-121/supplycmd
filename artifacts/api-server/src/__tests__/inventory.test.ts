@@ -102,6 +102,24 @@ describe("POST /api/inventory", () => {
     expect(res.body.errors).toHaveProperty("currentStock");
   });
 
+  it("201 – preserves valid decimal stock quantities", async () => {
+    mocks.mockReturning.mockResolvedValueOnce([
+      { ...fakeItem, currentStock: 12.75 },
+    ]);
+
+    const res = await request(app)
+      .post("/api/inventory")
+      .set("x-e2e-test-company-id", "1")
+      .send({ ...validBody, currentStock: 12.75 });
+
+    expect(res.status).toBe(201);
+    expect(mocks.mockValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentStock: 12.75,
+      }),
+    );
+  });
+
   it("400 – rejects when holdingCostRate exceeds 1", async () => {
     const res = await request(app)
       .post("/api/inventory").set("x-e2e-test-company-id", "1")

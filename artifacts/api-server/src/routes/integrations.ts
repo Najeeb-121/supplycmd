@@ -518,23 +518,33 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
     );
 
     for (const p of products) {
-      const odooId = p.id as number;
-      const odooProductTemplateId = Array.isArray(p.product_tmpl_id)
-        ? (p.product_tmpl_id[0] as number)
-        : null;
-      const name = String(p.name ?? "");
-      const sku = typeof p.default_code === "string" ? p.default_code.trim() : "";
-      if (!sku) {
+      const odooId = parsePositiveOdooId(p.id);
+      const odooProductTemplateId = many2oneId(
+        p.product_tmpl_id,
+      );
+      const name = optionalOdooString(p.name);
+      const sku = optionalOdooString(p.default_code);
+
+      if (
+        odooId === null ||
+        odooProductTemplateId === null ||
+        name === null ||
+        sku === null
+      ) {
         failed++;
-        errors.push(`${name || `#${odooId}`}: no default_code (SKU) set in Odoo — skipped`);
+        errors.push(
+          "Product has an invalid Odoo ID, template ID, name, or SKU.",
+        );
         continue;
       }
 
       const candidate = {
         name,
         sku,
-        category: many2oneLabel(p.categ_id, "Uncategorized"),
-        currentStock: Math.round(num(p.qty_available)),
+        category: optionalOdooString(
+          Array.isArray(p.categ_id) ? p.categ_id[1] : null,
+        ),
+        currentStock: num(p.qty_available),
         unitCost: num(p.standard_price),
       };
       const validated = StrictInventoryBody.safeParse(candidate);
@@ -572,7 +582,13 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
     let syncStatus = failed === 0 ? "success" : synced > 0 ? "partial" : "error";
 
     // Cleanup phase: remove local records that no longer exist in Odoo
-    const fetchedIds = products.map(p => p.id as number);
+    const fetchedIds = Array.from(
+      new Set(
+        products
+          .map((product) => parsePositiveOdooId(product.id))
+          .filter((id): id is number => id !== null),
+      ),
+    );
     if (fetchedIds.length > 0) {
       await db.delete(inventoryItemsTable)
         .where(and(
