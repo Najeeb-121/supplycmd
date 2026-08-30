@@ -965,7 +965,7 @@ components:
       properties:
         id:                  { type: number }
         name:                { type: string }
-        country:             { type: string }
+        country:             { type: string, nullable: true }
         leadTimeDays:        { type: number, nullable: true }
         onTimeDeliveryRate:  { type: number, nullable: true }
         qualityScore:        { type: number, nullable: true }

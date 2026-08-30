@@ -241,7 +241,7 @@ export interface StockMovementInput {
 export interface Supplier {
   id: number;
   name: string;
-  country: string;
+  country: string | null;
   leadTimeDays: number | null;
   onTimeDeliveryRate: number | null;
   qualityScore: number | null;

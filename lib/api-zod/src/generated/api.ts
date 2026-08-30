@@ -467,7 +467,7 @@ export const CreateStockMovementResponse = zod.object({
 export const ListSuppliersResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "country": zod.string(),
+  "country": zod.string().nullable(),
   "leadTimeDays": zod.number().nullable(),
   "onTimeDeliveryRate": zod.number().nullable(),
   "qualityScore": zod.number().nullable(),
@@ -492,7 +492,7 @@ export const CreateSupplierBody = zod.object({
 export const CreateSupplierResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "country": zod.string(),
+  "country": zod.string().nullable(),
   "leadTimeDays": zod.number().nullable(),
   "onTimeDeliveryRate": zod.number().nullable(),
   "qualityScore": zod.number().nullable(),
@@ -520,7 +520,7 @@ export const UpdateSupplierBody = zod.object({
 export const UpdateSupplierResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "country": zod.string(),
+  "country": zod.string().nullable(),
   "leadTimeDays": zod.number().nullable(),
   "onTimeDeliveryRate": zod.number().nullable(),
   "qualityScore": zod.number().nullable(),

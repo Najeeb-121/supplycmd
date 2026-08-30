@@ -9,7 +9,7 @@ export const suppliersTable = pgTable("suppliers", {
     .notNull()
     .references(() => companiesTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  country: text("country").notNull(),
+  country: text("country"),
   // Odoo res.partner id — set when this row came from an Odoo sync, used
   // as the idempotency key so re-syncing updates instead of duplicating.
   // Unique per company, not globally.

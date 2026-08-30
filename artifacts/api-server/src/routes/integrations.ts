@@ -9,6 +9,10 @@ import { z } from "zod";
 
 const router: IRouter = Router();
 
+const StrictOdooSupplierBody = StrictSupplierBody.extend({
+  country: z.string().min(1).nullable(),
+});
+
 export function num(v: unknown): number {
   if (typeof v === "number") {
     return Number.isFinite(v) ? v : Number.NaN;
@@ -20,6 +24,15 @@ export function num(v: unknown): number {
 
   const parsed = Number(v);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+export function parsePositiveOdooId(value: unknown): number | null {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value > 0
+  )
+    ? value
+    : null;
 }
 
 export function optionalOdooString(value: unknown): string | null {
@@ -152,7 +165,9 @@ function many2oneLabel(v: unknown, fallback: string): string {
   return Array.isArray(v) && typeof v[1] === "string" ? v[1] : fallback;
 }
 function many2oneId(v: unknown): number | null {
-  return Array.isArray(v) && typeof v[0] === "number" ? v[0] : null;
+  return Array.isArray(v)
+    ? parsePositiveOdooId(v[0])
+    : null;
 }
 
 
@@ -280,7 +295,22 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
   try {
     const client = new OdooClient(config);
     const existingSuppliers = await db.select().from(suppliersTable).where(eq(suppliersTable.companyId, companyId));
-    const existingSupplierIds = new Set(existingSuppliers.map(s => s.odooId).filter(Boolean));
+    const existingSupplierByOdooId = new Map<
+      number,
+      (typeof existingSuppliers)[number]
+    >();
+
+    for (const supplier of existingSuppliers) {
+      const odooId = parsePositiveOdooId(supplier.odooId);
+
+      if (odooId !== null) {
+        existingSupplierByOdooId.set(odooId, supplier);
+      }
+    }
+
+    const existingSupplierIds = new Set(
+      existingSupplierByOdooId.keys(),
+    );
     const poData = await db.select().from(ordersTable).where(eq(ordersTable.companyId, companyId));
 
     let partners: Record<string, unknown>[] = [];
@@ -315,22 +345,27 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
       );
     }
 
-    // Deduplicate by name to avoid showing duplicate vendors in the dashboard
-    const uniquePartnersMap = new Map<string, Record<string, unknown>>();
+
     for (const p of partners) {
-      const name = String(p.name ?? "");
-      if (name && !uniquePartnersMap.has(name)) {
-        uniquePartnersMap.set(name, p);
+      const odooId = parsePositiveOdooId(p.id);
+      const name = optionalOdooString(p.name);
+
+      if (odooId === null || name === null) {
+        failed++;
+        errors.push(
+          `Supplier record has an invalid Odoo ID or missing name.`,
+        );
+        continue;
       }
-    }
-    const uniquePartners = Array.from(uniquePartnersMap.values());
 
-    for (const p of uniquePartners) {
-      const odooId = p.id as number;
-      const name = String(p.name ?? "");
-
-      // Calculate real metrics from ordersTable
-      const supplierPOs = poData.filter(po => po.supplierId === (existingSuppliers.find(s => s.odooId === odooId)?.id || -1) || po.supplierName === name);
+      // Calculate metrics only from orders linked to this exact supplier.
+      const existingSupplier = existingSupplierByOdooId.get(odooId);
+      const supplierPOs =
+        existingSupplier === undefined
+          ? []
+          : poData.filter(
+            (po) => po.supplierId === existingSupplier.id,
+          );
       let leadTimeDays: number | null = null;
       let onTimeDeliveryRate: number | null = null;
 
@@ -358,13 +393,15 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
 
       const candidate = {
         name,
-        country: many2oneLabel(p.country_id, "Unknown"),
+        country: optionalOdooString(
+          Array.isArray(p.country_id) ? p.country_id[1] : null,
+        ),
         leadTimeDays,
         onTimeDeliveryRate,
         qualityScore: null,
         fillRate: null,
       };
-      const validated = StrictSupplierBody.safeParse(candidate);
+      const validated = StrictOdooSupplierBody.safeParse(candidate);
       if (!validated.success) {
         failed++;
         errors.push(`${name || `#${odooId}`}: ${validated.error.issues.map((i) => i.message).join("; ")}`);
@@ -400,10 +437,18 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
     let syncStatus = failed === 0 ? "success" : synced > 0 ? "partial" : "error";
 
     // Cleanup phase: remove local records that no longer exist in Odoo
-    const fetchedIds = uniquePartners.map(p => p.id as number);
+    const fetchedIds = Array.from(
+      new Set(
+        partners
+          .map((partner) => parsePositiveOdooId(partner.id))
+          .filter((id): id is number => id !== null),
+      ),
+    );
 
     // Category 2: Log warning for omitted previously synced suppliers
-    const missingIds = Array.from(existingSupplierIds).filter(id => id && !fetchedIds.includes(id));
+    const missingIds = Array.from(existingSupplierIds).filter(
+      (id) => !fetchedIds.includes(id),
+    );
     if (missingIds.length > 0) {
       req.log.warn({ missingIds }, "Suppliers missing from sync, potentially due to tag removal. They will be removed if auto-delete proceeds.");
     }
@@ -602,16 +647,25 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
     );
 
     const suppliers = await db.select().from(suppliersTable).where(eq(suppliersTable.companyId, companyId));
-    const supplierMap = new Map<number, typeof suppliers[0]>();
-    for (const s of suppliers) {
-      if (s.odooId) supplierMap.set(s.odooId, s);
+    const supplierMap = new Map<number, (typeof suppliers)[number]>();
+
+    for (const supplier of suppliers) {
+      const odooId = parsePositiveOdooId(supplier.odooId);
+
+      if (odooId !== null) {
+        supplierMap.set(odooId, supplier);
+      }
     }
 
     // Auto-fetch missing suppliers
     const missingSupplierIds = new Set<number>();
-    for (const p of purchases) {
-      const odooSupplierId = Array.isArray(p.partner_id) ? (p.partner_id[0] as number) : 0;
-      if (odooSupplierId && !supplierMap.has(odooSupplierId)) {
+    for (const purchase of purchases) {
+      const odooSupplierId = many2oneId(purchase.partner_id);
+
+      if (
+        odooSupplierId !== null &&
+        !supplierMap.has(odooSupplierId)
+      ) {
         missingSupplierIds.add(odooSupplierId);
       }
     }
@@ -625,17 +679,27 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
         );
 
         for (const p of missingPartners) {
-          const odooId = p.id as number;
-          const name = String(p.name ?? "");
+          const odooId = parsePositiveOdooId(p.id);
+          const name = optionalOdooString(p.name);
+
+          if (odooId === null || name === null) {
+            req.log.warn(
+              { partner: p },
+              "Skipping invalid auto-fetched Odoo supplier",
+            );
+            continue;
+          }
           const candidate = {
             name,
-            country: many2oneLabel(p.country_id, "Unknown"),
+            country: optionalOdooString(
+              Array.isArray(p.country_id) ? p.country_id[1] : null,
+            ),
             leadTimeDays: null,
             onTimeDeliveryRate: null,
             qualityScore: null,
             fillRate: null,
           };
-          const validated = StrictSupplierBody.safeParse(candidate);
+          const validated = StrictOdooSupplierBody.safeParse(candidate);
           if (validated.success) {
             const [inserted] = await db
               .insert(suppliersTable)
@@ -654,8 +718,16 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
     }
 
     for (const p of purchases) {
-      const odooId = p.id as number;
-      const odooSupplierId = Array.isArray(p.partner_id) ? (p.partner_id[0] as number) : 0;
+      const odooId = parsePositiveOdooId(p.id);
+      const odooSupplierId = many2oneId(p.partner_id);
+
+      if (odooId === null || odooSupplierId === null) {
+        failed++;
+        errors.push(
+          "Purchase order has an invalid Odoo ID or supplier ID.",
+        );
+        continue;
+      }
 
       const supplier = supplierMap.get(odooSupplierId);
       if (!supplier) {
@@ -740,7 +812,13 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
     let syncStatus = failed === 0 ? "success" : synced > 0 ? "partial" : "error";
 
     // Cleanup phase: remove local records that no longer exist in Odoo
-    const fetchedIds = purchases.map(p => p.id as number);
+    const fetchedIds = Array.from(
+      new Set(
+        purchases
+          .map((purchase) => parsePositiveOdooId(purchase.id))
+          .filter((id): id is number => id !== null),
+      ),
+    );
     if (fetchedIds.length > 0) {
       await db.delete(ordersTable)
         .where(and(

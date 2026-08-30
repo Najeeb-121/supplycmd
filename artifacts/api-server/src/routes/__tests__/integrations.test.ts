@@ -6,6 +6,7 @@ import {
   optionalOdooString,
   parseOdooDateTime,
   parseOdooStockMovementQuantities,
+  parsePositiveOdooId,
 } from "../integrations";
 
 describe("Integrations Sync Safety", () => {
@@ -160,6 +161,21 @@ describe("Odoo integration parsing", () => {
     expect(optionalOdooString("")).toBeNull();
     expect(optionalOdooString("   ")).toBeNull();
     expect(optionalOdooString(123)).toBeNull();
+  });
+  it("accepts positive integer Odoo IDs", () => {
+    expect(parsePositiveOdooId(1)).toBe(1);
+    expect(parsePositiveOdooId(380)).toBe(380);
+  });
+
+  it("rejects invalid Odoo IDs", () => {
+    expect(parsePositiveOdooId(null)).toBeNull();
+    expect(parsePositiveOdooId(false)).toBeNull();
+    expect(parsePositiveOdooId("380")).toBeNull();
+    expect(parsePositiveOdooId(0)).toBeNull();
+    expect(parsePositiveOdooId(-1)).toBeNull();
+    expect(parsePositiveOdooId(1.5)).toBeNull();
+    expect(parsePositiveOdooId(Number.NaN)).toBeNull();
+
   });
 
 });

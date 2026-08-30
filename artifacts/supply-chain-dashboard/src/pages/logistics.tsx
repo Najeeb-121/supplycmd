@@ -116,7 +116,7 @@ export default function LogisticsPage() {
     setEditingSupplier(supplier);
     supplierForm.reset({
       name: supplier.name,
-      country: supplier.country,
+      country: supplier.country ?? "",
       leadTimeDays: supplier.leadTimeDays ?? undefined,
       onTimeDeliveryRate:
         supplier.onTimeDeliveryRate ?? undefined,
@@ -380,7 +380,9 @@ export default function LogisticsPage() {
                         <TableRow key={s.id} className="hover:bg-muted/10">
                           <TableCell>
                             <div className="font-medium text-foreground">{s.name}</div>
-                            <div className="text-xs text-muted-foreground">{s.country}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {s.country ?? "Unknown"}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
                             {s.leadTimeDays != null
@@ -553,7 +555,9 @@ export default function LogisticsPage() {
                       </FormControl>
                       <SelectContent>
                         {suppliers?.map(s => (
-                          <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.country})</SelectItem>
+                          <SelectItem key={s.id} value={String(s.id)}>
+                            {s.name} ({s.country ?? "Unknown"})
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
