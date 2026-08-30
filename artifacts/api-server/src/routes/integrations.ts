@@ -25,6 +25,17 @@ export function num(v: unknown): number {
   const parsed = Number(v);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
+
+export function parseNonNegativeOdooNumber(
+  value: unknown,
+): number | null {
+  const parsed = num(value);
+
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : null;
+}
+
 export function parsePositiveOdooId(value: unknown): number | null {
   return (
     typeof value === "number" &&
@@ -934,10 +945,7 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
       );
 
       for (const pickingType of pickingTypes) {
-        const id =
-          typeof pickingType.id === "number"
-            ? pickingType.id
-            : null;
+        const id = parsePositiveOdooId(pickingType.id);
         const code =
           typeof pickingType.code === "string" &&
             pickingType.code.trim()
@@ -952,11 +960,26 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
 
     const items = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.companyId, companyId));
     const itemMap = new Map<number, number>();
-    for (const item of items) if (item.odooId) itemMap.set(item.odooId, item.id);
+
+    for (const item of items) {
+      const odooId = parsePositiveOdooId(item.odooId);
+
+      if (odooId !== null) {
+        itemMap.set(odooId, item.id);
+      }
+    }
 
     for (const m of moves) {
-      const odooId = m.id as number;
-      const odooProductId = Array.isArray(m.product_id) ? (m.product_id[0] as number) : 0;
+      const odooId = parsePositiveOdooId(m.id);
+      const odooProductId = many2oneId(m.product_id);
+
+      if (odooId === null || odooProductId === null) {
+        failed++;
+        errors.push(
+          "Stock movement has an invalid Odoo ID or product ID.",
+        );
+        continue;
+      }
       const inventoryItemId = itemMap.get(odooProductId);
       if (!inventoryItemId) {
         failed++; errors.push(`Move #${odooId}: Product not synced.`); continue;
@@ -1020,7 +1043,13 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
     }
     let syncStatus = failed === 0 ? "success" : synced > 0 ? "partial" : "error";
     // Cleanup phase: remove local records that no longer exist in Odoo
-    const fetchedIds = moves.map(p => p.id as number);
+    const fetchedIds = Array.from(
+      new Set(
+        moves
+          .map((move) => parsePositiveOdooId(move.id))
+          .filter((id): id is number => id !== null),
+      ),
+    );
     if (fetchedIds.length > 0) {
       await db.delete(stockMovementsTable)
         .where(and(
@@ -1064,9 +1093,24 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
     ).catch(() => { throw new Error("MRP module may not be installed in Odoo"); });
 
     for (const mo of mfgOrders) {
-      const odooId = mo.id as number;
-      const productName = many2oneLabel(mo.product_id, "Unknown Product");
+      const odooId = parsePositiveOdooId(mo.id);
+      const odooProductId = many2oneId(mo.product_id);
+      const productName = optionalOdooString(
+        Array.isArray(mo.product_id) ? mo.product_id[1] : null,
+      );
       const bomId = many2oneId(mo.bom_id);
+
+      if (
+        odooId === null ||
+        odooProductId === null ||
+        productName === null
+      ) {
+        failed++;
+        errors.push(
+          "Manufacturing order has an invalid Odoo ID or product.",
+        );
+        continue;
+      }
       const moState =
         typeof mo.state === "string" && mo.state.trim()
           ? mo.state
@@ -1077,31 +1121,45 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
         errors.push(`MO #${odooId}: Missing manufacturing-order state.`);
         continue;
       }
-      const dateDeadline =
-        typeof mo.date_deadline === "string"
-          ? mo.date_deadline.split(" ")[0]
-          : null;
+      const startedAt = parseOdooDateTime(mo.date_start);
+      const finishedAt = parseOdooDateTime(mo.date_finished);
+      const deadlineAt = parseOdooDateTime(mo.date_deadline);
+
       const runDate =
-        typeof mo.date_start === "string"
-          ? mo.date_start.split(" ")[0]
-          : null;
+        startedAt === null
+          ? null
+          : startedAt.toISOString().slice(0, 10);
+
+      const dateDeadline =
+        deadlineAt === null
+          ? null
+          : deadlineAt.toISOString().slice(0, 10);
 
       let actualTimeMin: number | null = null;
 
       if (
-        typeof mo.date_start === "string" &&
-        typeof mo.date_finished === "string"
+        startedAt !== null &&
+        finishedAt !== null &&
+        finishedAt.getTime() >= startedAt.getTime()
       ) {
-        const start = new Date(mo.date_start).getTime();
-        const end = new Date(mo.date_finished).getTime();
+        actualTimeMin = Math.round(
+          (finishedAt.getTime() - startedAt.getTime()) / 60000,
+        );
+      }
 
-        if (
-          Number.isFinite(start) &&
-          Number.isFinite(end) &&
-          end >= start
-        ) {
-          actualTimeMin = Math.round((end - start) / 60000);
-        }
+      const plannedUnits = parseNonNegativeOdooNumber(
+        mo.product_qty,
+      );
+      const actualUnits = parseNonNegativeOdooNumber(
+        mo.qty_producing,
+      );
+
+      if (plannedUnits === null || actualUnits === null) {
+        failed++;
+        errors.push(
+          `MO #${odooId}: Missing or invalid production quantity.`,
+        );
+        continue;
       }
 
       try {
@@ -1110,8 +1168,8 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
           odooId,
           productName,
           runDate,
-          plannedUnits: num(mo.product_qty),
-          actualUnits: num(mo.qty_producing),
+          plannedUnits,
+          actualUnits,
           plannedTimeMin: null,
           actualTimeMin,
           defects: null,
@@ -1122,7 +1180,9 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
         }).onConflictDoUpdate({
           target: [productionRunsTable.companyId, productionRunsTable.odooId],
           set: {
-            actualUnits: num(mo.qty_producing),
+            productName,
+            plannedUnits,
+            actualUnits,
             actualTimeMin,
             plannedTimeMin: null,
             defects: null,
@@ -1138,7 +1198,13 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
     }
     let syncStatus = failed === 0 ? "success" : synced > 0 ? "partial" : "error";
     // Cleanup phase: remove local records that no longer exist in Odoo
-    const fetchedIds = mfgOrders.map(p => p.id as number);
+    const fetchedIds = Array.from(
+      new Set(
+        mfgOrders
+          .map((order) => parsePositiveOdooId(order.id))
+          .filter((id): id is number => id !== null),
+      ),
+    );
     if (fetchedIds.length > 0) {
       await db.delete(productionRunsTable)
         .where(and(

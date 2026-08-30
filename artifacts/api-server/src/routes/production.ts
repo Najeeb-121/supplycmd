@@ -12,8 +12,8 @@ import { validateBody } from "../lib/validate.js";
 // ── Stricter production schema with cross-field rule ──────────────────────────
 export const StrictProductionBody = CreateProductionRunBody
   .extend({
-    plannedUnits: z.number().int().min(0),
-    actualUnits: z.number().int().min(0),
+    plannedUnits: z.number().min(0),
+    actualUnits: z.number().min(0),
     plannedTimeMin: z.number().int().min(0),
     actualTimeMin: z.number().int().min(0),
     defects: z.number().int().min(0),
