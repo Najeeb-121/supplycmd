@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert";
 import { simulateMitigationAction } from "./what-if-engine";
 import { SupplyRiskSnapshot, RiskExposure, RiskMitigation } from "./supply-risk-contracts";

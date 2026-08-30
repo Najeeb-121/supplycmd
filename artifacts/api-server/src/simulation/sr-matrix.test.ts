@@ -1,3 +1,4 @@
+import { expect, test } from "vitest";
 import { SupplyRiskSnapshot } from "./supply-risk-contracts";
 import {
   analyzeQualityFailure,
@@ -77,13 +78,12 @@ function buildMockSnapshot(): SupplyRiskSnapshot {
   };
 }
 
-function assertEq(label: string, actual: any, expected: any) {
-  if (actual === expected) {
-    console.log(`[PASS] ${label}`);
-  } else {
-    console.error(`[FAIL] ${label} - Expected ${expected}, got ${actual}`);
-    process.exitCode = 1;
-  }
+function assertEq(
+  label: string,
+  actual: unknown,
+  expected: unknown,
+) {
+  expect(actual, label).toBe(expected);
 }
 
 function runMatrix() {
@@ -138,4 +138,4 @@ function runMatrix() {
   assertEq("SR-08: residualShortage === 2950", sr08.residualShortage, 2950);
 }
 
-runMatrix();
+test("SR-1.9 canonical scenario matrix", runMatrix);

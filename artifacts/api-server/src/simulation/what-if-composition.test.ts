@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import test from 'node:test';
+import { test } from 'vitest';
 import { composeWhatIfWithPegging } from './what-if-composition';
 import { SupplyRiskSnapshot, RiskExposure } from './supply-risk-contracts';
 import { WhatIfResult } from './what-if-contracts';
@@ -41,14 +41,14 @@ const priceLookup: SalesOrderPriceLookup[] = [
 
 function createMockWhatIf(baselineShortage: number, scenarioShortage: number): WhatIfResult {
   return {
-    actionApplied: { 
+    actionApplied: {
       id: 'mock_action_1',
-      type: 'ALTERNATE_SUPPLIER', 
+      type: 'ALTERNATE_SUPPLIER',
       title: 'Mock Action',
       reason: 'Mock reason',
       feasible: true,
       affectedQuantity: 100,
-      mitigationCost: 0, 
+      mitigationCost: 0,
       mitigationCostProvenance: 'UNKNOWN',
       mitigationDateProvenance: 'UNKNOWN'
     },
@@ -64,7 +64,7 @@ function createMockWhatIf(baselineShortage: number, scenarioShortage: number): W
 test('Baseline pegging uses baseline shortage and scenario pegging uses scenario shortage', () => {
   const whatIf = createMockWhatIf(100, 50);
   const result = composeWhatIfWithPegging(snapshot, exposure, whatIf, priceLookup);
-  
+
   assert.strictEqual(result.baselinePegging.componentShortageQty, 100);
   assert.strictEqual(result.scenarioPegging.componentShortageQty, 50);
 });
@@ -72,7 +72,7 @@ test('Baseline pegging uses baseline shortage and scenario pegging uses scenario
 test('Alternate supplier reducing shortage reduces downstream simulated revenue impact', () => {
   const whatIf = createMockWhatIf(100, 50);
   const result = composeWhatIfWithPegging(snapshot, exposure, whatIf, priceLookup);
-  
+
   // Baseline: shortage 100 -> missed revenue 1000
   assert.strictEqual(result.baselinePegging.verifiedRevenueAtRisk, 1000);
   // Scenario: shortage 50 -> missed revenue 500
@@ -84,7 +84,7 @@ test('Alternate supplier reducing shortage reduces downstream simulated revenue 
 test('No shortage produces zero downstream impact', () => {
   const whatIf = createMockWhatIf(0, 0);
   const result = composeWhatIfWithPegging(snapshot, exposure, whatIf, priceLookup);
-  
+
   assert.strictEqual(result.baselinePegging.componentShortageQty, 0);
   assert.strictEqual(result.baselinePegging.verifiedRevenueAtRisk, 0);
   assert.strictEqual(result.scenarioPegging.componentShortageQty, 0);
@@ -95,7 +95,7 @@ test('No shortage produces zero downstream impact', () => {
 test('Missing price propagates UNKNOWN', () => {
   const whatIf = createMockWhatIf(100, 50);
   const result = composeWhatIfWithPegging(snapshot, exposure, whatIf, []); // empty prices
-  
+
   assert.strictEqual(result.baselinePegging.verifiedRevenueAtRisk, 'UNKNOWN');
   assert.strictEqual(result.scenarioPegging.verifiedRevenueAtRisk, 'UNKNOWN');
   assert.strictEqual(result.downstreamRevenueDelta, 'UNKNOWN');
@@ -104,7 +104,7 @@ test('Missing price propagates UNKNOWN', () => {
 test('Missing targetProductId throws an error', () => {
   const badExposure = { ...exposure, targetProductId: undefined };
   const whatIf = createMockWhatIf(100, 50);
-  
+
   assert.throws(() => {
     composeWhatIfWithPegging(snapshot, badExposure, whatIf, priceLookup);
   }, /targetProductId is required/);

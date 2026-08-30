@@ -53,7 +53,7 @@ describe("POST /api/orders", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mocks.mockReturning.mockResolvedValueOnce([fakeOrder] as any);
 
-    const res = await request(app).post("/api/orders").send(validBody);
+    const res = await request(app).post("/api/orders").set("x-e2e-test-company-id", "1").send(validBody);
 
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ id: 10, supplierName: "Acme Corp" });
@@ -62,7 +62,7 @@ describe("POST /api/orders", () => {
   // ── Required field validation ─────────────────────────────────────────────
   it("400 – rejects when supplierId is missing", async () => {
     const { supplierId: _, ...body } = validBody;
-    const res = await request(app).post("/api/orders").send(body);
+    const res = await request(app).post("/api/orders").set("x-e2e-test-company-id", "1").send(body);
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("errors");
@@ -71,7 +71,7 @@ describe("POST /api/orders", () => {
 
   it("400 – rejects when itemCount is less than 1", async () => {
     const res = await request(app)
-      .post("/api/orders")
+      .post("/api/orders").set("x-e2e-test-company-id", "1")
       .send({ ...validBody, itemCount: 0 });
 
     expect(res.status).toBe(400);
@@ -80,7 +80,7 @@ describe("POST /api/orders", () => {
 
   it("400 – rejects when totalValue is negative", async () => {
     const res = await request(app)
-      .post("/api/orders")
+      .post("/api/orders").set("x-e2e-test-company-id", "1")
       .send({ ...validBody, totalValue: -1 });
 
     expect(res.status).toBe(400);
@@ -89,7 +89,7 @@ describe("POST /api/orders", () => {
 
   it("400 – rejects when orderDate is missing", async () => {
     const { orderDate: _, ...body } = validBody;
-    const res = await request(app).post("/api/orders").send(body);
+    const res = await request(app).post("/api/orders").set("x-e2e-test-company-id", "1").send(body);
 
     expect(res.status).toBe(400);
     expect(res.body.errors).toHaveProperty("orderDate");
@@ -98,7 +98,7 @@ describe("POST /api/orders", () => {
   // ── Cross-field constraint ─────────────────────────────────────────────────
   it("400 – rejects when expectedDelivery is before orderDate", async () => {
     const res = await request(app)
-      .post("/api/orders")
+      .post("/api/orders").set("x-e2e-test-company-id", "1")
       .send({ ...validBody, orderDate: "2026-07-15", expectedDelivery: "2026-07-01" });
 
     expect(res.status).toBe(400);
@@ -116,7 +116,7 @@ describe("POST /api/orders", () => {
     mocks.mockReturning.mockResolvedValueOnce([fakeOrder] as any);
 
     const res = await request(app)
-      .post("/api/orders")
+      .post("/api/orders").set("x-e2e-test-company-id", "1")
       .send({ ...validBody, orderDate: "2026-07-01", expectedDelivery: "2026-07-01" });
 
     expect(res.status).toBe(201);
@@ -126,7 +126,7 @@ describe("POST /api/orders", () => {
   it("400 – rejects when supplier does not exist", async () => {
     mocks.mockSupplierWhere.mockResolvedValueOnce([]); // no supplier found
 
-    const res = await request(app).post("/api/orders").send(validBody);
+    const res = await request(app).post("/api/orders").set("x-e2e-test-company-id", "1").send(validBody);
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("errors");

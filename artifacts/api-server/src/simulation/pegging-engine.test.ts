@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import test from 'node:test';
+import { test } from 'vitest';
 import { calculateDownstreamPegging } from './pegging-engine';
 import { SupplyRiskSnapshot } from './supply-risk-contracts';
 import { SalesOrderPriceLookup } from './pegging-contracts';

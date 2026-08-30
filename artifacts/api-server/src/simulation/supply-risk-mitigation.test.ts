@@ -1,3 +1,4 @@
+import { test } from "vitest";
 import { generateMitigations } from "./supply-risk-mitigation";
 import { RiskExposure, SupplyRiskSnapshot, ProductInventory } from "./supply-risk-contracts";
 
@@ -34,18 +35,16 @@ const createMockExposure = (overrides: Partial<RiskExposure>): RiskExposure => (
 
 const snapshot: SupplyRiskSnapshot = { products: {}, demand: [], boms: {}, productionRuns: [] };
 
-function runTest(name: string, setup: () => any, assert: (result: any) => void) {
-  try {
+function runTest<TResult>(
+  name: string,
+  setup: () => TResult,
+  assertResult: (result: TResult) => void,
+) {
+  test(name, () => {
     const result = setup();
-    assert(result);
-    console.log(`[PASS] ${name}`);
-  } catch (err: any) {
-    console.error(`[FAIL] ${name} - ${err.message}`);
-    process.exit(1);
-  }
+    assertResult(result);
+  });
 }
-
-console.log("=== SR-3.0 MITIGATION TEST SUITE ===");
 
 runTest("single supplier", () => {
   const p = createMockProduct({ suppliers: [{ supplierId: 100, supplierName: "A", preferredSupplier: true, leadTimeDays: { value: 5, source: "ODOO_VERIFIED" }, minimumOrderQuantity: 0, supplierUnitCost: 10, sequence: 1 }] });
@@ -203,6 +202,7 @@ runTest("supplier cost known", () => {
   return generateMitigations({ ...snapshot, products: { 1: p } }, e);
 }, (res) => {
   const a = res.actions.find((a: any) => a.type === "ALTERNATE_SUPPLIER");
+  if (!a) throw new Error("Missing alternate supplier mitigation");
   if (a.mitigationCost !== 1500) throw new Error("Cost should be 1500");
   if (a.mitigationCostProvenance !== "CALCULATED") throw new Error("Provenance should be CALCULATED");
 });
@@ -217,6 +217,7 @@ runTest("supplier cost unknown", () => {
   return generateMitigations({ ...snapshot, products: { 1: p } }, e);
 }, (res) => {
   const a = res.actions.find((a: any) => a.type === "ALTERNATE_SUPPLIER");
+  if (!a) throw new Error("Missing alternate supplier mitigation");
   if (a.mitigationCost !== undefined) throw new Error("Cost should be undefined");
   if (a.mitigationCostProvenance !== "UNKNOWN") throw new Error("Provenance should be UNKNOWN");
 });
@@ -231,6 +232,7 @@ runTest("no fabricated dates", () => {
   return generateMitigations({ ...snapshot, products: { 1: p } }, e);
 }, (res) => {
   const a = res.actions.find((a: any) => a.type === "ALTERNATE_SUPPLIER");
+  if (!a) throw new Error("Missing alternate supplier mitigation");
   if (a.mitigationDate !== undefined) throw new Error("Date should be undefined");
   if (a.mitigationDateProvenance !== "UNKNOWN") throw new Error("Provenance should be UNKNOWN");
 });
@@ -245,5 +247,6 @@ runTest("no fabricated supplier capacity", () => {
   return generateMitigations({ ...snapshot, products: { 1: p } }, e);
 }, (res) => {
   const a = res.actions.find((a: any) => a.type === "ALTERNATE_SUPPLIER");
+  if (!a) throw new Error("Missing alternate supplier mitigation");
   if (a.availableQuantity !== undefined) throw new Error("availableQuantity should be undefined");
 });

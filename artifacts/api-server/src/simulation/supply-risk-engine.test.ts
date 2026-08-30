@@ -1,3 +1,4 @@
+import { expect, test } from "vitest";
 import { SupplyRiskSnapshot } from "./supply-risk-contracts";
 import {
   analyzeQualityFailure,
@@ -99,17 +100,12 @@ function buildMockSnapshot(): SupplyRiskSnapshot {
 
 function runTests() {
   const snapshot = buildMockSnapshot();
-  let passed = 0;
-  let failed = 0;
-
-  function assertEq(label: string, actual: any, expected: any) {
-    if (actual === expected) {
-      console.log(`[PASS] ${label}`);
-      passed++;
-    } else {
-      console.error(`[FAIL] ${label} - Expected ${expected}, got ${actual}`);
-      failed++;
-    }
+  function assertEq(
+    label: string,
+    actual: unknown,
+    expected: unknown,
+  ) {
+    expect(actual, label).toBe(expected);
   }
 
   console.log("=== SR-1.7 DETERMINISTIC TEST SUITE ===\n");
@@ -154,8 +150,7 @@ function runTests() {
   assertEq("TEST 12: Tropicana downstreamMOs length", tropDownstream.delayedMOs.length, 0);
   assertEq("TEST 12: Tropicana affectedSalesOrders length", tropDownstream.affectedSalesOrders.length, 0);
 
-  console.log(`\nTests Completed: ${passed} Passed, ${failed} Failed\n`);
-  if (failed > 0) process.exit(1);
+
 }
 
-runTests();
+test("SR-1.7 deterministic supply-risk suite", runTests);
