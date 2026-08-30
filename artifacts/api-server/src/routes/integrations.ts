@@ -36,6 +36,16 @@ export function parseNonNegativeOdooNumber(
     : null;
 }
 
+export function parsePositiveOdooNumber(
+  value: unknown,
+): number | null {
+  const parsed = num(value);
+
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : null;
+}
+
 export function parsePositiveOdooId(value: unknown): number | null {
   return (
     typeof value === "number" &&
@@ -170,11 +180,6 @@ export function mapOdooPurchaseState(
   }
 }
 
-// Odoo represents an empty many2one as `false`, not null — normalize to a
-// plain string, taking the display name (index 1) of the [id, name] tuple.
-function many2oneLabel(v: unknown, fallback: string): string {
-  return Array.isArray(v) && typeof v[1] === "string" ? v[1] : fallback;
-}
 function many2oneId(v: unknown): number | null {
   return Array.isArray(v)
     ? parsePositiveOdooId(v[0])
@@ -1261,12 +1266,17 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
     const byProductId = new Map<number, typeof inventoryItems[number]>();
 
     for (const item of inventoryItems) {
-      if (item.odooProductTemplateId != null) {
-        byTemplateId.set(item.odooProductTemplateId, item);
+      const templateId = parsePositiveOdooId(
+        item.odooProductTemplateId,
+      );
+      const productId = parsePositiveOdooId(item.odooId);
+
+      if (templateId !== null) {
+        byTemplateId.set(templateId, item);
       }
 
-      if (item.odooId != null) {
-        byProductId.set(item.odooId, item);
+      if (productId !== null) {
+        byProductId.set(productId, item);
       }
     }
 
@@ -1281,12 +1291,31 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
       });
 
     for (const odooBom of odooBoms) {
-      const odooBomId = odooBom.id as number;
+      const odooBomId = parsePositiveOdooId(odooBom.id);
       const templateId = many2oneId(odooBom.product_tmpl_id);
+      const parentBomQty = parsePositiveOdooNumber(
+        odooBom.product_qty,
+      );
+      const isActive =
+        typeof odooBom.active === "boolean"
+          ? odooBom.active
+          : null;
+      const prioritySequence =
+        typeof odooBom.sequence === "number" &&
+          Number.isInteger(odooBom.sequence)
+          ? odooBom.sequence
+          : null;
 
-      if (templateId == null) {
+      if (
+        odooBomId === null ||
+        templateId === null ||
+        parentBomQty === null ||
+        isActive === null
+      ) {
         failed++;
-        errors.push(`BOM #${odooBomId}: missing product_tmpl_id.`);
+        errors.push(
+          "BOM has an invalid Odoo ID, product template, quantity, or active status.",
+        );
         continue;
       }
 
@@ -1308,12 +1337,10 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
             odooBomId,
             parentSkuId: parentItem.id,
             parentSku: parentItem.sku,
-            parentBomQty:
-              odooBom.product_qty == null ? 1 : num(odooBom.product_qty),
-            bomType: typeof odooBom.type === "string" ? odooBom.type : null,
-            isActive: odooBom.active !== false,
-            prioritySequence:
-              typeof odooBom.sequence === "number" ? odooBom.sequence : null,
+            parentBomQty,
+            bomType: optionalOdooString(odooBom.type),
+            isActive,
+            prioritySequence,
             lastSyncedAt: new Date(),
           })
           .onConflictDoUpdate({
@@ -1321,12 +1348,10 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
             set: {
               parentSkuId: parentItem.id,
               parentSku: parentItem.sku,
-              parentBomQty:
-                odooBom.product_qty == null ? 1 : num(odooBom.product_qty),
-              bomType: typeof odooBom.type === "string" ? odooBom.type : null,
-              isActive: odooBom.active !== false,
-              prioritySequence:
-                typeof odooBom.sequence === "number" ? odooBom.sequence : null,
+              parentBomQty,
+              bomType: optionalOdooString(odooBom.type),
+              isActive,
+              prioritySequence,
               lastSyncedAt: new Date(),
             },
           })
@@ -1345,13 +1370,27 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
         );
 
         for (const odooLine of odooLines) {
-          const odooLineId = odooLine.id as number;
-          const componentProductId = many2oneId(odooLine.product_id);
+          const odooLineId = parsePositiveOdooId(odooLine.id);
+          const componentProductId = many2oneId(
+            odooLine.product_id,
+          );
+          const componentQty = parsePositiveOdooNumber(
+            odooLine.product_qty,
+          );
+          const uomName = optionalOdooString(
+            Array.isArray(odooLine.uom_id)
+              ? odooLine.uom_id[1]
+              : null,
+          );
 
-          if (componentProductId == null) {
+          if (
+            odooLineId === null ||
+            componentProductId === null ||
+            componentQty === null
+          ) {
             failed++;
             errors.push(
-              `BOM line #${odooLineId}: missing component product_id.`
+              "BOM line has an invalid Odoo ID, component product, or quantity.",
             );
             continue;
           }
@@ -1374,8 +1413,8 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
               bomId: savedBom.id,
               childSkuId: childItem.id,
               childSku: childItem.sku,
-              componentQty: num(odooLine.product_qty),
-              uomName: many2oneLabel(odooLine.uom_id, ""),
+              componentQty,
+              uomName,
               isDeleted: false,
             })
             .onConflictDoUpdate({
@@ -1384,8 +1423,8 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
                 bomId: savedBom.id,
                 childSkuId: childItem.id,
                 childSku: childItem.sku,
-                componentQty: num(odooLine.product_qty),
-                uomName: many2oneLabel(odooLine.uom_id, ""),
+                componentQty,
+                uomName,
                 isDeleted: false,
               },
             });
@@ -1437,9 +1476,31 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
       const schedules = await client.searchRead<Record<string, unknown>>(
         "mrp.production.schedule", [], ["id", "product_id"]
       );
-      const scheduleToProduct = new Map<number, unknown>();
-      for (const s of schedules) scheduleToProduct.set(s.id as number, s.product_id);
+      const scheduleToProduct = new Map<number, string>();
 
+      for (const schedule of schedules) {
+        const scheduleId = parsePositiveOdooId(schedule.id);
+        const productId = many2oneId(schedule.product_id);
+        const productName = optionalOdooString(
+          Array.isArray(schedule.product_id)
+            ? schedule.product_id[1]
+            : null,
+        );
+
+        if (
+          scheduleId === null ||
+          productId === null ||
+          productName === null
+        ) {
+          failed++;
+          errors.push(
+            "MPS schedule has an invalid Odoo ID or product.",
+          );
+          continue;
+        }
+
+        scheduleToProduct.set(scheduleId, productName);
+      }
       const forecasts = await client.searchRead<Record<string, unknown>>(
         "mrp.product.forecast", [], ["id", "production_schedule_id", "date", "create_date", "forecast_qty", "replenish_qty"]
       );
@@ -1447,19 +1508,23 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
       if (forecasts.length > 0) {
         syncedMps = true;
         for (const line of forecasts) {
-          const odooId = line.id as number;
-          const scheduleId = many2oneId(line.production_schedule_id);
+          const odooId = parsePositiveOdooId(line.id);
+          const scheduleId = many2oneId(
+            line.production_schedule_id,
+          );
 
-          if (scheduleId === null) {
+          if (odooId === null || scheduleId === null) {
             failed++;
-            errors.push(`MPS Forecast #${odooId}: missing production schedule.`);
+            errors.push(
+              "MPS forecast has an invalid Odoo ID or production schedule.",
+            );
             continue;
           }
 
-          const productReference = scheduleToProduct.get(scheduleId);
-          const productName = many2oneLabel(productReference, "");
+          const productName =
+            scheduleToProduct.get(scheduleId) ?? null;
 
-          if (!productName) {
+          if (productName === null) {
             failed++;
             errors.push(`MPS Forecast #${odooId}: missing mapped product.`);
             continue;
@@ -1479,10 +1544,35 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
           const period = dateVal.slice(0, 7);
 
           const targetQty =
-            line.forecast_qty == null ? null : num(line.forecast_qty);
+            line.forecast_qty == null ||
+              line.forecast_qty === false
+              ? null
+              : parseNonNegativeOdooNumber(
+                line.forecast_qty,
+              );
 
           const replenishmentQty =
-            line.replenish_qty == null ? null : num(line.replenish_qty);
+            line.replenish_qty == null ||
+              line.replenish_qty === false
+              ? null
+              : parseNonNegativeOdooNumber(
+                line.replenish_qty,
+              );
+
+          if (
+            (line.forecast_qty != null &&
+              line.forecast_qty !== false &&
+              targetQty === null) ||
+            (line.replenish_qty != null &&
+              line.replenish_qty !== false &&
+              replenishmentQty === null)
+          ) {
+            failed++;
+            errors.push(
+              `MPS Forecast #${odooId}: invalid forecast or replenishment quantity.`,
+            );
+            continue;
+          }
 
           try {
             await db.insert(demandRecordsTable).values({
@@ -1521,17 +1611,33 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
       );
 
       for (const line of lines) {
-        const odooId = line.id as number;
-        const productName = many2oneLabel(line.product_id, "Unknown Product");
-        if (typeof line.create_date !== "string" || line.create_date.length < 7) {
+        const odooId = parsePositiveOdooId(line.id);
+        const productId = many2oneId(line.product_id);
+        const productName = optionalOdooString(
+          Array.isArray(line.product_id)
+            ? line.product_id[1]
+            : null,
+        );
+        const createdAt = parseOdooDateTime(line.create_date);
+        const actualDemand = parseNonNegativeOdooNumber(
+          line.product_uom_qty,
+        );
+
+        if (
+          odooId === null ||
+          productId === null ||
+          productName === null ||
+          createdAt === null ||
+          actualDemand === null
+        ) {
           failed++;
-          errors.push(`SO Line #${odooId}: missing valid create_date`);
+          errors.push(
+            "Sales-order line has an invalid Odoo ID, product, date, or quantity.",
+          );
           continue;
         }
 
-        const period = line.create_date.substring(0, 7);
-        const actualDemand = num(line.product_uom_qty);
-
+        const period = createdAt.toISOString().slice(0, 7);
         try {
           await db.insert(demandRecordsTable).values({
             companyId,
@@ -1559,20 +1665,28 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
     }
 
     let syncStatus = failed === 0 ? "success" : synced > 0 ? "partial" : "error";
-    // Cleanup phase: remove local records that no longer exist in Odoo
-    const fetchedIds: number[] = [];
-    // (Simplification: skipped collecting IDs for planning fallback to avoid deleting MPS when falling back, but we can do a safe wipe if needed)
-    // Actually, we will just skip cleanup for Planning as it mixes MPS and SOs, or we can use the safe-delete if it was fully rewritten.
-    // The instruction said "all 5 syncs". Wait, I should collect fetchedIds.
+    // Planning can switch between MPS and sales-order sources.
+    // Retain existing history until cleanup can be scoped safely
+    // to the source that was successfully synchronized.
+    const allRows = await db
+      .select({ id: demandRecordsTable.id })
+      .from(demandRecordsTable)
+      .where(
+        and(
+          eq(demandRecordsTable.companyId, companyId),
+          isNotNull(demandRecordsTable.odooId),
+        ),
+      );
 
-    const allRows = await db.select({ id: demandRecordsTable.id }).from(demandRecordsTable)
-      .where(and(eq(demandRecordsTable.companyId, companyId), isNotNull(demandRecordsTable.odooId)));
-    if (allRows.length > 5 && synced === 0) {
+    if (
+      allRows.length > 5 &&
+      synced === 0 &&
+      failed === 0
+    ) {
       syncStatus = "suspicious_empty_result";
-      errors.push(`Suspicious empty result. Local record count (${allRows.length}) > 5. Skipping auto-delete.`);
-    } else if (synced > 0) {
-      // Safe delete skipped to preserve history for planning, as requested by prompt constraints, wait, I will implement a safe delete.
-      // Actually I won't delete unless I have all IDs. Let's just log status.
+      errors.push(
+        `Suspicious empty result. Local record count (${allRows.length}) > 5. Existing planning history was preserved.`,
+      );
     }
 
     await db.insert(odooSyncLogTable).values({ companyId, entity: "planning", status: syncStatus, recordsSynced: synced, recordsFailed: failed, message: generateSyncMessage(synced, failed, errors) });

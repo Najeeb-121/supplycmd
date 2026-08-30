@@ -7,6 +7,7 @@ import {
   parseNonNegativeOdooNumber,
   parseOdooDateTime,
   parseOdooStockMovementQuantities,
+  parsePositiveOdooNumber,
   parsePositiveOdooId,
 } from "../integrations";
 
@@ -177,6 +178,21 @@ describe("Odoo integration parsing", () => {
     expect(parseNonNegativeOdooNumber(-1)).toBeNull();
     expect(parseNonNegativeOdooNumber("invalid")).toBeNull();
     expect(parseNonNegativeOdooNumber(Number.POSITIVE_INFINITY)).toBeNull();
+  });
+
+  it("preserves valid positive Odoo quantities", () => {
+    expect(parsePositiveOdooNumber(1)).toBe(1);
+    expect(parsePositiveOdooNumber(0.01)).toBe(0.01);
+    expect(parsePositiveOdooNumber("12.75")).toBe(12.75);
+  });
+
+  it("rejects zero, negative, or invalid positive quantities", () => {
+    expect(parsePositiveOdooNumber(null)).toBeNull();
+    expect(parsePositiveOdooNumber(false)).toBeNull();
+    expect(parsePositiveOdooNumber(0)).toBeNull();
+    expect(parsePositiveOdooNumber(-1)).toBeNull();
+    expect(parsePositiveOdooNumber("invalid")).toBeNull();
+    expect(parsePositiveOdooNumber(Number.POSITIVE_INFINITY)).toBeNull();
   });
 
   it("accepts positive integer Odoo IDs", () => {
