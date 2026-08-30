@@ -56,58 +56,121 @@ describe("Phase 2: Deterministic Production Timing Layer", () => {
     expect(p1270Demand?.sourceSalesOrderOdooId).toBe(10);
     expect(p1270Demand?.bomOdooId).toBe(102);
   });
-  it("Test C2: product name alone does not verify MO timing", () => {
-    const boms = [
-      {
-        id: 1,
-        odooBomId: 8,
-        parentSkuId: 15,
-        parentBomQty: 1,
-        isActive: true
-      }
-    ];
-
-    const bomLines = [
-      {
-        id: 1,
-        odooLineId: 8,
-        bomId: 1,
-        childSkuId: 1270,
-        componentQty: 0.01,
-        isDeleted: false
-      }
-    ];
-
-    const graph = buildBOMGraph(boms, bomLines);
-
-    const salesOrders = [
-      {
-        salesOrderId: 1,
-        salesOrderLineId: 1,
-        productId: 15,
-        demandDate: "2026-08-11",
-        remainingQty: 100
-      }
-    ];
-
-    const productionRuns = [
-      {
-        productName: "[PSC-SF-001] Printed Can Body Blank 355ml",
-        runDate: "2026-08-08"
-      }
-    ];
+  it("Test C2: run date alone does not verify MO timing", () => {
+    const graph = buildBOMGraph(
+      [
+        {
+          id: 1,
+          odooBomId: 8,
+          parentSkuId: 15,
+          parentBomQty: 1,
+          isActive: true,
+        },
+      ],
+      [
+        {
+          id: 1,
+          odooLineId: 8,
+          bomId: 1,
+          childSkuId: 1270,
+          componentQty: 0.01,
+          isDeleted: false,
+        },
+      ],
+    );
 
     const { dependentDemands } = propagateDemand(
-      salesOrders,
+      [
+        {
+          salesOrderId: 1,
+          salesOrderLineId: 1,
+          productId: 15,
+          demandDate: "2026-08-11",
+          remainingQty: 100,
+        },
+      ],
       graph,
       {},
-      productionRuns
+      [
+        {
+          id: 41,
+          odooId: 41,
+          bomId: 8,
+          productName:
+            "[PSC-SF-001] Printed Can Body Blank 355ml",
+          runDate: "2026-08-08",
+          plannedTimeMin: null,
+        },
+      ],
     );
 
     expect(dependentDemands[0].status).toBe(
-      "INSUFFICIENT_PRODUCTION_TIMING_DATA"
+      "INSUFFICIENT_PRODUCTION_TIMING_DATA",
     );
     expect(dependentDemands[0].requiredDate).toBeNull();
+    expect(dependentDemands[0].productionTiming?.source).toBe(
+      "MISSING",
+    );
+  });
+
+  it("Test C3: verified Odoo work-order timing supplies the required date", () => {
+    const graph = buildBOMGraph(
+      [
+        {
+          id: 1,
+          odooBomId: 8,
+          parentSkuId: 15,
+          parentBomQty: 1,
+          isActive: true,
+        },
+      ],
+      [
+        {
+          id: 1,
+          odooLineId: 8,
+          bomId: 1,
+          childSkuId: 1270,
+          componentQty: 0.01,
+          isDeleted: false,
+        },
+      ],
+    );
+
+    const { dependentDemands } = propagateDemand(
+      [
+        {
+          salesOrderId: 1,
+          salesOrderLineId: 1,
+          productId: 15,
+          demandDate: "2026-08-11",
+          remainingQty: 100,
+        },
+      ],
+      graph,
+      {},
+      [
+        {
+          id: 41,
+          odooId: 41,
+          bomId: 8,
+          productName:
+            "[PSC-SF-001] Printed Can Body Blank 355ml",
+          runDate: "2026-08-08",
+          plannedTimeMin: 75,
+          actualTimeMin: null,
+        },
+      ],
+    );
+
+    expect(dependentDemands[0].status).toBe(
+      "VERIFIED_MO_TIMING",
+    );
+    expect(dependentDemands[0].requiredDate).toBe(
+      "2026-08-08",
+    );
+    expect(dependentDemands[0].productionTiming?.source).toBe(
+      "ODOO_WORKORDER",
+    );
   });
   it("Test D: Unknown timing does NOT create a false chronological shortage", () => {
     const dependentDemands: DependentDemand[] = [

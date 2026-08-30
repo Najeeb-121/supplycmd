@@ -171,20 +171,30 @@ function explodeDemand(
   // 4. Explode down to components
   const bomMultiplier = netQty / bom.parentBomQty;
 
-  // Step 3: Find relevant parent MO for timing
-  const parentMo = productionRuns.find(m =>
-    m.bomId && m.bomId === bom.odooBomId
+  // Step 3: Use only verified Odoo work-order timing.
+  const parentMo = productionRuns.find(
+    (productionRun) =>
+      productionRun.bomId === bom.odooBomId &&
+      Number.isInteger(productionRun.odooId) &&
+      productionRun.odooId > 0 &&
+      typeof productionRun.plannedTimeMin === "number" &&
+      Number.isFinite(productionRun.plannedTimeMin) &&
+      productionRun.plannedTimeMin > 0 &&
+      typeof productionRun.runDate === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(productionRun.runDate),
   );
 
   let childRequiredDate: string | null = null;
-  let timingStatus: "VERIFIED_MO_TIMING" | "INSUFFICIENT_PRODUCTION_TIMING_DATA" = "INSUFFICIENT_PRODUCTION_TIMING_DATA";
+  let timingStatus:
+    | "VERIFIED_MO_TIMING"
+    | "INSUFFICIENT_PRODUCTION_TIMING_DATA" =
+    "INSUFFICIENT_PRODUCTION_TIMING_DATA";
   let timingSource = "MISSING";
 
-  const dateStart = parentMo?.runDate || parentMo?.scheduledDate || parentMo?.dateStart;
-  if (dateStart) {
-    childRequiredDate = dateStart.split(" ")[0];
+  if (parentMo) {
+    childRequiredDate = parentMo.runDate;
     timingStatus = "VERIFIED_MO_TIMING";
-    timingSource = "ODOO_PRODUCTION_RUN";
+    timingSource = "ODOO_WORKORDER";
   }
 
   for (const line of bom.lines) {

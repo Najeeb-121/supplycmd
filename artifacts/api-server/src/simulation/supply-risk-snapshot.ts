@@ -226,18 +226,30 @@ export async function buildSupplyRiskSnapshot(companyId: number): Promise<{ snap
 
     snapshot.productionRuns.push({
       id: mo.odooId,
+      odooId: mo.odooId,
       productName: mo.productName,
       productOdooId: (() => {
-        const moBom = boms.find(b => b.odooBomId === mo.bomId);
-        if (!moBom) return null;
+        const moBom = boms.find(
+          (bom) => bom.odooBomId === mo.bomId,
+        );
 
-        return items.find((i: any) => i.id === moBom.parentSkuId)?.odooId ?? null;
+        if (!moBom) {
+          return null;
+        }
+
+        return (
+          items.find(
+            (item) => item.id === moBom.parentSkuId,
+          )?.odooId ?? null
+        );
       })(),
       bomId: mo.bomId,
       plannedUnits: mo.plannedUnits,
+      plannedTimeMin: mo.plannedTimeMin,
+      actualTimeMin: mo.actualTimeMin,
       runDate: dateStart,
       dateDeadline: mo.dateDeadline,
-      moState: mo.moState
+      moState: mo.moState,
     });
   }
 

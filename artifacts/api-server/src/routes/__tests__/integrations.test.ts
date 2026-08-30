@@ -8,6 +8,7 @@ import {
   parseNonNegativeOdooNumber,
   parseOdooDateTime,
   parseOdooStockMovementQuantities,
+  parseOdooWorkOrderTiming,
   parsePositiveOdooNumber,
   parsePositiveOdooId,
 } from "../integrations";
@@ -193,6 +194,69 @@ describe("Odoo integration parsing", () => {
     expect(parsePositiveOdooNumber(-1)).toBeNull();
     expect(parsePositiveOdooNumber("invalid")).toBeNull();
     expect(parsePositiveOdooNumber(Number.POSITIVE_INFINITY)).toBeNull();
+  });
+
+  it("aggregates verified completed Odoo work-order timing", () => {
+    expect(
+      parseOdooWorkOrderTiming([
+        {
+          duration_expected: 30,
+          duration: 25,
+          state: "done",
+        },
+        {
+          duration_expected: 45,
+          duration: 40,
+          state: "done",
+        },
+      ]),
+    ).toEqual({
+      plannedTimeMin: 75,
+      actualTimeMin: 65,
+    });
+  });
+
+  it("preserves planned timing but withholds incomplete actual timing", () => {
+    expect(
+      parseOdooWorkOrderTiming([
+        {
+          duration_expected: 30,
+          duration: 10,
+          state: "progress",
+        },
+        {
+          duration_expected: 45,
+          duration: false,
+          state: "pending",
+        },
+      ]),
+    ).toEqual({
+      plannedTimeMin: 75,
+      actualTimeMin: null,
+    });
+  });
+
+  it("rejects missing or non-positive expected work-order timing", () => {
+    expect(parseOdooWorkOrderTiming([])).toBeNull();
+    expect(
+      parseOdooWorkOrderTiming([
+        {
+          duration_expected: 0,
+          duration: 0,
+          state: "done",
+        },
+      ]),
+    ).toBeNull();
+    expect(
+      parseOdooWorkOrderTiming([
+        {
+          duration_expected: false,
+          duration: 10,
+          state: "done",
+        },
+      ]),
+    ).toBeNull();
+
   });
 
   it("accepts positive integer Odoo IDs", () => {

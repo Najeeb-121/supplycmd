@@ -46,6 +46,64 @@ export function parsePositiveOdooNumber(
     : null;
 }
 
+export type OdooWorkOrderTiming = {
+  plannedTimeMin: number;
+  actualTimeMin: number | null;
+};
+
+export function parseOdooWorkOrderTiming(
+  workOrders: Record<string, unknown>[],
+): OdooWorkOrderTiming | null {
+  if (workOrders.length === 0) {
+    return null;
+  }
+
+  let plannedTimeMin = 0;
+  let actualTimeMin = 0;
+  let hasCompleteActualTiming = true;
+
+  for (const workOrder of workOrders) {
+    const expectedDuration = parsePositiveOdooNumber(
+      workOrder.duration_expected,
+    );
+
+    if (expectedDuration === null) {
+      return null;
+    }
+
+    plannedTimeMin += expectedDuration;
+
+    if (workOrder.state !== "done") {
+      hasCompleteActualTiming = false;
+      continue;
+    }
+
+    const actualDuration = parseNonNegativeOdooNumber(
+      workOrder.duration,
+    );
+
+    if (actualDuration === null) {
+      hasCompleteActualTiming = false;
+      continue;
+    }
+
+    actualTimeMin += actualDuration;
+  }
+
+  if (!Number.isFinite(plannedTimeMin)) {
+    return null;
+  }
+
+  return {
+    plannedTimeMin,
+    actualTimeMin:
+      hasCompleteActualTiming &&
+        Number.isFinite(actualTimeMin)
+        ? actualTimeMin
+        : null,
+  };
+}
+
 export function parsePositiveOdooId(value: unknown): number | null {
   return (
     typeof value === "number" &&
@@ -1203,8 +1261,71 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
   try {
     const client = new OdooClient(config);
     const mfgOrders = await client.searchRead<Record<string, unknown>>(
-      "mrp.production", [], ["id", "product_id", "product_qty", "qty_producing", "date_start", "date_finished", "date_deadline", "bom_id", "state"]
+      "mrp.production", [], ["id", "product_id", "product_qty", "qty_producing", "date_start", "date_deadline", "bom_id", "state"]
     ).catch(() => { throw new Error("MRP module may not be installed in Odoo"); });
+
+    const mfgOrderIds = Array.from(
+      new Set(
+        mfgOrders
+          .map((order) => parsePositiveOdooId(order.id))
+          .filter((id): id is number => id !== null),
+      ),
+    );
+
+    const workOrdersByProductionId = new Map<
+      number,
+      Record<string, unknown>[]
+    >();
+
+    if (mfgOrderIds.length > 0) {
+      try {
+        const workOrders =
+          await client.searchRead<Record<string, unknown>>(
+            "mrp.workorder",
+            [["production_id", "in", mfgOrderIds]],
+            [
+              "id",
+              "production_id",
+              "duration_expected",
+              "duration",
+              "state",
+            ],
+          );
+
+        for (const workOrder of workOrders) {
+          const workOrderId = parsePositiveOdooId(workOrder.id);
+          const productionId = many2oneId(
+            workOrder.production_id,
+          );
+
+          if (workOrderId === null || productionId === null) {
+            failed++;
+            errors.push(
+              "Work order has an invalid Odoo ID or manufacturing order.",
+            );
+            continue;
+          }
+
+          const groupedWorkOrders =
+            workOrdersByProductionId.get(productionId) ?? [];
+
+          groupedWorkOrders.push(workOrder);
+          workOrdersByProductionId.set(
+            productionId,
+            groupedWorkOrders,
+          );
+        }
+      } catch (err) {
+        failed++;
+        errors.push(
+          `Work-order timing unavailable: ${(err as Error).message}`,
+        );
+        req.log.warn(
+          { err },
+          "Odoo work-order timing unavailable",
+        );
+      }
+    }
 
     for (const mo of mfgOrders) {
       const odooId = parsePositiveOdooId(mo.id);
@@ -1236,7 +1357,6 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
         continue;
       }
       const startedAt = parseOdooDateTime(mo.date_start);
-      const finishedAt = parseOdooDateTime(mo.date_finished);
       const deadlineAt = parseOdooDateTime(mo.date_deadline);
 
       const runDate =
@@ -1249,17 +1369,15 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
           ? null
           : deadlineAt.toISOString().slice(0, 10);
 
-      let actualTimeMin: number | null = null;
+      const workOrderTiming = parseOdooWorkOrderTiming(
+        workOrdersByProductionId.get(odooId) ?? [],
+      );
 
-      if (
-        startedAt !== null &&
-        finishedAt !== null &&
-        finishedAt.getTime() >= startedAt.getTime()
-      ) {
-        actualTimeMin = Math.round(
-          (finishedAt.getTime() - startedAt.getTime()) / 60000,
-        );
-      }
+      const plannedTimeMin =
+        workOrderTiming?.plannedTimeMin ?? null;
+
+      const actualTimeMin =
+        workOrderTiming?.actualTimeMin ?? null;
 
       const plannedUnits = parseNonNegativeOdooNumber(
         mo.product_qty,
@@ -1284,7 +1402,7 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
           runDate,
           plannedUnits,
           actualUnits,
-          plannedTimeMin: null,
+          plannedTimeMin,
           actualTimeMin,
           defects: null,
           downtimeMin: null,
@@ -1298,7 +1416,7 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
             plannedUnits,
             actualUnits,
             actualTimeMin,
-            plannedTimeMin: null,
+            plannedTimeMin,
             defects: null,
             downtimeMin: null,
             runDate,
