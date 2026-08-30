@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  getOdooCleanupDecision,
   mapOdooPurchaseState,
   mapOdooStockMovementType,
   num,
@@ -12,30 +13,28 @@ import {
 } from "../integrations";
 
 describe("Integrations Sync Safety", () => {
-  it("should block empty result deletions (suspicious empty result) if local records > 5", async () => {
-    // This is a placeholder test for the safe delete logic implemented in integrations.ts
-    // In a real environment, we would use an in-memory DB or a mocked db.delete() spy
-    // to verify that db.delete is NOT called when Odoo returns 0 records and local > 5.
+  it("preserves records after any failed Odoo record", () => {
+    expect(getOdooCleanupDecision(10, 1, 20)).toBe(
+      "preserve_failed",
+    );
+  });
 
-    const localRecords = 10;
-    const fetchedFromOdoo = 0;
-    const errors = 0;
+  it("deletes only missing records after a successful non-empty fetch", () => {
+    expect(getOdooCleanupDecision(10, 0, 20)).toBe(
+      "delete_missing",
+    );
+  });
 
-    // Simulate safe delete condition
-    let syncStatus = "success";
-    let dbDeleteCalled = false;
+  it("blocks suspicious empty-result deletion when local records exceed five", () => {
+    expect(getOdooCleanupDecision(0, 0, 10)).toBe(
+      "preserve_suspicious_empty",
+    );
+  });
 
-    if (fetchedFromOdoo === 0 && errors === 0) {
-      if (localRecords > 5) {
-        syncStatus = "suspicious_empty_result";
-        dbDeleteCalled = false; // Blocked
-      } else {
-        dbDeleteCalled = true;
-      }
-    }
-
-    expect(syncStatus).toBe("suspicious_empty_result");
-    expect(dbDeleteCalled).toBe(false);
+  it("allows an authoritative empty result to delete five or fewer records", () => {
+    expect(getOdooCleanupDecision(0, 0, 5)).toBe(
+      "delete_all",
+    );
   });
 
   it("should calculate lead time correctly based on historical orders", () => {
@@ -48,6 +47,7 @@ describe("Integrations Sync Safety", () => {
     expect(leadTimeDays).toBe(9);
   });
 });
+
 describe("Odoo integration parsing", () => {
   it("preserves real zero and valid numeric values", () => {
     expect(num(0)).toBe(0);

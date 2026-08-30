@@ -55,6 +55,31 @@ export function parsePositiveOdooId(value: unknown): number | null {
     ? value
     : null;
 }
+export type OdooCleanupDecision =
+  | "delete_missing"
+  | "delete_all"
+  | "preserve_failed"
+  | "preserve_suspicious_empty";
+
+export function getOdooCleanupDecision(
+  fetchedRecordCount: number,
+  failedRecordCount: number,
+  localRecordCount: number,
+): OdooCleanupDecision {
+  if (failedRecordCount > 0) {
+    return "preserve_failed";
+  }
+
+  if (fetchedRecordCount > 0) {
+    return "delete_missing";
+  }
+
+  if (localRecordCount > 5) {
+    return "preserve_suspicious_empty";
+  }
+
+  return "delete_all";
+}
 
 export function optionalOdooString(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -469,23 +494,32 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
       req.log.warn({ missingIds }, "Suppliers missing from sync, potentially due to tag removal. They will be removed if auto-delete proceeds.");
     }
 
-    if (fetchedIds.length > 0) {
+    const cleanupDecision = getOdooCleanupDecision(
+      fetchedIds.length,
+      failed,
+      existingSupplierIds.size,
+    );
+
+    if (cleanupDecision === "delete_missing") {
       await db.delete(suppliersTable)
         .where(and(
           eq(suppliersTable.companyId, companyId),
           isNotNull(suppliersTable.odooId),
-          notInArray(suppliersTable.odooId, fetchedIds)
+          notInArray(suppliersTable.odooId, fetchedIds),
         ));
-    } else if (failed === 0) {
-      const allRows = await db.select({ id: suppliersTable.id }).from(suppliersTable)
-        .where(and(eq(suppliersTable.companyId, companyId), isNotNull(suppliersTable.odooId)));
-      if (allRows.length > 5) {
-        syncStatus = "suspicious_empty_result";
-        errors.push(`Suspicious empty result. Local record count (${allRows.length}) > 5. Skipping auto-delete.`);
-      } else {
-        await db.delete(suppliersTable)
-          .where(and(eq(suppliersTable.companyId, companyId), isNotNull(suppliersTable.odooId)));
-      }
+    } else if (cleanupDecision === "delete_all") {
+      await db.delete(suppliersTable)
+        .where(and(
+          eq(suppliersTable.companyId, companyId),
+          isNotNull(suppliersTable.odooId),
+        ));
+    } else if (
+      cleanupDecision === "preserve_suspicious_empty"
+    ) {
+      syncStatus = "suspicious_empty_result";
+      errors.push(
+        `Suspicious empty result. Local record count (${existingSupplierIds.size}) > 5. Skipping auto-delete.`,
+      );
     }
 
     await db.insert(odooSyncLogTable).values({
@@ -605,23 +639,48 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
           .filter((id): id is number => id !== null),
       ),
     );
-    if (fetchedIds.length > 0) {
+    let localRecordCount = 0;
+
+    if (fetchedIds.length === 0 && failed === 0) {
+      const allRows = await db
+        .select({ id: inventoryItemsTable.id })
+        .from(inventoryItemsTable)
+        .where(
+          and(
+            eq(inventoryItemsTable.companyId, companyId),
+            isNotNull(inventoryItemsTable.odooId),
+          ),
+        );
+
+      localRecordCount = allRows.length;
+    }
+
+    const cleanupDecision = getOdooCleanupDecision(
+      fetchedIds.length,
+      failed,
+      localRecordCount,
+    );
+
+    if (cleanupDecision === "delete_missing") {
       await db.delete(inventoryItemsTable)
         .where(and(
           eq(inventoryItemsTable.companyId, companyId),
           isNotNull(inventoryItemsTable.odooId),
-          notInArray(inventoryItemsTable.odooId, fetchedIds)
+          notInArray(inventoryItemsTable.odooId, fetchedIds),
         ));
-    } else if (failed === 0) {
-      const allRows = await db.select({ id: inventoryItemsTable.id }).from(inventoryItemsTable)
-        .where(and(eq(inventoryItemsTable.companyId, companyId), isNotNull(inventoryItemsTable.odooId)));
-      if (allRows.length > 5) {
-        syncStatus = "suspicious_empty_result";
-        errors.push(`Suspicious empty result. Local record count (${allRows.length}) > 5. Skipping auto-delete.`);
-      } else {
-        await db.delete(inventoryItemsTable)
-          .where(and(eq(inventoryItemsTable.companyId, companyId), isNotNull(inventoryItemsTable.odooId)));
-      }
+    } else if (cleanupDecision === "delete_all") {
+      await db.delete(inventoryItemsTable)
+        .where(and(
+          eq(inventoryItemsTable.companyId, companyId),
+          isNotNull(inventoryItemsTable.odooId),
+        ));
+    } else if (
+      cleanupDecision === "preserve_suspicious_empty"
+    ) {
+      syncStatus = "suspicious_empty_result";
+      errors.push(
+        `Suspicious empty result. Local record count (${localRecordCount}) > 5. Skipping auto-delete.`,
+      );
     }
 
     await db.insert(odooSyncLogTable).values({
@@ -851,23 +910,48 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
           .filter((id): id is number => id !== null),
       ),
     );
-    if (fetchedIds.length > 0) {
+    let localRecordCount = 0;
+
+    if (fetchedIds.length === 0 && failed === 0) {
+      const allRows = await db
+        .select({ id: ordersTable.id })
+        .from(ordersTable)
+        .where(
+          and(
+            eq(ordersTable.companyId, companyId),
+            isNotNull(ordersTable.odooId),
+          ),
+        );
+
+      localRecordCount = allRows.length;
+    }
+
+    const cleanupDecision = getOdooCleanupDecision(
+      fetchedIds.length,
+      failed,
+      localRecordCount,
+    );
+
+    if (cleanupDecision === "delete_missing") {
       await db.delete(ordersTable)
         .where(and(
           eq(ordersTable.companyId, companyId),
           isNotNull(ordersTable.odooId),
-          notInArray(ordersTable.odooId, fetchedIds)
+          notInArray(ordersTable.odooId, fetchedIds),
         ));
-    } else if (failed === 0) {
-      const allRows = await db.select({ id: ordersTable.id }).from(ordersTable)
-        .where(and(eq(ordersTable.companyId, companyId), isNotNull(ordersTable.odooId)));
-      if (allRows.length > 5) {
-        syncStatus = "suspicious_empty_result";
-        errors.push(`Suspicious empty result. Local record count (${allRows.length}) > 5. Skipping auto-delete.`);
-      } else {
-        await db.delete(ordersTable)
-          .where(and(eq(ordersTable.companyId, companyId), isNotNull(ordersTable.odooId)));
-      }
+    } else if (cleanupDecision === "delete_all") {
+      await db.delete(ordersTable)
+        .where(and(
+          eq(ordersTable.companyId, companyId),
+          isNotNull(ordersTable.odooId),
+        ));
+    } else if (
+      cleanupDecision === "preserve_suspicious_empty"
+    ) {
+      syncStatus = "suspicious_empty_result";
+      errors.push(
+        `Suspicious empty result. Local record count (${localRecordCount}) > 5. Skipping auto-delete.`,
+      );
     }
 
     await db.insert(odooSyncLogTable).values({
@@ -1055,23 +1139,48 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
           .filter((id): id is number => id !== null),
       ),
     );
-    if (fetchedIds.length > 0) {
+    let localRecordCount = 0;
+
+    if (fetchedIds.length === 0 && failed === 0) {
+      const allRows = await db
+        .select({ id: stockMovementsTable.id })
+        .from(stockMovementsTable)
+        .where(
+          and(
+            eq(stockMovementsTable.companyId, companyId),
+            isNotNull(stockMovementsTable.odooId),
+          ),
+        );
+
+      localRecordCount = allRows.length;
+    }
+
+    const cleanupDecision = getOdooCleanupDecision(
+      fetchedIds.length,
+      failed,
+      localRecordCount,
+    );
+
+    if (cleanupDecision === "delete_missing") {
       await db.delete(stockMovementsTable)
         .where(and(
           eq(stockMovementsTable.companyId, companyId),
           isNotNull(stockMovementsTable.odooId),
-          notInArray(stockMovementsTable.odooId, fetchedIds)
+          notInArray(stockMovementsTable.odooId, fetchedIds),
         ));
-    } else if (failed === 0) {
-      const allRows = await db.select({ id: stockMovementsTable.id }).from(stockMovementsTable)
-        .where(and(eq(stockMovementsTable.companyId, companyId), isNotNull(stockMovementsTable.odooId)));
-      if (allRows.length > 5) {
-        syncStatus = "suspicious_empty_result";
-        errors.push(`Suspicious empty result. Local record count (${allRows.length}) > 5. Skipping auto-delete.`);
-      } else {
-        await db.delete(stockMovementsTable)
-          .where(and(eq(stockMovementsTable.companyId, companyId), isNotNull(stockMovementsTable.odooId)));
-      }
+    } else if (cleanupDecision === "delete_all") {
+      await db.delete(stockMovementsTable)
+        .where(and(
+          eq(stockMovementsTable.companyId, companyId),
+          isNotNull(stockMovementsTable.odooId),
+        ));
+    } else if (
+      cleanupDecision === "preserve_suspicious_empty"
+    ) {
+      syncStatus = "suspicious_empty_result";
+      errors.push(
+        `Suspicious empty result. Local record count (${localRecordCount}) > 5. Skipping auto-delete.`,
+      );
     }
 
     await db.insert(odooSyncLogTable).values({ companyId, entity: "logistics", status: syncStatus, recordsSynced: synced, recordsFailed: failed, message: generateSyncMessage(synced, failed, errors) });
@@ -1210,25 +1319,49 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
           .filter((id): id is number => id !== null),
       ),
     );
-    if (fetchedIds.length > 0) {
+    let localRecordCount = 0;
+
+    if (fetchedIds.length === 0 && failed === 0) {
+      const allRows = await db
+        .select({ id: productionRunsTable.id })
+        .from(productionRunsTable)
+        .where(
+          and(
+            eq(productionRunsTable.companyId, companyId),
+            isNotNull(productionRunsTable.odooId),
+          ),
+        );
+
+      localRecordCount = allRows.length;
+    }
+
+    const cleanupDecision = getOdooCleanupDecision(
+      fetchedIds.length,
+      failed,
+      localRecordCount,
+    );
+
+    if (cleanupDecision === "delete_missing") {
       await db.delete(productionRunsTable)
         .where(and(
           eq(productionRunsTable.companyId, companyId),
           isNotNull(productionRunsTable.odooId),
-          notInArray(productionRunsTable.odooId, fetchedIds)
+          notInArray(productionRunsTable.odooId, fetchedIds),
         ));
-    } else if (failed === 0) {
-      const allRows = await db.select({ id: productionRunsTable.id }).from(productionRunsTable)
-        .where(and(eq(productionRunsTable.companyId, companyId), isNotNull(productionRunsTable.odooId)));
-      if (allRows.length > 5) {
-        syncStatus = "suspicious_empty_result";
-        errors.push(`Suspicious empty result. Local record count (${allRows.length}) > 5. Skipping auto-delete.`);
-      } else {
-        await db.delete(productionRunsTable)
-          .where(and(eq(productionRunsTable.companyId, companyId), isNotNull(productionRunsTable.odooId)));
-      }
+    } else if (cleanupDecision === "delete_all") {
+      await db.delete(productionRunsTable)
+        .where(and(
+          eq(productionRunsTable.companyId, companyId),
+          isNotNull(productionRunsTable.odooId),
+        ));
+    } else if (
+      cleanupDecision === "preserve_suspicious_empty"
+    ) {
+      syncStatus = "suspicious_empty_result";
+      errors.push(
+        `Suspicious empty result. Local record count (${localRecordCount}) > 5. Skipping auto-delete.`,
+      );
     }
-
     await db.insert(odooSyncLogTable).values({ companyId, entity: "production", status: syncStatus, recordsSynced: synced, recordsFailed: failed, message: generateSyncMessage(synced, failed, errors) });
     res.json({ synced, failed, errors });
   } catch (err) {
