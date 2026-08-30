@@ -3,6 +3,7 @@ import {
   mapOdooPurchaseState,
   mapOdooStockMovementType,
   num,
+  optionalOdooString,
   parseOdooDateTime,
   parseOdooStockMovementQuantities,
 } from "../integrations";
@@ -144,6 +145,21 @@ describe("Odoo integration parsing", () => {
     expect(mapOdooStockMovementType("incoming", false)).not.toBe(
       "transfer",
     );
+  });
+
+  it("normalizes optional Odoo reference strings", () => {
+    expect(optionalOdooString("  PO-123  ")).toBe("PO-123");
+    expect(optionalOdooString("Product Quantity Updated")).toBe(
+      "Product Quantity Updated",
+    );
+  });
+
+  it("rejects missing and non-string Odoo references", () => {
+    expect(optionalOdooString(null)).toBeNull();
+    expect(optionalOdooString(false)).toBeNull();
+    expect(optionalOdooString("")).toBeNull();
+    expect(optionalOdooString("   ")).toBeNull();
+    expect(optionalOdooString(123)).toBeNull();
   });
 
 });

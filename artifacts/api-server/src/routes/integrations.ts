@@ -21,6 +21,16 @@ export function num(v: unknown): number {
   const parsed = Number(v);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
+
+export function optionalOdooString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized || null;
+}
+
 export type OdooStockMovementQuantities = {
   quantityBefore: null;
   quantityChanged: number;
@@ -885,15 +895,18 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
         m.origin_returned_move_id,
       );
 
+      const referenceNumber = optionalOdooString(m.reference);
+
       try {
         await db.insert(stockMovementsTable).values({
           companyId,
           odooId,
           inventoryItemId,
           movedAt,
+          user: null,
           movementType,
           action: "completed",
-          referenceNumber: String(m.reference ?? ""),
+          referenceNumber,
           ...quantities,
         }).onConflictDoUpdate({
           target: [
@@ -902,7 +915,9 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
           ],
           set: {
             movedAt,
+            user: null,
             movementType,
+            referenceNumber,
             ...quantities,
           },
         });

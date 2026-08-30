@@ -426,7 +426,7 @@ export default function InventoryPage() {
         m.quantityChanged,
         m.quantityAfter ?? "Unknown",
         m.warehouse ?? "",
-        m.user,
+        m.user ?? "Unknown",
       ].map(String),
     );
 
@@ -725,7 +725,9 @@ export default function InventoryPage() {
                       </TableCell>
                       <TableCell className="text-right font-mono">{formatNum(m.quantityAfter)}</TableCell>
                       <TableCell className="text-muted-foreground">{m.warehouse ?? "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{m.user}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {m.user ?? "Unknown"}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
