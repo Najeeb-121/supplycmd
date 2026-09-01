@@ -207,6 +207,58 @@ runTest("supplier cost known", () => {
   if (a.mitigationCostProvenance !== "CALCULATED") throw new Error("Provenance should be CALCULATED");
 });
 
+runTest("alternate supplier explains faster but more expensive tradeoff", () => {
+  const p = createMockProduct({
+    suppliers: [
+      {
+        supplierId: 100,
+        supplierName: "Gulf Aluminium Supply Co.",
+        preferredSupplier: true,
+        leadTimeDays: { value: 5, source: "ODOO_SUPPLIERINFO" },
+        minimumOrderQuantity: 500,
+        supplierUnitCost: 2.35,
+        sequence: 1
+      },
+      {
+        supplierId: 101,
+        supplierName: "Jordan Metals Trading",
+        preferredSupplier: false,
+        leadTimeDays: { value: 2, source: "ODOO_SUPPLIERINFO" },
+        minimumOrderQuantity: 300,
+        supplierUnitCost: 2.62,
+        sequence: 2
+      }
+    ]
+  });
+
+  const e = createMockExposure({
+    targetSupplierId: 100,
+    alternateSupplierAvailable: true,
+    residualShortage: 100
+  });
+
+  return generateMitigations(
+    { ...snapshot, products: { 1: p } },
+    e
+  );
+}, (res) => {
+  const alternate = res.actions.find(
+    (a: any) => a.id === "ALT_SUPPLIER_101"
+  );
+
+  if (!alternate) {
+    throw new Error("Missing Jordan Metals alternate supplier");
+  }
+
+  if (!alternate.reason.includes("3 days faster")) {
+    throw new Error(`Expected faster lead-time comparison, got: ${alternate.reason}`);
+  }
+
+  if (!alternate.reason.includes("0.27")) {
+    throw new Error(`Expected unit-cost premium comparison, got: ${alternate.reason}`);
+  }
+});
+
 runTest("supplier cost unknown", () => {
   const p = createMockProduct({
     suppliers: [

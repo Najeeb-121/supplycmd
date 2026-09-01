@@ -99,4 +99,94 @@ describe('buildSupplyRiskSnapshot', () => {
     expect(priceLookup.length).toBe(1);
     expect(priceLookup[0].unitPrice).toBe(0); // My implementation currently maps null to 0 for PriceLookup. Wait, the prompt said: "missing supplier cost → UNKNOWN ... missing demand date → excluded". Actually it didn't specify what to do with sales order line unitPrice missing.
   });
+
+  it('excludes cancelled procurement from inbound supply', async () => {
+    const mockItems = [
+      {
+        id: 1,
+        companyId: 1,
+        odooId: 100,
+        sku: 'AL-COIL-5182',
+        name: 'Aluminium Coil 5182-H19',
+        currentStock: 500,
+        safetyStock: 0,
+        leadTimeDays: 7,
+        leadTimeSource: 'SCHEMA_DEFAULT'
+      }
+    ];
+
+    const mockRawSuppliers = [
+      {
+        id: 10,
+        companyId: 1,
+        odooId: 200,
+        name: 'Supplier 1'
+      }
+    ];
+
+    const mockPos = [
+      { id: 20, companyId: 1, odooId: 300, status: 'confirmed' },
+      { id: 21, companyId: 1, odooId: 301, status: 'cancelled' },
+      { id: 22, companyId: 1, odooId: 302, status: 'confirmed' }
+    ];
+
+    const mockPoLines = [
+      {
+        id: 30,
+        companyId: 1,
+        orderId: 20,
+        inventoryItemId: 1,
+        supplierId: 10,
+        odooId: 400,
+        orderedQuantity: 900,
+        receivedQuantity: 0,
+        remainingQuantity: 900,
+        expectedDate: '2026-09-05',
+        status: 'cancelled'
+      },
+      {
+        id: 31,
+        companyId: 1,
+        orderId: 21,
+        inventoryItemId: 1,
+        supplierId: 10,
+        odooId: 401,
+        orderedQuantity: 800,
+        receivedQuantity: 0,
+        remainingQuantity: 800,
+        expectedDate: '2026-09-06',
+        status: 'confirmed'
+      },
+      {
+        id: 32,
+        companyId: 1,
+        orderId: 22,
+        inventoryItemId: 1,
+        supplierId: 10,
+        odooId: 402,
+        orderedQuantity: 700,
+        receivedQuantity: 0,
+        remainingQuantity: 700,
+        expectedDate: '2026-09-07',
+        status: 'confirmed'
+      }
+    ];
+
+    (db as any).where
+      .mockReturnValueOnce(mockItems)
+      .mockReturnValueOnce(mockRawSuppliers)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce(mockPos)
+      .mockReturnValueOnce(mockPoLines)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([]);
+
+    const { snapshot } = await buildSupplyRiskSnapshot(1);
+
+    expect(snapshot.products[100].inboundPOs).toHaveLength(1);
+    expect(snapshot.products[100].inboundPOs[0].odooId).toBe(402);
+    expect(snapshot.products[100].inboundPOs[0].remainingQuantity).toBe(700);
+    expect(snapshot.products[100].inboundPOs[0].supplierId).toBe(200);
+  });
+
 });

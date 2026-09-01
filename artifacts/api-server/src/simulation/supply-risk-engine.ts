@@ -36,7 +36,13 @@ function extractGeneralRiskFactors(snapshot: SupplyRiskSnapshot, productId: numb
     : false;
 
   // Lead time is verified if ANY supplier has ODOO_VERIFIED lead time.
-  const leadTimeVerified = product.leadTimeDays.source === "ODOO_VERIFIED" || product.suppliers.some(s => s.leadTimeDays.source === "ODOO_VERIFIED");
+  const leadTimeVerified =
+    product.leadTimeDays.source === "ODOO_VERIFIED" ||
+    product.suppliers.some(
+      s =>
+        s.leadTimeDays.source === "ODOO_VERIFIED" ||
+        s.leadTimeDays.source === "ODOO_SUPPLIERINFO"
+    );
 
   return {
     singleSupplierDependency,

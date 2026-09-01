@@ -71,16 +71,19 @@ export async function buildSupplyRiskSnapshot(companyId: number): Promise<{ snap
   const inboundByItem = new Map<number, InboundSupply[]>();
   for (const pol of poLines) {
     if (!pol.expectedDate) continue;
-    if (pol.status === "cancel" || pol.status === "done" || pol.remainingQuantity <= 0) continue;
+    if (pol.status === "cancelled" || pol.status === "done" || pol.remainingQuantity <= 0) continue;
     if (pol.inventoryItemId === null) continue;
 
     const po = pos.find((p: any) => p.id === pol.orderId);
-    if (!po || po.status === "cancel" || po.status === "done") continue;
+    if (!po || po.status === "cancelled" || po.status === "done") continue;
+
+    const supplier = rawSuppliers.find((s: any) => s.id === pol.supplierId);
+    if (!supplier || supplier.odooId === null) continue;
 
     const inbound: InboundSupply = {
       poId: pol.orderId,
       odooId: pol.odooId,
-      supplierId: pol.supplierId,
+      supplierId: supplier.odooId,
       productId: pol.inventoryItemId,
       orderedQuantity: pol.orderedQuantity,
       receivedQuantity: pol.receivedQuantity,
@@ -88,7 +91,9 @@ export async function buildSupplyRiskSnapshot(companyId: number): Promise<{ snap
       expectedArrivalDate: pol.expectedDate,
       status: po.status,
       confirmedForSupply: po.status === "purchase" || po.status === "done" || po.status === "confirmed",
-      currentlyInbound: true
+      currentlyInbound:
+        (po.status === "purchase" || po.status === "confirmed") &&
+        pol.remainingQuantity > 0
     };
 
     if (!inboundByItem.has(pol.inventoryItemId)) {

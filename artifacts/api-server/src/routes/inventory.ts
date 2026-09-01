@@ -202,7 +202,8 @@ router.get("/inventory/relationships", async (req: Request, res: Response): Prom
       existing.activePoCount += 1;
       existing.inboundQty += Number(po.remainingQuantity || 0);
       existing.hasActivePo = true;
-      existing.relationshipSource = existing.relationshipSource === "product_supplier" ? "both" : "purchase_order_line";
+      existing.relationshipSource =
+        existing.relationshipSource === "purchase_order_line" ? "purchase_order_line" : "both";
     } else {
       map.set(key, {
         supplierId: po.supplierId,

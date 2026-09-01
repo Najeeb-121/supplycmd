@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { desc, eq, and, isNotNull, notInArray, sql } from "drizzle-orm";
-import { db, suppliersTable, inventoryItemsTable, odooSyncLogTable, odooConnectionsTable, ordersTable, stockMovementsTable, productionRunsTable, demandRecordsTable, salesOrdersTable, salesOrderLinesTable, bomsTable, bomLinesTable, purchaseOrderLinesTable } from "@workspace/db";
+import { db, suppliersTable, inventoryItemsTable, odooSyncLogTable, odooConnectionsTable, ordersTable, stockMovementsTable, productionRunsTable, demandRecordsTable, salesOrdersTable, salesOrderLinesTable, bomsTable, bomLinesTable, purchaseOrderLinesTable, productSuppliersTable } from "@workspace/db";
 import { OdooClient, encryptSecret, decryptSecret, type OdooConfig } from "@workspace/integrations-odoo-server";
 import { StrictSupplierBody } from "./suppliers";
 import { StrictInventoryBody } from "./inventory";
@@ -503,13 +503,26 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
     const poData = await db.select().from(ordersTable).where(eq(ordersTable.companyId, companyId));
 
     let partners: Record<string, unknown>[] = [];
+    let supplierInfoRows: Record<string, unknown>[] = [];
 
     try {
-      const supplierInfoRows = await client.searchRead<Record<string, unknown>>(
+      supplierInfoRows = await client.searchRead<Record<string, unknown>>(
         "product.supplierinfo",
         [],
-        ["partner_id"],
+        [
+          "id",
+          "partner_id",
+          "product_id",
+          "product_tmpl_id",
+          "product_code",
+          "price",
+          "currency_id",
+          "min_qty",
+          "delay",
+          "sequence",
+        ],
       );
+
 
       const supplierInfoPartnerIds = Array.from(
         new Set(
@@ -561,6 +574,7 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
         ["id", "name", "country_id"],
       );
     } catch (err) {
+
       partners = await client.searchRead<Record<string, unknown>>(
         "res.partner",
         [["supplier", "=", true], ["parent_id", "=", false]],
@@ -654,6 +668,209 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
       } catch (err) {
         failed++;
         errors.push(`${name || `#${odooId}`}: ${(err as Error).message}`);
+      }
+    }
+
+    // Synchronize Odoo vendor pricelist relationships after supplier masters exist.
+    if (supplierInfoRows.length > 0) {
+      const currentSuppliers = await db
+        .select()
+        .from(suppliersTable)
+        .where(eq(suppliersTable.companyId, companyId));
+
+      const currentInventory = await db
+        .select()
+        .from(inventoryItemsTable)
+        .where(eq(inventoryItemsTable.companyId, companyId));
+
+      const existingProductSuppliers = await db
+        .select()
+        .from(productSuppliersTable)
+        .where(eq(productSuppliersTable.companyId, companyId));
+
+      const supplierByOdooId = new Map<number, (typeof currentSuppliers)[number]>();
+
+      for (const supplier of currentSuppliers) {
+        const supplierOdooId = parsePositiveOdooId(supplier.odooId);
+
+        if (supplierOdooId !== null) {
+          supplierByOdooId.set(supplierOdooId, supplier);
+        }
+      }
+
+      const inventoryByOdooProductId = new Map<
+        number,
+        (typeof currentInventory)[number]
+      >();
+
+      const inventoryByOdooTemplateId = new Map<
+        number,
+        (typeof currentInventory)[number]
+      >();
+
+      for (const item of currentInventory) {
+        const productOdooId = parsePositiveOdooId(item.odooId);
+        const templateOdooId = parsePositiveOdooId(
+          item.odooProductTemplateId,
+        );
+
+        if (productOdooId !== null) {
+          inventoryByOdooProductId.set(productOdooId, item);
+        }
+
+        if (templateOdooId !== null) {
+          inventoryByOdooTemplateId.set(templateOdooId, item);
+        }
+      }
+
+      const existingRelationshipByKey = new Map(
+        existingProductSuppliers.map((relationship) => [
+          `${relationship.inventoryItemId}:${relationship.supplierId}`,
+          relationship,
+        ]),
+      );
+
+      type SupplierInfoCandidate = {
+        inventoryItem: (typeof currentInventory)[number];
+        supplier: (typeof currentSuppliers)[number];
+        supplierSkuCode: string | null;
+        supplierUnitCost: number | null;
+        currency: string | null;
+        minimumOrderQuantity: number | null;
+        leadTimeDays: number | null;
+        sequence: number;
+      };
+
+      const relationshipByKey = new Map<string, SupplierInfoCandidate>();
+
+      for (const row of supplierInfoRows) {
+        const supplierOdooId = many2oneId(row.partner_id);
+        const productOdooId = many2oneId(row.product_id);
+        const templateOdooId = many2oneId(row.product_tmpl_id);
+
+        if (supplierOdooId === null) continue;
+
+        const supplier = supplierByOdooId.get(supplierOdooId);
+
+        const inventoryItem =
+          (productOdooId !== null
+            ? inventoryByOdooProductId.get(productOdooId)
+            : undefined) ??
+          (templateOdooId !== null
+            ? inventoryByOdooTemplateId.get(templateOdooId)
+            : undefined);
+
+        if (!supplier || !inventoryItem) continue;
+
+        const supplierUnitCost = parseNonNegativeOdooNumber(row.price);
+        const minimumOrderQuantity = parseNonNegativeOdooNumber(row.min_qty);
+        const leadTimeDays = parseNonNegativeOdooNumber(row.delay);
+        const sequence = parseNonNegativeOdooNumber(row.sequence) ?? 0;
+
+        const currency =
+          Array.isArray(row.currency_id) &&
+            typeof row.currency_id[1] === "string"
+            ? row.currency_id[1]
+            : null;
+
+        const candidate: SupplierInfoCandidate = {
+          inventoryItem,
+          supplier,
+          supplierSkuCode: optionalOdooString(row.product_code),
+          supplierUnitCost,
+          currency,
+          minimumOrderQuantity,
+          leadTimeDays,
+          sequence,
+        };
+
+        const key = `${inventoryItem.id}:${supplier.id}`;
+        const previous = relationshipByKey.get(key);
+
+        // One local relationship exists per product/supplier pair.
+        // Prefer Odoo's lower sequence, then the lower MOQ tier.
+        if (
+          !previous ||
+          candidate.sequence < previous.sequence ||
+          (
+            candidate.sequence === previous.sequence &&
+            (candidate.minimumOrderQuantity ?? 0) <
+            (previous.minimumOrderQuantity ?? 0)
+          )
+        ) {
+          relationshipByKey.set(key, candidate);
+        }
+      }
+
+      const preferredSequenceByItem = new Map<number, number>();
+
+      for (const candidate of relationshipByKey.values()) {
+        const currentPreferredSequence = preferredSequenceByItem.get(
+          candidate.inventoryItem.id,
+        );
+
+        if (
+          currentPreferredSequence === undefined ||
+          candidate.sequence < currentPreferredSequence
+        ) {
+          preferredSequenceByItem.set(
+            candidate.inventoryItem.id,
+            candidate.sequence,
+          );
+        }
+      }
+
+      for (const [key, candidate] of relationshipByKey) {
+        const existingRelationship = existingRelationshipByKey.get(key);
+
+        // Never overwrite a relationship created outside the Odoo
+        // product.supplierinfo synchronization.
+        if (
+          existingRelationship &&
+          !(
+            existingRelationship.source.toLowerCase() === "odoo" &&
+            existingRelationship.sourceEntity === "product.supplierinfo"
+          )
+        ) {
+          continue;
+        }
+
+        const preferredSupplier =
+          candidate.sequence ===
+          preferredSequenceByItem.get(candidate.inventoryItem.id);
+
+        await db
+          .insert(productSuppliersTable)
+          .values({
+            companyId,
+            inventoryItemId: candidate.inventoryItem.id,
+            supplierId: candidate.supplier.id,
+            supplierSkuCode: candidate.supplierSkuCode,
+            supplierUnitCost: candidate.supplierUnitCost,
+            currency: candidate.currency,
+            minimumOrderQuantity: candidate.minimumOrderQuantity,
+            orderMultiple: null,
+            leadTimeDays: candidate.leadTimeDays,
+            preferredSupplier,
+            source: "Odoo",
+            sourceEntity: "product.supplierinfo",
+          })
+          .onConflictDoUpdate({
+            target: [
+              productSuppliersTable.inventoryItemId,
+              productSuppliersTable.supplierId,
+            ],
+            set: {
+              supplierSkuCode: candidate.supplierSkuCode,
+              supplierUnitCost: candidate.supplierUnitCost,
+              currency: candidate.currency,
+              minimumOrderQuantity: candidate.minimumOrderQuantity,
+              leadTimeDays: candidate.leadTimeDays,
+              preferredSupplier,
+              source: "Odoo",
+              sourceEntity: "product.supplierinfo",
+            },
+          });
       }
     }
 

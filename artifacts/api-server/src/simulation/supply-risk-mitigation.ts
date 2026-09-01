@@ -49,7 +49,9 @@ export function generateMitigations(snapshot: SupplyRiskSnapshot, exposure: Risk
   // 3. ALTERNATE_SUPPLIER
   if (product && exposure.alternateSupplierAvailable) {
     const alternates = product.suppliers.filter(s => s.supplierId !== targetSupplierId);
-
+    const targetSupplier = product.suppliers.find(
+      s => s.supplierId === targetSupplierId
+    );
     // Sort by sequence (lowest first) then preferred supplier
     alternates.sort((a, b) => {
       const seqA = a.sequence ?? 999;
@@ -76,11 +78,35 @@ export function generateMitigations(snapshot: SupplyRiskSnapshot, exposure: Risk
       let date: string | undefined = undefined;
       let dateProv: "CALCULATED" | "UNKNOWN" = "UNKNOWN";
 
+      let reason = `Supplier ${alt.supplierName} is available as an alternate source.`;
+
+      const targetLeadTime = targetSupplier?.leadTimeDays.value;
+      const alternateLeadTime = alt.leadTimeDays.value;
+      const targetUnitCost = targetSupplier?.supplierUnitCost;
+      const alternateUnitCost = alt.supplierUnitCost;
+
+      if (
+        targetLeadTime != null &&
+        alternateLeadTime != null &&
+        targetUnitCost != null &&
+        alternateUnitCost != null
+      ) {
+        const daysFaster = targetLeadTime - alternateLeadTime;
+        const unitCostDifference = alternateUnitCost - targetUnitCost;
+
+        if (daysFaster > 0 && unitCostDifference > 0) {
+          reason =
+            `Supplier ${alt.supplierName} is ${daysFaster} days faster ` +
+            `but ${unitCostDifference.toFixed(2)} per unit more expensive than ` +
+            `${targetSupplier!.supplierName.replace(/\.$/, "")}.`;
+        }
+      }
+
       actions.push({
         id: `ALT_SUPPLIER_${alt.supplierId}`,
         type: "ALTERNATE_SUPPLIER",
         title: `Source from Alternate Supplier: ${alt.supplierName}`,
-        reason: `Supplier ${alt.supplierName} is available as an alternate source.`,
+        reason,
         feasible: true,
         affectedQuantity: residualShortage,
         mitigationCost: cost,

@@ -82,7 +82,48 @@ function buildMockSnapshot(): SupplyRiskSnapshot {
         leadTimeDays: { value: 7, source: "SCHEMA_DEFAULT" },
         suppliers: [],
         inboundPOs: []
+      },
+
+      101: {
+        productId: 101,
+        odooId: 101,
+        sku: "ODOO-SUPPLIERINFO-TEST",
+        name: "SupplierInfo Lead Time Test",
+        physicalStock: 0,
+        reservedStock: 0,
+        availableStock: 0,
+        reservationShortage: 0,
+        incomingQuantity: 100,
+        safetyStock: { value: 0, source: "SCHEMA_DEFAULT" },
+        leadTimeDays: { value: null, source: "UNKNOWN" },
+        suppliers: [
+          {
+            supplierId: 500,
+            supplierName: "Odoo SupplierInfo Supplier",
+            preferredSupplier: true,
+            leadTimeDays: { value: 2, source: "ODOO_SUPPLIERINFO" },
+            minimumOrderQuantity: 0,
+            supplierUnitCost: 5,
+            sequence: 1
+          }
+        ],
+        inboundPOs: [
+          {
+            poId: 99,
+            odooId: 99,
+            supplierId: 500,
+            productId: 101,
+            orderedQuantity: 100,
+            receivedQuantity: 0,
+            remainingQuantity: 100,
+            expectedArrivalDate: "2026-09-03",
+            status: "confirmed",
+            confirmedForSupply: true,
+            currentlyInbound: true
+          }
+        ]
       }
+
     },
     demand: [
       { salesOrderId: 1, salesOrderLineId: 1, customerId: 1, productId: 16, demandDate: "2026-08-20", demandQuantity: 1000, status: "confirmed" }
@@ -140,6 +181,13 @@ function runTests() {
 
   const tropicanaFail = analyzeSupplierFailure(snapshot, 999, 100);
   assertEq("TEST 10: Tropicana leadTimeVerified = false", tropicanaFail.leadTimeVerified, false);
+
+  const supplierInfoFail = analyzeSupplierFailure(snapshot, 500, 101);
+  assertEq(
+    "TEST 10: ODOO_SUPPLIERINFO leadTimeVerified = true",
+    supplierInfoFail.leadTimeVerified,
+    true
+  );
 
   // TEST 11: Reservation shortage
   assertEq("TEST 11: Mountain Dew reservationShortage = 1,065,000", snapshot.products[16].reservationShortage, 1065000);
