@@ -1,11 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  buildInitialConnectionState,
-  simulateSyncCycle,
-  buildSyncingState,
-  type ErpConnectionState,
-} from "@/services/erp-integration";
-import {
   type OpsIntelState,
   type KpiId,
 } from "@/services/operational-intelligence";
@@ -40,13 +34,13 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 
 const KPI_ICONS: Record<KpiId, React.ReactNode> = {
-  inventory_accuracy:     <Package      className="w-3.5 h-3.5" />,
-  production_utilization: <Activity     className="w-3.5 h-3.5" />,
-  supplier_performance:   <Users        className="w-3.5 h-3.5" />,
-  warehouse_fill_rate:    <Warehouse    className="w-3.5 h-3.5" />,
-  purchase_lead_time:     <Clock        className="w-3.5 h-3.5" />,
-  stock_turnover:         <RotateCcw    className="w-3.5 h-3.5" />,
-  late_deliveries:        <TruckIcon    className="w-3.5 h-3.5" />,
+  inventory_accuracy: <Package className="w-3.5 h-3.5" />,
+  production_utilization: <Activity className="w-3.5 h-3.5" />,
+  supplier_performance: <Users className="w-3.5 h-3.5" />,
+  warehouse_fill_rate: <Warehouse className="w-3.5 h-3.5" />,
+  purchase_lead_time: <Clock className="w-3.5 h-3.5" />,
+  stock_turnover: <RotateCcw className="w-3.5 h-3.5" />,
+  late_deliveries: <TruckIcon className="w-3.5 h-3.5" />,
   order_fulfillment_rate: <CheckCircle2 className="w-3.5 h-3.5" />,
 };
 
@@ -63,10 +57,10 @@ function HealthGrade({ score }: { score: number }) {
 function HealthRing({ score }: { score: number }) {
   const color =
     score >= 90 ? "#10b981"
-    : score >= 75 ? "#34d399"
-    : score >= 60 ? "#f59e0b"
-    : score >= 45 ? "#f97316"
-    : "hsl(var(--destructive))";
+      : score >= 75 ? "#34d399"
+        : score >= 60 ? "#f59e0b"
+          : score >= 45 ? "#f97316"
+            : "hsl(var(--destructive))";
 
   const r = 28;
   const circ = 2 * Math.PI * r;
@@ -89,8 +83,8 @@ function HealthRing({ score }: { score: number }) {
 }
 
 function StatusCount({ ops }: { ops: OpsIntelState }) {
-  const good     = ops.kpis.filter((k) => k.status === "good").length;
-  const warning  = ops.kpis.filter((k) => k.status === "warning").length;
+  const good = ops.kpis.filter((k) => k.status === "good").length;
+  const warning = ops.kpis.filter((k) => k.status === "warning").length;
   const critical = ops.kpis.filter((k) => k.status === "critical").length;
   return (
     <div className="flex gap-3 text-sm">
@@ -126,10 +120,10 @@ function SyncPill({ isFetching }: { isFetching: boolean }) {
 
 // Section config keyed by "## N." number string
 const SECTION_META: Record<string, { label: string; border: string; bg: string; heading: string; icon: string }> = {
-  "1": { label: "Overall Operations Summary", icon: "◈", border: "border-blue-200 dark:border-blue-800",     bg: "bg-blue-50/60 dark:bg-blue-950/20",      heading: "text-blue-700 dark:text-blue-400"     },
-  "2": { label: "Top Risks",                  icon: "◉", border: "border-red-200 dark:border-red-800",       bg: "bg-red-50/60 dark:bg-red-950/20",        heading: "text-red-700 dark:text-red-400"       },
-  "3": { label: "KPI Relationships",          icon: "◎", border: "border-purple-200 dark:border-purple-800", bg: "bg-purple-50/60 dark:bg-purple-950/20",  heading: "text-purple-700 dark:text-purple-400" },
-  "4": { label: "Priority Action Plan",       icon: "◆", border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50/60 dark:bg-emerald-950/20", heading: "text-emerald-700 dark:text-emerald-400" },
+  "1": { label: "Overall Operations Summary", icon: "◈", border: "border-blue-200 dark:border-blue-800", bg: "bg-blue-50/60 dark:bg-blue-950/20", heading: "text-blue-700 dark:text-blue-400" },
+  "2": { label: "Top Risks", icon: "◉", border: "border-red-200 dark:border-red-800", bg: "bg-red-50/60 dark:bg-red-950/20", heading: "text-red-700 dark:text-red-400" },
+  "3": { label: "KPI Relationships", icon: "◎", border: "border-purple-200 dark:border-purple-800", bg: "bg-purple-50/60 dark:bg-purple-950/20", heading: "text-purple-700 dark:text-purple-400" },
+  "4": { label: "Priority Action Plan", icon: "◆", border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50/60 dark:bg-emerald-950/20", heading: "text-emerald-700 dark:text-emerald-400" },
 };
 
 interface ParsedSection { id: string; content: string }
@@ -157,9 +151,9 @@ function parseSections(text: string): ParsedSection[] {
 
 // ─── Block types ──────────────────────────────────────────────────────────────
 
-type TextBlock     = { kind: "text";     text: string };
-type BulletBlock   = { kind: "bullet";   text: string };
-type ArrowBlock    = { kind: "arrow";    parts: string[] };
+type TextBlock = { kind: "text"; text: string };
+type BulletBlock = { kind: "bullet"; text: string };
+type ArrowBlock = { kind: "arrow"; parts: string[] };
 type NumberedBlock = { kind: "numbered"; num: string; title: string; rows: string[] };
 type Block = TextBlock | BulletBlock | ArrowBlock | NumberedBlock;
 
@@ -258,7 +252,7 @@ function NumberedCard({ block }: { block: NumberedBlock }) {
       </span>
       <div className="flex-1 space-y-1.5 min-w-0">
         <p className="text-sm font-semibold text-foreground leading-snug"
-           dangerouslySetInnerHTML={{ __html: applyMarkdown(block.title) }} />
+          dangerouslySetInnerHTML={{ __html: applyMarkdown(block.title) }} />
         {block.rows.length > 0 && (
           <div className="space-y-1 border-t border-border/40 pt-1.5 mt-1.5">
             {block.rows.map((r, i) => (
@@ -277,11 +271,11 @@ function SectionBlocks({ content }: { content: string }) {
     <div className="space-y-2">
       {blocks.map((b, i) => {
         if (b.kind === "numbered") return <NumberedCard key={i} block={b} />;
-        if (b.kind === "arrow")   return <ArrowChain   key={i} parts={b.parts} />;
-        if (b.kind === "bullet")  return <BulletRow    key={i} text={b.text} />;
+        if (b.kind === "arrow") return <ArrowChain key={i} parts={b.parts} />;
+        if (b.kind === "bullet") return <BulletRow key={i} text={b.text} />;
         return (
           <p key={i} className="text-sm text-foreground leading-relaxed"
-             dangerouslySetInnerHTML={{ __html: applyMarkdown(b.text) }} />
+            dangerouslySetInnerHTML={{ __html: applyMarkdown(b.text) }} />
         );
       })}
     </div>
@@ -307,10 +301,10 @@ function CopilotSection({ id, content }: ParsedSection) {
 }
 
 function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
-  const [status, setStatus]           = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [rawText, setRawText]         = useState("");
-  const [errorMsg, setErrorMsg]       = useState("");
-  const [analyzedAt, setAnalyzedAt]   = useState<Date | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [rawText, setRawText] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [analyzedAt, setAnalyzedAt] = useState<Date | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const runAnalysis = useCallback(async () => {
@@ -365,7 +359,7 @@ function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
           try {
             const msg = JSON.parse(line);
             if (msg.error) { setErrorMsg(msg.error); setStatus("error"); return; }
-            if (msg.done)  { setStatus("done"); setAnalyzedAt(new Date()); return; }
+            if (msg.done) { setStatus("done"); setAnalyzedAt(new Date()); return; }
             if (msg.content) setRawText((prev) => prev + msg.content);
           } catch { /* non-JSON line */ }
         }
@@ -398,7 +392,7 @@ function AICopilotPanel({ ops }: { ops: OpsIntelState }) {
                 </Badge>
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                Analyzes all 8 KPIs collectively and surfaces risks, relationships, and top 3 actions
+                Analyzes all {ops.kpis.length} currently supported KPIs and surfaces risks, relationships, and top 3 actions
                 {analyzedAt && (
                   <span className="ml-2 text-muted-foreground/70">
                     · last run {formatDistanceToNow(analyzedAt, { addSuffix: true })}
@@ -512,15 +506,15 @@ const SYNC_INTERVAL_MS = 30_000;
 
 export default function OperationalIntelligencePage() {
   const { ops, isFetching, refetchAll } = useRealOpsIntel();
-  const [flashedIds, setFl]   = useState<Set<KpiId>>(new Set());
+  const [flashedIds, setFl] = useState<Set<KpiId>>(new Set());
 
   // Flash all when ops changes significantly, or just omit flashing since data updates smoothly now.
   useEffect(() => {
     if (!isFetching) {
       const all = new Set<KpiId>([
-        "inventory_accuracy","production_utilization","supplier_performance",
-        "warehouse_fill_rate","purchase_lead_time","stock_turnover",
-        "late_deliveries","order_fulfillment_rate",
+        "inventory_accuracy", "production_utilization", "supplier_performance",
+        "warehouse_fill_rate", "purchase_lead_time", "stock_turnover",
+        "late_deliveries", "order_fulfillment_rate",
       ]);
       setFl(all);
       setTimeout(() => setFl(new Set()), 900);
@@ -532,8 +526,8 @@ export default function OperationalIntelligencePage() {
     refetchAll();
   }
 
-  const good     = ops.kpis.filter((k) => k.status === "good").length;
-  const warning  = ops.kpis.filter((k) => k.status === "warning").length;
+  const good = ops.kpis.filter((k) => k.status === "good").length;
+  const warning = ops.kpis.filter((k) => k.status === "warning").length;
   const critical = ops.kpis.filter((k) => k.status === "critical").length;
 
   return (
@@ -552,7 +546,7 @@ export default function OperationalIntelligencePage() {
             Operations Dashboard
           </h1>
           <p className="text-muted-foreground mt-1">
-            8 KPIs fed live from ERP integrations · powered by real data
+            {ops.kpis.length} KPIs currently supported by live ERP data
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -589,7 +583,7 @@ export default function OperationalIntelligencePage() {
                 <span><span className="text-amber-500 font-semibold">{warning}</span> need attention</span>
                 <span><span className="text-destructive font-semibold">{critical}</span> critical</span>
                 <span className="ml-auto">
-                  Updated {formatDistanceToNow(ops.lastUpdatedAt, { addSuffix: true })} · Cycle #{ops.syncCycleCount}
+                  Updated {formatDistanceToNow(ops.lastUpdatedAt, { addSuffix: true })}
                 </span>
               </div>
             </div>
@@ -648,7 +642,7 @@ export default function OperationalIntelligencePage() {
               <AlertTriangle className="w-4 h-4" />
               {warning} KPI{warning > 1 ? "s" : ""} Need Monitoring
             </CardTitle>
-            <CardDescription>These metrics are within acceptable range but trending toward warning thresholds.</CardDescription>
+            <CardDescription>These metrics are currently within the warning range and need monitoring.</CardDescription>
           </CardHeader>
           <CardContent className="pb-4">
             <div className="flex flex-wrap gap-2">

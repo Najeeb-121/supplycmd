@@ -27,8 +27,8 @@ export interface KpiMetric {
   description: string;
   /** Current value in the metric's native unit */
   value: number;
-  /** Value from the previous tick — used to derive delta */
-  prevValue: number;
+  /** Historical comparison, only present when supported by real history */
+  prevValue?: number;
   unit: string;
   /** Formatting hint for the display layer */
   format: "percent" | "decimal" | "integer" | "days";
@@ -37,16 +37,16 @@ export interface KpiMetric {
   /** Operational target */
   target: number;
   status: KpiStatus;
-  trend: KpiTrend;
-  /** 10-point sparkline history (oldest → newest) */
-  sparkline: number[];
+  /** Historical trend, only present when supported by real history */
+  trend?: KpiTrend;
+  /** Historical sparkline, only present when supported by real history */
+  sparkline?: number[];
 }
 
 export interface OpsIntelState {
   kpis: KpiMetric[];
   healthScore: number;      // 0-100 composite
   lastUpdatedAt: Date;
-  syncCycleCount: number;
 }
 
 // ─── KPI metadata (static) ───────────────────────────────────────────────────
@@ -218,27 +218,27 @@ export function buildSparkline(meta: KpiMeta, current: number): number[] {
  */
 function erpInfluence(erp: ErpConnectionState): Record<KpiId, number> {
   const invEnt = erp.entities.find((e) => e.entity === "Inventory");
-  const poEnt  = erp.entities.find((e) => e.entity === "Purchase Orders");
-  const soEnt  = erp.entities.find((e) => e.entity === "Sales Orders");
+  const poEnt = erp.entities.find((e) => e.entity === "Purchase Orders");
+  const soEnt = erp.entities.find((e) => e.entity === "Sales Orders");
   const supEnt = erp.entities.find((e) => e.entity === "Suppliers");
   const prodEnt = erp.entities.find((e) => e.entity === "Production Orders");
 
   // Error in a related entity nudges the KPI toward worse territory
-  const invNudge  = invEnt?.status  === "error" ? -0.5 : 0;
-  const poNudge   = poEnt?.status   === "error" ? -0.3 : 0;
-  const soNudge   = soEnt?.status   === "error" ? -0.4 : 0;
-  const supNudge  = supEnt?.status  === "error" ? -0.6 : 0;
+  const invNudge = invEnt?.status === "error" ? -0.5 : 0;
+  const poNudge = poEnt?.status === "error" ? -0.3 : 0;
+  const soNudge = soEnt?.status === "error" ? -0.4 : 0;
+  const supNudge = supEnt?.status === "error" ? -0.6 : 0;
   const prodNudge = prodEnt?.status === "error" ? -0.8 : 0;
 
   return {
-    inventory_accuracy:      invNudge,
-    production_utilization:  prodNudge,
-    supplier_performance:    supNudge,
-    warehouse_fill_rate:     invNudge * 0.5,
-    purchase_lead_time:      poNudge * -1,  // nudge increases lead time (bad)
-    stock_turnover:          invNudge * 0.3,
-    late_deliveries:         (soNudge + poNudge) * -2, // nudge increases late orders (bad)
-    order_fulfillment_rate:  soNudge + poNudge * 0.5,
+    inventory_accuracy: invNudge,
+    production_utilization: prodNudge,
+    supplier_performance: supNudge,
+    warehouse_fill_rate: invNudge * 0.5,
+    purchase_lead_time: poNudge * -1,  // nudge increases lead time (bad)
+    stock_turnover: invNudge * 0.3,
+    late_deliveries: (soNudge + poNudge) * -2, // nudge increases late orders (bad)
+    order_fulfillment_rate: soNudge + poNudge * 0.5,
   };
 }
 
@@ -280,7 +280,6 @@ export function buildInitialOpsState(erp: ErpConnectionState): OpsIntelState {
     kpis,
     healthScore: computeHealthScore(kpis),
     lastUpdatedAt: new Date(),
-    syncCycleCount: 0,
   };
 }
 
@@ -321,7 +320,7 @@ export function tickOpsState(
       value,
       status: resolveStatus(meta, value),
       trend: resolveTrend(value, kpi.value),
-      sparkline: [...kpi.sparkline.slice(1), value],
+      sparkline: [...(kpi.sparkline ?? []).slice(1), value],
     };
   });
 
@@ -329,6 +328,5 @@ export function tickOpsState(
     kpis,
     healthScore: computeHealthScore(kpis),
     lastUpdatedAt: new Date(),
-    syncCycleCount: prev.syncCycleCount + 1,
   };
 }

@@ -68,6 +68,7 @@ function formatValue(kpi: KpiMetric): string {
 }
 
 function formatDelta(kpi: KpiMetric): { label: string; positive: boolean } | null {
+  if (kpi.prevValue == null) return null;
   const diff = kpi.value - kpi.prevValue;
   if (Math.abs(diff) < 0.005) return null;
   const sign = diff > 0 ? "+" : "";
@@ -127,10 +128,10 @@ function TargetStrip({ kpi, sparkColor }: { kpi: KpiMetric; sparkColor: string }
           {kpi.format === "percent" || kpi.unit === "%"
             ? `${kpi.target}%`
             : kpi.format === "days"
-            ? `${kpi.target} days`
-            : kpi.unit === "×"
-            ? `${kpi.target}×`
-            : `${kpi.target}${kpi.unit}`}
+              ? `${kpi.target} days`
+              : kpi.unit === "×"
+                ? `${kpi.target}×`
+                : `${kpi.target}${kpi.unit}`}
         </span>
         <span className="font-mono">{Math.round(pct * 100)}%</span>
       </div>
@@ -264,7 +265,9 @@ export const KpiCard = memo(function KpiCard({
           </div>
 
           <div className="flex flex-col items-end gap-1">
-            <TrendIcon trend={kpi.trend} goodDirection={kpi.goodDirection} />
+            {kpi.trend && (
+              <TrendIcon trend={kpi.trend} goodDirection={kpi.goodDirection} />
+            )}
             {delta && (
               <span
                 className={cn(
@@ -279,7 +282,9 @@ export const KpiCard = memo(function KpiCard({
         </div>
 
         {/* Sparkline */}
-        <Sparkline data={kpi.sparkline} color={styles.sparkColor} />
+        {kpi.sparkline && kpi.sparkline.length > 1 && (
+          <Sparkline data={kpi.sparkline} color={styles.sparkColor} />
+        )}
 
         {/* Target strip */}
         <TargetStrip kpi={kpi} sparkColor={styles.sparkColor} />

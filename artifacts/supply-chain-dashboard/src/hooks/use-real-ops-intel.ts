@@ -9,8 +9,6 @@ import {
 import {
   KPI_META,
   resolveStatus,
-  resolveTrend,
-  buildSparkline,
   computeHealthScore,
   type OpsIntelState,
   type KpiMetric,
@@ -41,41 +39,26 @@ export function useRealOpsIntel(): { ops: OpsIntelState; isFetching: boolean; re
   const ops: OpsIntelState = useMemo(() => {
     const kpisMeta = new Map(KPI_META.map((m) => [m.id, m]));
 
-    // 1. Inventory Accuracy (Static high baseline, since we don't have cycle counts)
-    const invAccMeta = kpisMeta.get("inventory_accuracy")!;
-    const invAccVal = 98.5; // Realistic value
-    const invAccKpi: KpiMetric = {
-      id: "inventory_accuracy",
-      label: invAccMeta.label,
-      description: invAccMeta.description,
-      value: invAccVal,
-      prevValue: 98.4,
-      unit: invAccMeta.unit,
-      format: invAccMeta.format,
-      goodDirection: invAccMeta.goodDirection,
-      target: invAccMeta.target,
-      status: resolveStatus(invAccMeta, invAccVal),
-      trend: "up",
-      sparkline: buildSparkline(invAccMeta, invAccVal),
-    };
+
 
     // 2. Production Utilization
     const prodUtilMeta = kpisMeta.get("production_utilization")!;
-    const prodUtilVal = oeeQuery.data?.availabilityPercent ?? prodUtilMeta.baseline;
-    const prodUtilKpi: KpiMetric = {
-      id: "production_utilization",
-      label: prodUtilMeta.label,
-      description: prodUtilMeta.description,
-      value: prodUtilVal,
-      prevValue: Math.max(0, prodUtilVal - 1.2),
-      unit: prodUtilMeta.unit,
-      format: prodUtilMeta.format,
-      goodDirection: prodUtilMeta.goodDirection,
-      target: prodUtilMeta.target,
-      status: resolveStatus(prodUtilMeta, prodUtilVal),
-      trend: "up",
-      sparkline: buildSparkline(prodUtilMeta, prodUtilVal),
-    };
+    const prodUtilVal = oeeQuery.data?.availabilityPercent ?? null;
+
+    const prodUtilKpi: KpiMetric | null =
+      prodUtilVal == null
+        ? null
+        : {
+          id: "production_utilization",
+          label: prodUtilMeta.label,
+          description: prodUtilMeta.description,
+          value: prodUtilVal,
+          unit: prodUtilMeta.unit,
+          format: prodUtilMeta.format,
+          goodDirection: prodUtilMeta.goodDirection,
+          target: prodUtilMeta.target,
+          status: resolveStatus(prodUtilMeta, prodUtilVal),
+        };
 
     // 3. Supplier Performance
     const supPerfMeta = kpisMeta.get("supplier_performance")!;
@@ -108,42 +91,54 @@ export function useRealOpsIntel(): { ops: OpsIntelState; isFetching: boolean; re
           label: supPerfMeta.label,
           description: supPerfMeta.description,
           value: supPerfVal,
-          prevValue: Math.max(0, supPerfVal - 0.5),
           unit: supPerfMeta.unit,
           format: supPerfMeta.format,
           goodDirection: supPerfMeta.goodDirection,
           target: supPerfMeta.target,
           status: resolveStatus(supPerfMeta, supPerfVal),
-          trend: "flat",
-          sparkline: buildSparkline(supPerfMeta, supPerfVal),
         };
 
     // 4. Warehouse Fill Rate
     const whFillMeta = kpisMeta.get("warehouse_fill_rate")!;
-    let whFillVal = whFillMeta.baseline;
-    if (inventoryQuery.data && inventoryQuery.data.length > 0) {
-      let currentTotal = 0;
-      let maxTotal = 0;
-      inventoryQuery.data.forEach((item) => {
-        currentTotal += item.currentStock;
-        maxTotal += item.maxStock ?? (item.currentStock * 1.5); // Fallback max capacity
-      });
-      whFillVal = maxTotal > 0 ? (currentTotal / maxTotal) * 100 : whFillMeta.baseline;
-    }
-    const whFillKpi: KpiMetric = {
-      id: "warehouse_fill_rate",
-      label: whFillMeta.label,
-      description: whFillMeta.description,
-      value: whFillVal,
-      prevValue: Math.max(0, whFillVal - 1.0),
-      unit: whFillMeta.unit,
-      format: whFillMeta.format,
-      goodDirection: whFillMeta.goodDirection,
-      target: whFillMeta.target,
-      status: resolveStatus(whFillMeta, whFillVal),
-      trend: "up",
-      sparkline: buildSparkline(whFillMeta, whFillVal),
-    };
+
+    const inventoryWithCapacity =
+      inventoryQuery.data?.filter(
+        (item) => item.maxStock != null && item.maxStock > 0
+      ) ?? [];
+
+    const hasCompleteWarehouseCapacity =
+      inventoryQuery.data != null &&
+      inventoryQuery.data.length > 0 &&
+      inventoryWithCapacity.length === inventoryQuery.data.length;
+
+    const whFillVal =
+      hasCompleteWarehouseCapacity
+        ? (
+          inventoryWithCapacity.reduce(
+            (sum, item) => sum + item.currentStock,
+            0
+          ) /
+          inventoryWithCapacity.reduce(
+            (sum, item) => sum + (item.maxStock ?? 0),
+            0
+          )
+        ) * 100
+        : null;
+
+    const whFillKpi: KpiMetric | null =
+      whFillVal == null
+        ? null
+        : {
+          id: "warehouse_fill_rate",
+          label: whFillMeta.label,
+          description: whFillMeta.description,
+          value: whFillVal,
+          unit: whFillMeta.unit,
+          format: whFillMeta.format,
+          goodDirection: whFillMeta.goodDirection,
+          target: whFillMeta.target,
+          status: resolveStatus(whFillMeta, whFillVal),
+        };
 
     // 5. Purchase Lead Time
     const leadTimeMeta = kpisMeta.get("purchase_lead_time")!;
@@ -158,14 +153,12 @@ export function useRealOpsIntel(): { ops: OpsIntelState; isFetching: boolean; re
           label: leadTimeMeta.label,
           description: leadTimeMeta.description,
           value: leadTimeVal,
-          prevValue: leadTimeVal + 0.2,
           unit: leadTimeMeta.unit,
           format: leadTimeMeta.format,
           goodDirection: leadTimeMeta.goodDirection,
           target: leadTimeMeta.target,
           status: resolveStatus(leadTimeMeta, leadTimeVal),
-          trend: "down",
-          sparkline: buildSparkline(leadTimeMeta, leadTimeVal),
+
         };
 
 
@@ -173,29 +166,29 @@ export function useRealOpsIntel(): { ops: OpsIntelState; isFetching: boolean; re
 
     // 7. Late Deliveries
     const lateMeta = kpisMeta.get("late_deliveries")!;
-    let lateVal = lateMeta.baseline;
-    if (ordersQuery.data) {
-      const now = new Date();
-      const lateOrders = ordersQuery.data.filter((o) => {
-        if (o.status === "delivered" || o.status === "cancelled") return false;
-        return new Date(o.expectedDelivery) < now;
-      });
-      lateVal = lateOrders.length;
-    }
-    const lateKpi: KpiMetric = {
-      id: "late_deliveries",
-      label: lateMeta.label,
-      description: lateMeta.description,
-      value: lateVal,
-      prevValue: lateVal,
-      unit: lateMeta.unit,
-      format: lateMeta.format,
-      goodDirection: lateMeta.goodDirection,
-      target: lateMeta.target,
-      status: resolveStatus(lateMeta, lateVal),
-      trend: "flat",
-      sparkline: buildSparkline(lateMeta, lateVal),
-    };
+
+    const lateVal =
+      ordersQuery.data == null
+        ? null
+        : ordersQuery.data.filter((o) => {
+          if (o.status === "delivered" || o.status === "cancelled") return false;
+          return new Date(o.expectedDelivery) < new Date();
+        }).length;
+
+    const lateKpi: KpiMetric | null =
+      lateVal == null
+        ? null
+        : {
+          id: "late_deliveries",
+          label: lateMeta.label,
+          description: lateMeta.description,
+          value: lateVal,
+          unit: lateMeta.unit,
+          format: lateMeta.format,
+          goodDirection: lateMeta.goodDirection,
+          target: lateMeta.target,
+          status: resolveStatus(lateMeta, lateVal),
+        };
 
     // 8. Order Fulfillment Rate
     const otifMeta = kpisMeta.get("order_fulfillment_rate")!;
@@ -210,23 +203,20 @@ export function useRealOpsIntel(): { ops: OpsIntelState; isFetching: boolean; re
           label: otifMeta.label,
           description: otifMeta.description,
           value: otifVal,
-          prevValue: Math.max(0, otifVal - 0.5),
           unit: otifMeta.unit,
           format: otifMeta.format,
           goodDirection: otifMeta.goodDirection,
           target: otifMeta.target,
           status: resolveStatus(otifMeta, otifVal),
-          trend: "up",
-          sparkline: buildSparkline(otifMeta, otifVal),
         };
 
     const kpis: KpiMetric[] = [
-      invAccKpi,
-      prodUtilKpi,
+
+      ...(prodUtilKpi ? [prodUtilKpi] : []),
       ...(supPerfKpi ? [supPerfKpi] : []),
-      whFillKpi,
+      ...(whFillKpi ? [whFillKpi] : []),
       ...(leadTimeKpi ? [leadTimeKpi] : []),
-      lateKpi,
+      ...(lateKpi ? [lateKpi] : []),
       ...(otifKpi ? [otifKpi] : []),
     ];
 
@@ -236,7 +226,6 @@ export function useRealOpsIntel(): { ops: OpsIntelState; isFetching: boolean; re
       kpis,
       healthScore,
       lastUpdatedAt: new Date(),
-      syncCycleCount: 1, // Static or incrementally updated if desired
     };
   }, [kpisQuery.data, oeeQuery.data, suppliersQuery.data, inventoryQuery.data, ordersQuery.data]);
 
