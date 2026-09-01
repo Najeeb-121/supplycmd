@@ -253,6 +253,63 @@ export default function ErpIntegrationPage() {
     }
   });
 
+  const syncSales = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/integrations/odoo/sync/sales", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to sync sales");
+      }
+
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setSyncResult({ entity: "sales", ...data });
+      queryClient.invalidateQueries({
+        queryKey: getGetOdooSyncLogQueryKey(),
+      });
+
+      if (data.synced === 0) {
+        toast({
+          title: "Warning",
+          description: "Connection successful, but 0 sales orders were found in Odoo.",
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
+  const syncBoms = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/integrations/odoo/sync/boms", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to sync BoMs");
+      }
+
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setSyncResult({ entity: "boms", ...data });
+      queryClient.invalidateQueries({
+        queryKey: getGetOdooSyncLogQueryKey(),
+      });
+
+      if (data.synced === 0) {
+        toast({
+          title: "Warning",
+          description: "Connection successful, but 0 BoMs were found in Odoo.",
+          variant: "destructive",
+        });
+      }
+    },
+  });
   const handleSyncAll = async () => {
     setIsSyncingAll(true);
     try {
@@ -263,22 +320,38 @@ export default function ErpIntegrationPage() {
         syncLogistics.mutateAsync,
         syncProduction.mutateAsync,
         syncPlanning.mutateAsync,
-        syncProcurementMock.mutateAsync
+        syncProcurementMock.mutateAsync,
+        syncSales.mutateAsync,
+        syncBoms.mutateAsync,
       ];
+
       let totalSynced = 0;
       let totalFailed = 0;
+      const syncErrors: string[] = [];
+
       for (const op of ops) {
         try {
           const res = await op(undefined);
           totalSynced += res.synced || 0;
           totalFailed += res.failed || 0;
         } catch (err) {
-          // Ignore individual failures to allow others to continue
+          // Continue with the remaining modules, but preserve the failure.
+          totalFailed += 1;
+          syncErrors.push(
+            err instanceof Error ? err.message : "A sync operation failed",
+          );
         }
       }
-      setSyncResult({ entity: "all", synced: totalSynced, failed: totalFailed, errors: [] });
+
+      setSyncResult({
+        entity: "all",
+        synced: totalSynced,
+        failed: totalFailed,
+        errors: syncErrors,
+      });
+
       if (totalSynced === 0) {
-         toast({ title: "Sync Completed", description: "No records found across all modules in Odoo.", variant: "destructive" });
+        toast({ title: "Sync Completed", description: "No records found across all modules in Odoo.", variant: "destructive" });
       }
     } finally {
       setIsSyncingAll(false);
@@ -376,7 +449,7 @@ export default function ErpIntegrationPage() {
                 <p className="text-xs text-muted-foreground mt-1">Vendor list and metrics</p>
               </div>
               <Button size="sm" onClick={handleSyncSuppliers} disabled={!connection?.connected || syncSuppliers.isPending || isSyncingAll} variant="secondary">
-                <RefreshCw className={`w-3 h-3 mr-2 ${syncSuppliers.isPending ? "animate-spin" : ""}`} /> 
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncSuppliers.isPending ? "animate-spin" : ""}`} />
                 {syncSuppliers.isPending ? "Syncing…" : "Sync"}
               </Button>
             </div>
@@ -387,7 +460,7 @@ export default function ErpIntegrationPage() {
                 <p className="text-xs text-muted-foreground mt-1">Product catalog and stock</p>
               </div>
               <Button size="sm" onClick={handleSyncInventory} disabled={!connection?.connected || syncInventory.isPending || isSyncingAll} variant="secondary">
-                <RefreshCw className={`w-3 h-3 mr-2 ${syncInventory.isPending ? "animate-spin" : ""}`} /> 
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncInventory.isPending ? "animate-spin" : ""}`} />
                 {syncInventory.isPending ? "Syncing…" : "Sync"}
               </Button>
             </div>
@@ -400,8 +473,37 @@ export default function ErpIntegrationPage() {
                 <p className="text-xs text-muted-foreground mt-1">Purchase orders and spend</p>
               </div>
               <Button size="sm" onClick={() => syncProcurementMock.mutate()} disabled={!connection?.connected || syncProcurementMock.isPending || isSyncingAll} variant="secondary">
-                <RefreshCw className={`w-3 h-3 mr-2 ${syncProcurementMock.isPending ? "animate-spin" : ""}`} /> 
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncProcurementMock.isPending ? "animate-spin" : ""}`} />
                 {syncProcurementMock.isPending ? "Syncing…" : "Sync Procurement"}
+              </Button>
+            </div>
+
+            <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-primary" />
+                  Sales
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Sales orders and customer demand
+                </p>
+              </div>
+
+              <Button
+                size="sm"
+                onClick={() => syncSales.mutate()}
+                disabled={
+                  !connection?.connected ||
+                  syncSales.isPending ||
+                  isSyncingAll
+                }
+                variant="secondary"
+              >
+                <RefreshCw
+                  className={`w-3 h-3 mr-2 ${syncSales.isPending ? "animate-spin" : ""
+                    }`}
+                />
+                {syncSales.isPending ? "Syncing…" : "Sync Sales"}
               </Button>
             </div>
 
@@ -411,7 +513,7 @@ export default function ErpIntegrationPage() {
                 <p className="text-xs text-muted-foreground mt-1">Inbound and outbound orders</p>
               </div>
               <Button size="sm" onClick={handleSyncLogistics} disabled={!connection?.connected || syncLogistics.isPending || isSyncingAll} variant="secondary">
-                <RefreshCw className={`w-3 h-3 mr-2 ${syncLogistics.isPending ? "animate-spin" : ""}`} /> 
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncLogistics.isPending ? "animate-spin" : ""}`} />
                 {syncLogistics.isPending ? "Syncing…" : "Sync Logistics"}
               </Button>
             </div>
@@ -422,7 +524,7 @@ export default function ErpIntegrationPage() {
                 <p className="text-xs text-muted-foreground mt-1">Manufacturing orders and OEE</p>
               </div>
               <Button size="sm" onClick={handleSyncProduction} disabled={!connection?.connected || syncProduction.isPending || isSyncingAll} variant="secondary">
-                <RefreshCw className={`w-3 h-3 mr-2 ${syncProduction.isPending ? "animate-spin" : ""}`} /> 
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncProduction.isPending ? "animate-spin" : ""}`} />
                 {syncProduction.isPending ? "Syncing…" : "Sync Production"}
               </Button>
             </div>
@@ -433,25 +535,81 @@ export default function ErpIntegrationPage() {
                 <p className="text-xs text-muted-foreground mt-1">Demand forecasts and history</p>
               </div>
               <Button size="sm" onClick={handleSyncPlanning} disabled={!connection?.connected || syncPlanning.isPending || isSyncingAll} variant="secondary">
-                <RefreshCw className={`w-3 h-3 mr-2 ${syncPlanning.isPending ? "animate-spin" : ""}`} /> 
+                <RefreshCw className={`w-3 h-3 mr-2 ${syncPlanning.isPending ? "animate-spin" : ""}`} />
                 {syncPlanning.isPending ? "Syncing…" : "Sync Planning"}
               </Button>
             </div>
+            <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Boxes className="w-4 h-4 text-primary" />
+                  BoMs
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Bills of materials and component structure
+                </p>
+              </div>
+
+              <Button
+                size="sm"
+                onClick={() => syncBoms.mutate()}
+                disabled={
+                  !connection?.connected ||
+                  syncBoms.isPending ||
+                  isSyncingAll
+                }
+                variant="secondary"
+              >
+                <RefreshCw
+                  className={`w-3 h-3 mr-2 ${syncBoms.isPending ? "animate-spin" : ""
+                    }`}
+                />
+                {syncBoms.isPending ? "Syncing…" : "Sync BoMs"}
+              </Button>
+            </div>
           </div>
-          
+
           {syncResult && syncResult.entity !== "all" && (
             <div className="mt-4 pt-4 border-t border-border flex items-center gap-2">
-              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Success</Badge>
+              {syncResult.failed === 0 ? (
+                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Success
+                </Badge>
+              ) : syncResult.synced > 0 ? (
+                <Badge className="bg-amber-500 hover:bg-amber-600 text-white gap-1">
+                  <AlertTriangle className="w-3 h-3" /> Partial
+                </Badge>
+              ) : (
+                <Badge variant="destructive" className="gap-1">
+                  <AlertTriangle className="w-3 h-3" /> Error
+                </Badge>
+              )}
+
               <span className="text-sm text-muted-foreground">
                 <span className="capitalize">{syncResult.entity}</span>: {syncResult.synced} synced
-                {syncResult.failed > 0 && <span className="text-destructive">, {syncResult.failed} failed</span>}
+                {syncResult.failed > 0 && (
+                  <span className="text-destructive">, {syncResult.failed} failed</span>
+                )}
               </span>
             </div>
           )}
           {syncResult && syncResult.entity === "all" && (
             <div className="mt-4 pt-4 border-t border-border flex items-center gap-2">
-              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"><CheckCircle2 className="w-3 h-3" /> Success</Badge>
-              <span className="text-sm text-muted-foreground">All functions synced successfully.</span>
+              {syncResult.failed === 0 ? (
+                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Success
+                </Badge>
+              ) : (
+                <Badge className="bg-amber-500 hover:bg-amber-600 text-white gap-1">
+                  <AlertTriangle className="w-3 h-3" /> Partial
+                </Badge>
+              )}
+
+              <span className="text-sm text-muted-foreground">
+                {syncResult.failed === 0
+                  ? `All functions synced successfully. ${syncResult.synced} records synced.`
+                  : `Sync completed with ${syncResult.synced} records synced and ${syncResult.failed} failed.`}
+              </span>
             </div>
           )}
         </CardContent>

@@ -364,19 +364,109 @@ router.put("/integrations/odoo/connection", async (req: Request, res: Response):
     return;
   }
 
+  const companyId = req.user!.companyId;
   const apiKeyEncrypted = encryptSecret(config.apiKey);
-  await db
-    .insert(odooConnectionsTable)
-    .values({ companyId: req.user!.companyId, url: config.url, db: config.db, username: config.username, apiKeyEncrypted })
-    .onConflictDoUpdate({
-      target: odooConnectionsTable.companyId,
-      set: { url: config.url, db: config.db, username: config.username, apiKeyEncrypted },
-    });
 
-  res.json({ connected: true, url: config.url, db: config.db, username: config.username, error: null });
+  const [existingConnection] = await db
+    .select()
+    .from(odooConnectionsTable)
+    .where(eq(odooConnectionsTable.companyId, companyId));
+
+  const erpIdentityChanged =
+    existingConnection !== undefined &&
+    (
+      existingConnection.url.replace(/\/+$/, "") !== config.url ||
+      existingConnection.db !== config.db
+    );
+
+  await db.transaction(async (tx) => {
+    if (erpIdentityChanged) {
+      // These parent deletes cascade to their dependent ERP rows.
+      await tx.delete(salesOrdersTable).where(
+        and(
+          eq(salesOrdersTable.companyId, companyId),
+          isNotNull(salesOrdersTable.odooId),
+        ),
+      );
+
+      await tx.delete(ordersTable).where(
+        and(
+          eq(ordersTable.companyId, companyId),
+          isNotNull(ordersTable.odooId),
+        ),
+      );
+
+      await tx.delete(bomsTable).where(
+        and(
+          eq(bomsTable.companyId, companyId),
+          isNotNull(bomsTable.odooBomId),
+        ),
+      );
+
+      await tx.delete(stockMovementsTable).where(
+        and(
+          eq(stockMovementsTable.companyId, companyId),
+          isNotNull(stockMovementsTable.odooId),
+        ),
+      );
+
+      await tx.delete(productionRunsTable).where(
+        and(
+          eq(productionRunsTable.companyId, companyId),
+          isNotNull(productionRunsTable.odooId),
+        ),
+      );
+
+      await tx.delete(demandRecordsTable).where(
+        and(
+          eq(demandRecordsTable.companyId, companyId),
+          isNotNull(demandRecordsTable.odooId),
+        ),
+      );
+
+      await tx.delete(suppliersTable).where(
+        and(
+          eq(suppliersTable.companyId, companyId),
+          isNotNull(suppliersTable.odooId),
+        ),
+      );
+
+      await tx.delete(inventoryItemsTable).where(
+        and(
+          eq(inventoryItemsTable.companyId, companyId),
+          isNotNull(inventoryItemsTable.odooId),
+        ),
+      );
+    }
+
+    await tx
+      .insert(odooConnectionsTable)
+      .values({
+        companyId,
+        url: config.url,
+        db: config.db,
+        username: config.username,
+        apiKeyEncrypted,
+      })
+      .onConflictDoUpdate({
+        target: odooConnectionsTable.companyId,
+        set: {
+          url: config.url,
+          db: config.db,
+          username: config.username,
+          apiKeyEncrypted,
+        },
+      });
+  });
+
+  res.json({
+    connected: true,
+    url: config.url,
+    db: config.db,
+    username: config.username,
+    error: null,
+  });
 });
-
-
 
 // ── POST /integrations/odoo/sync/suppliers ─────────────────────────────────────
 router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Response): Promise<void> => {
@@ -413,19 +503,54 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
     const poData = await db.select().from(ordersTable).where(eq(ordersTable.companyId, companyId));
 
     let partners: Record<string, unknown>[] = [];
+
     try {
-      // Find the ID of the 'Vendor' tag (case insensitive) to be perfectly accurate
+      const supplierInfoRows = await client.searchRead<Record<string, unknown>>(
+        "product.supplierinfo",
+        [],
+        ["partner_id"],
+      );
+
+      const supplierInfoPartnerIds = Array.from(
+        new Set(
+          supplierInfoRows
+            .map((row) => many2oneId(row.partner_id))
+            .filter((id): id is number => id !== null),
+        ),
+      );
+
       const tags = await client.searchRead<{ id: number; name: string }>(
         "res.partner.category",
         [["name", "ilike", "Vendor"]],
-        ["id", "name"]
+        ["id", "name"],
       );
-      const tagIds = tags.map(t => t.id);
 
-      // Search for partners that either have the Vendor tag OR have supplier_rank > 0
+      const tagIds = tags.map((tag) => tag.id);
+
       const domain: any[] = [["parent_id", "=", false]];
-      if (tagIds.length > 0) {
-        domain.unshift("|", ["supplier_rank", ">", 0], ["category_id", "in", tagIds]);
+
+      if (supplierInfoPartnerIds.length > 0) {
+        if (tagIds.length > 0) {
+          domain.unshift(
+            "|",
+            "|",
+            ["id", "in", supplierInfoPartnerIds],
+            ["supplier_rank", ">", 0],
+            ["category_id", "in", tagIds],
+          );
+        } else {
+          domain.unshift(
+            "|",
+            ["id", "in", supplierInfoPartnerIds],
+            ["supplier_rank", ">", 0],
+          );
+        }
+      } else if (tagIds.length > 0) {
+        domain.unshift(
+          "|",
+          ["supplier_rank", ">", 0],
+          ["category_id", "in", tagIds],
+        );
       } else {
         domain.push(["supplier_rank", ">", 0]);
       }
@@ -436,7 +561,6 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
         ["id", "name", "country_id"],
       );
     } catch (err) {
-      // Fallback for older Odoo versions (< 13) where supplier_rank does not exist
       partners = await client.searchRead<Record<string, unknown>>(
         "res.partner",
         [["supplier", "=", true], ["parent_id", "=", false]],
@@ -649,9 +773,10 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
       const candidate = {
         name,
         sku,
-        category: optionalOdooString(
-          Array.isArray(p.categ_id) ? p.categ_id[1] : null,
-        ),
+        category:
+          optionalOdooString(
+            Array.isArray(p.categ_id) ? p.categ_id[1] : null,
+          ) ?? "Uncategorized",
         currentStock: num(p.qty_available),
         unitCost: num(p.standard_price),
       };
@@ -794,6 +919,55 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
         "order_line",
       ]
     );
+    const purchaseOdooIds = purchases
+      .map((purchase) => parsePositiveOdooId(purchase.id))
+      .filter((id): id is number => id !== null);
+
+    const purchaseLines =
+      purchaseOdooIds.length > 0
+        ? await client.searchRead<Record<string, unknown>>(
+          "purchase.order.line",
+          [["order_id", "in", purchaseOdooIds]],
+          [
+            "id",
+            "order_id",
+            "product_id",
+            "product_qty",
+            "qty_received",
+            "price_unit",
+            "currency_id",
+            "date_planned",
+          ],
+        )
+        : [];
+
+    const purchaseLinesByOrderId = new Map<number, Record<string, unknown>[]>();
+
+    for (const line of purchaseLines) {
+      const orderOdooId = many2oneId(line.order_id);
+      if (orderOdooId === null) continue;
+
+      const grouped = purchaseLinesByOrderId.get(orderOdooId) ?? [];
+      grouped.push(line);
+      purchaseLinesByOrderId.set(orderOdooId, grouped);
+    }
+
+    const inventoryItems = await db
+      .select()
+      .from(inventoryItemsTable)
+      .where(eq(inventoryItemsTable.companyId, companyId));
+
+    const inventoryByOdooId = new Map<
+      number,
+      (typeof inventoryItems)[number]
+    >();
+
+    for (const item of inventoryItems) {
+      const itemOdooId = parsePositiveOdooId(item.odooId);
+      if (itemOdooId !== null) {
+        inventoryByOdooId.set(itemOdooId, item);
+      }
+    }
 
     const suppliers = await db.select().from(suppliersTable).where(eq(suppliersTable.companyId, companyId));
     const supplierMap = new Map<number, (typeof suppliers)[number]>();
@@ -940,7 +1114,7 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
       };
 
       try {
-        await db
+        const [localOrder] = await db
           .insert(ordersTable)
           .values(candidate)
           .onConflictDoUpdate({
@@ -950,7 +1124,86 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
               status: candidate.status,
               expectedDelivery: candidate.expectedDelivery,
             },
+          })
+          .returning({ id: ordersTable.id });
+
+        const odooLines = purchaseLinesByOrderId.get(odooId) ?? [];
+
+        // The line table has no unique Odoo-ID constraint.
+        // Replace this PO's synchronized lines to keep repeated syncs idempotent.
+        await db
+          .delete(purchaseOrderLinesTable)
+          .where(
+            and(
+              eq(purchaseOrderLinesTable.companyId, companyId),
+              eq(purchaseOrderLinesTable.orderId, localOrder.id),
+            ),
+          );
+
+        for (const line of odooLines) {
+          const lineOdooId = parsePositiveOdooId(line.id);
+          const productOdooId = many2oneId(line.product_id);
+
+          if (lineOdooId === null || productOdooId === null) {
+            throw new Error("Purchase-order line has an invalid Odoo ID or product.");
+          }
+
+          const inventoryItem = inventoryByOdooId.get(productOdooId);
+
+          if (!inventoryItem) {
+            throw new Error(
+              `PO line #${lineOdooId}: Odoo product ${productOdooId} was not found in local inventory.`,
+            );
+          }
+
+          const orderedQuantity = parseNonNegativeOdooNumber(line.product_qty);
+          const receivedQuantity = parseNonNegativeOdooNumber(line.qty_received);
+          const unitPrice = parseNonNegativeOdooNumber(line.price_unit);
+
+          if (
+            orderedQuantity === null ||
+            receivedQuantity === null ||
+            unitPrice === null
+          ) {
+            throw new Error(
+              `PO line #${lineOdooId}: Invalid quantity or price data.`,
+            );
+          }
+
+          const expectedDate =
+            typeof line.date_planned === "string" && line.date_planned.trim()
+              ? line.date_planned.split(" ")[0]
+              : datePlanned;
+
+          const currencyTuple =
+            Array.isArray(line.currency_id) ? line.currency_id : null;
+
+          const currency =
+            currencyTuple &&
+              typeof currencyTuple[1] === "string" &&
+              currencyTuple[1].trim()
+              ? currencyTuple[1]
+              : "USD";
+
+          await db.insert(purchaseOrderLinesTable).values({
+            companyId,
+            orderId: localOrder.id,
+            inventoryItemId: inventoryItem.id,
+            supplierId: supplier.id,
+            odooId: lineOdooId,
+            orderedQuantity,
+            receivedQuantity,
+            remainingQuantity: Math.max(
+              orderedQuantity - receivedQuantity,
+              0,
+            ),
+            unitPrice,
+            currency,
+            status,
+            expectedDate,
           });
+        }
+
         synced++;
       } catch (err) {
         failed++;
@@ -1711,6 +1964,396 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
     });
   }
 });
+// ── POST /integrations/odoo/sync/sales ───────────────────────────────────────
+router.post(
+  "/integrations/odoo/sync/sales",
+  async (req: Request, res: Response): Promise<void> => {
+    const companyId = req.user!.companyId;
+    const config = await getCompanyOdooConfig(companyId);
+
+    if (!config) {
+      res.status(400).json({
+        synced: 0,
+        failed: 0,
+        errors: ["No Odoo connection configured for this company yet"],
+      });
+      return;
+    }
+
+    const errors: string[] = [];
+    let synced = 0;
+    let failed = 0;
+
+    try {
+      const client = new OdooClient(config);
+
+      const orders = await client.searchRead<Record<string, unknown>>(
+        "sale.order",
+        [],
+        [
+          "id",
+          "name",
+          "partner_id",
+          "amount_untaxed",
+          "amount_tax",
+          "amount_total",
+          "currency_id",
+          "state",
+          "date_order",
+          "commitment_date",
+          "order_line",
+        ],
+      );
+
+      const orderOdooIds = orders
+        .map((order) => parsePositiveOdooId(order.id))
+        .filter((id): id is number => id !== null);
+
+      const lines =
+        orderOdooIds.length > 0
+          ? await client.searchRead<Record<string, unknown>>(
+            "sale.order.line",
+            [["order_id", "in", orderOdooIds]],
+            [
+              "id",
+              "order_id",
+              "product_id",
+              "name",
+              "product_uom_qty",
+              "qty_delivered",
+              "qty_invoiced",
+              "price_unit",
+              "discount",
+              "price_subtotal",
+              "currency_id",
+              "state",
+            ],
+          )
+          : [];
+
+      const linesByOrderOdooId = new Map<
+        number,
+        Record<string, unknown>[]
+      >();
+
+      for (const line of lines) {
+        const orderOdooId = many2oneId(line.order_id);
+        if (orderOdooId === null) continue;
+
+        const grouped = linesByOrderOdooId.get(orderOdooId) ?? [];
+        grouped.push(line);
+        linesByOrderOdooId.set(orderOdooId, grouped);
+      }
+
+      const inventoryItems = await db
+        .select()
+        .from(inventoryItemsTable)
+        .where(eq(inventoryItemsTable.companyId, companyId));
+
+      const inventoryByOdooId = new Map<
+        number,
+        (typeof inventoryItems)[number]
+      >();
+
+      for (const item of inventoryItems) {
+        const itemOdooId = parsePositiveOdooId(item.odooId);
+
+        if (itemOdooId !== null) {
+          inventoryByOdooId.set(itemOdooId, item);
+        }
+      }
+
+      for (const order of orders) {
+        const odooId = parsePositiveOdooId(order.id);
+        const orderNumber = optionalOdooString(order.name);
+        const status = optionalOdooString(order.state);
+
+        if (odooId === null || orderNumber === null || status === null) {
+          failed++;
+          errors.push("Sales order has an invalid Odoo ID, name, or state.");
+          continue;
+        }
+
+        const orderDateParsed = parseOdooDateTime(order.date_order);
+        const commitmentDateParsed = parseOdooDateTime(
+          order.commitment_date,
+        );
+
+        const orderDate = orderDateParsed
+          ? orderDateParsed.toISOString().slice(0, 10)
+          : null;
+
+        const commitmentDate = commitmentDateParsed
+          ? commitmentDateParsed.toISOString().slice(0, 10)
+          : null;
+
+        const effectiveDeliveryDate = commitmentDate;
+
+        const effectiveDeliveryDateSource = commitmentDate
+          ? "ODOO_COMMITMENT_DATE"
+          : "MISSING";
+
+        const customerOdooId = many2oneId(order.partner_id);
+
+        const customerName =
+          Array.isArray(order.partner_id) &&
+            typeof order.partner_id[1] === "string"
+            ? order.partner_id[1]
+            : null;
+
+        const currency =
+          Array.isArray(order.currency_id) &&
+            typeof order.currency_id[1] === "string"
+            ? order.currency_id[1]
+            : null;
+
+        const amountUntaxed = parseNonNegativeOdooNumber(
+          order.amount_untaxed,
+        );
+
+        const taxAmount = parseNonNegativeOdooNumber(order.amount_tax);
+        const totalAmount = parseNonNegativeOdooNumber(
+          order.amount_total,
+        );
+
+        if (totalAmount === null) {
+          failed++;
+          errors.push(`SO #${odooId}: Invalid total amount.`);
+          continue;
+        }
+
+        const orderLines = linesByOrderOdooId.get(odooId) ?? [];
+
+        try {
+          const [localOrder] = await db
+            .insert(salesOrdersTable)
+            .values({
+              companyId,
+              odooId,
+              orderNumber,
+              customerId: customerOdooId,
+              customerName,
+              untaxedAmount: amountUntaxed,
+              taxAmount,
+              totalAmount,
+              currency,
+              status,
+              state: status,
+              source: "ODOO",
+              orderDate,
+              expectedDate: commitmentDate,
+              commitmentDate,
+              commitmentDateRaw:
+                typeof order.commitment_date === "string"
+                  ? order.commitment_date
+                  : null,
+              effectiveDeliveryDate,
+              effectiveDeliveryDateSource,
+              dataConfidence: commitmentDate ? "HIGH" : "LOW",
+              itemCount: orderLines.length,
+              syncedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: [
+                salesOrdersTable.companyId,
+                salesOrdersTable.odooId,
+              ],
+              set: {
+                orderNumber,
+                customerId: customerOdooId,
+                customerName,
+                untaxedAmount: amountUntaxed,
+                taxAmount,
+                totalAmount,
+                currency,
+                status,
+                state: status,
+                source: "ODOO",
+                orderDate,
+                expectedDate: commitmentDate,
+                commitmentDate,
+                commitmentDateRaw:
+                  typeof order.commitment_date === "string"
+                    ? order.commitment_date
+                    : null,
+                effectiveDeliveryDate,
+                effectiveDeliveryDateSource,
+                dataConfidence: commitmentDate ? "HIGH" : "LOW",
+                itemCount: orderLines.length,
+                syncedAt: new Date(),
+                updatedAt: new Date(),
+              },
+            })
+            .returning({ id: salesOrdersTable.id });
+
+          for (const line of orderLines) {
+            const lineOdooId = parsePositiveOdooId(line.id);
+            const productOdooId = many2oneId(line.product_id);
+
+            if (lineOdooId === null || productOdooId === null) {
+              throw new Error(
+                `SO #${odooId}: Sales line has an invalid ID or product.`,
+              );
+            }
+
+            const inventoryItem = inventoryByOdooId.get(productOdooId);
+
+            if (!inventoryItem) {
+              throw new Error(
+                `SO line #${lineOdooId}: Odoo product ${productOdooId} was not found in local inventory.`,
+              );
+            }
+
+            const orderedQuantity = parseNonNegativeOdooNumber(
+              line.product_uom_qty,
+            );
+
+            const deliveredQuantity = parseNonNegativeOdooNumber(
+              line.qty_delivered,
+            );
+
+            const invoicedQuantity = parseNonNegativeOdooNumber(
+              line.qty_invoiced,
+            );
+
+            const unitPrice = parseNonNegativeOdooNumber(line.price_unit);
+            const discount = parseNonNegativeOdooNumber(line.discount);
+            const subtotal = parseNonNegativeOdooNumber(
+              line.price_subtotal,
+            );
+
+            const lineStatus = optionalOdooString(line.state);
+
+            if (
+              orderedQuantity === null ||
+              deliveredQuantity === null ||
+              invoicedQuantity === null ||
+              lineStatus === null
+            ) {
+              throw new Error(
+                `SO line #${lineOdooId}: Invalid quantity or state data.`,
+              );
+            }
+
+            const lineCurrency =
+              Array.isArray(line.currency_id) &&
+                typeof line.currency_id[1] === "string"
+                ? line.currency_id[1]
+                : currency;
+
+            await db
+              .insert(salesOrderLinesTable)
+              .values({
+                companyId,
+                odooId: lineOdooId,
+                orderId: localOrder.id,
+                inventoryItemId: inventoryItem.id,
+                odooProductId: productOdooId,
+                productName: inventoryItem.name,
+                sku: inventoryItem.sku,
+                description: optionalOdooString(line.name),
+                orderedQuantity,
+                deliveredQuantity,
+                invoicedQuantity,
+                remainingQuantity: Math.max(
+                  orderedQuantity - deliveredQuantity,
+                  0,
+                ),
+                unitPrice,
+                discount,
+                subtotal,
+                currency: lineCurrency,
+                expectedDate: commitmentDate,
+                effectiveDeliveryDate,
+                effectiveDeliveryDateSource,
+                dataConfidence: commitmentDate ? "HIGH" : "LOW",
+                status: lineStatus,
+                syncedAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .onConflictDoUpdate({
+                target: [
+                  salesOrderLinesTable.companyId,
+                  salesOrderLinesTable.odooId,
+                ],
+                set: {
+                  orderId: localOrder.id,
+                  inventoryItemId: inventoryItem.id,
+                  odooProductId: productOdooId,
+                  productName: inventoryItem.name,
+                  sku: inventoryItem.sku,
+                  description: optionalOdooString(line.name),
+                  orderedQuantity,
+                  deliveredQuantity,
+                  invoicedQuantity,
+                  remainingQuantity: Math.max(
+                    orderedQuantity - deliveredQuantity,
+                    0,
+                  ),
+                  unitPrice,
+                  discount,
+                  subtotal,
+                  currency: lineCurrency,
+                  expectedDate: commitmentDate,
+                  effectiveDeliveryDate,
+                  effectiveDeliveryDateSource,
+                  dataConfidence: commitmentDate ? "HIGH" : "LOW",
+                  status: lineStatus,
+                  syncedAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              });
+          }
+
+          synced++;
+        } catch (err) {
+          failed++;
+          errors.push(
+            `SO #${odooId}: ${err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
+
+      const syncStatus =
+        failed === 0 ? "success" : synced > 0 ? "partial" : "error";
+
+      await db.insert(odooSyncLogTable).values({
+        companyId,
+        entity: "sales",
+        status: syncStatus,
+        recordsSynced: synced,
+        recordsFailed: failed,
+        message: generateSyncMessage(synced, failed, errors),
+      });
+
+      res.json({
+        synced,
+        failed,
+        errors,
+      });
+    } catch (err) {
+      req.log.error({ err }, "Odoo sales sync failed");
+      await db.insert(odooSyncLogTable).values({
+        companyId,
+        entity: "sales",
+        status: "error",
+        recordsSynced: synced,
+        recordsFailed: failed,
+        message: err instanceof Error ? err.message : "Odoo sales sync failed",
+      });
+      res.status(500).json({
+        synced,
+        failed,
+        errors: [
+          err instanceof Error ? err.message : "Odoo sales sync failed",
+        ],
+      });
+    }
+  },
+);
+
 // ── POST /integrations/odoo/sync/planning ────────────────────────────────────
 router.post("/integrations/odoo/sync/planning", async (req: Request, res: Response): Promise<void> => {
   const companyId = req.user!.companyId;

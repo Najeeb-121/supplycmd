@@ -546,7 +546,7 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
         po.expectedDate &&
         po.remainingQuantity > 0 &&
         po.status !== "done" &&
-        po.status !== "cancel"
+        po.status !== "cancelled"
       )
       .map(po => ({
         id: po.id,
