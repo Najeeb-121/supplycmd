@@ -158,6 +158,56 @@ describe("SR-6 Phase 2 AI Orchestration", () => {
     expect(res.body).toHaveProperty("deterministicContext");
   });
 
+  it("returns deterministic context when Google AI is not configured", async () => {
+    const originalGoogleApiKey = process.env.GoogleAPIKey;
+    const originalGoogleApiKeyUnderscore = process.env.GOOGLE_API_KEY;
+
+    delete process.env.GoogleAPIKey;
+    delete process.env.GOOGLE_API_KEY;
+
+    try {
+      const res = await request(app)
+        .post("/ai/decision-engine")
+        .send({
+          simulationResult: { timeline: [], kpis: {}, executiveSummary: "" },
+          scenario: {},
+          rootCause: {},
+          riskIntelligence: {}
+        });
+
+      expect(res.status).toBe(200);
+
+      expect(generateDeterministicDecision).toHaveBeenCalledWith(1);
+
+      expect(res.body).toHaveProperty("deterministicContext");
+      expect(res.body.deterministicContext).toEqual(
+        expect.objectContaining({
+          baselineRiskDetected: true,
+          candidateMitigations: []
+        })
+      );
+
+      expect(res.body.aiExplanation).toEqual({
+        status: "UNAVAILABLE",
+        reason: "Generative AI is not configured."
+      });
+
+      expect(mockGenerateContent).not.toHaveBeenCalled();
+    } finally {
+      if (originalGoogleApiKey === undefined) {
+        delete process.env.GoogleAPIKey;
+      } else {
+        process.env.GoogleAPIKey = originalGoogleApiKey;
+      }
+
+      if (originalGoogleApiKeyUnderscore === undefined) {
+        delete process.env.GOOGLE_API_KEY;
+      } else {
+        process.env.GOOGLE_API_KEY = originalGoogleApiKeyUnderscore;
+      }
+    }
+  });
+
   it("identical deterministic input produces identical AI context string", async () => {
     await request(app).post("/ai/decision-engine").send({ simulationResult: {}, scenario: {}, rootCause: {}, riskIntelligence: {} });
     const callArgs1 = mockGenerateContent.mock.calls[0][0];

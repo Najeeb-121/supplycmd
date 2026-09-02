@@ -117,16 +117,27 @@ router.post("/ai/decision-engine", async (req, res): Promise<void> => {
     return;
   }
 
-  const ai = getAI();
-  if (!ai) {
-    logger.error("GoogleAPIKey is not configured in .env");
-    res.status(503).json({ error: "Generative AI is not configured." });
-    return;
-  }
 
   try {
     const companyId = req.user!.companyId;
     const deterministicContext = await generateDeterministicDecision(companyId);
+
+    const ai = getAI();
+
+    if (!ai) {
+      logger.warn(
+        "GoogleAPIKey is not configured; returning deterministic decision context without AI explanation"
+      );
+
+      res.json({
+        aiExplanation: {
+          status: "UNAVAILABLE",
+          reason: "Generative AI is not configured.",
+        },
+        deterministicContext,
+      });
+      return;
+    }
 
     const userMessage = `Analyze this What-If Simulation and preceding AI cascades to communicate the BEST possible business decision based on deterministic logic:\n\nSR6_DETERMINISTIC_RESULTS:\n${JSON.stringify(deterministicContext, null, 2)}\n\nSCENARIO INPUTS:\n${JSON.stringify(scenario, null, 2)}\n\nSIMULATION TIMELINE & IMPACT:\n${JSON.stringify({ timeline: simulationResult.timeline, kpis: simulationResult.kpis, summary: simulationResult.executiveSummary }, null, 2)}\n\nROOT CAUSE ENGINE:\n${JSON.stringify(rootCause, null, 2)}\n\nRISK ENGINE:\n${JSON.stringify(riskIntelligence, null, 2)}`;
 
