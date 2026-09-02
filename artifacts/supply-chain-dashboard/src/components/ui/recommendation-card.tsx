@@ -1,5 +1,5 @@
 /**
- * RecommendationCard — reusable AI Decision Engine recommendation card.
+ * RecommendationCard - reusable deterministic decision recommendation card.
  * Built on existing Card / Badge / Button primitives.
  * Zero new dependencies.
  */
@@ -16,8 +16,6 @@ import {
   Clock,
   Activity,
   ArrowLeftRight,
-  TrendingDown as TrendDown,
-  Tag,
   AlertTriangle,
   Zap,
   CheckCircle2,
@@ -80,17 +78,17 @@ const STATUS_META: Record<
     cls: "bg-primary text-primary-foreground",
   },
   acknowledged: {
-    label: "Acknowledged",
+    label: "Reviewed",
     icon: <CheckCircle2 className="w-3 h-3" />,
     cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   },
   in_progress: {
-    label: "In Progress",
+    label: "Reviewing Action",
     icon: <Loader2 className="w-3 h-3 animate-spin" />,
     cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
   },
   applied: {
-    label: "Applied",
+    label: "Reviewed as Applied",
     icon: <CheckCircle2 className="w-3 h-3" />,
     cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
   },
@@ -104,14 +102,12 @@ const STATUS_META: Record<
 // ─── Type icons ───────────────────────────────────────────────────────────────
 
 const TYPE_ICONS: Record<RecommendationType, React.ReactNode> = {
-  reorder_material: <ShoppingCart className="w-4 h-4" />,
-  delay_purchase_order: <Clock className="w-4 h-4" />,
-  increase_production_capacity: <Activity className="w-4 h-4" />,
-  transfer_inventory: <ArrowLeftRight className="w-4 h-4" />,
-  reduce_safety_stock: <TrendDown className="w-4 h-4" />,
-  flag_slow_moving: <Tag className="w-4 h-4" />,
-  supplier_delay_detected: <AlertTriangle className="w-4 h-4" />,
-  predict_stockout: <Zap className="w-4 h-4" />,
+  ALTERNATE_SUPPLIER: <ArrowLeftRight className="w-4 h-4" />,
+  FOLLOW_UP_INBOUND: <Clock className="w-4 h-4" />,
+  COVER_FROM_AVAILABLE_STOCK: <ShoppingCart className="w-4 h-4" />,
+  PRIORITIZE_DOWNSTREAM_DEMAND: <Zap className="w-4 h-4" />,
+  MONITOR_UNVERIFIED_LEAD_TIME: <AlertTriangle className="w-4 h-4" />,
+  CAPACITY_DATA_REQUIRED: <Activity className="w-4 h-4" />,
 };
 
 // ─── Confidence ring ──────────────────────────────────────────────────────────
@@ -260,10 +256,12 @@ export const RecommendationCard = memo(function RecommendationCard({
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-md bg-muted/50 px-2.5 py-2 space-y-0.5">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-              Est. Savings
+              Action Financial Impact
             </p>
             <p className="text-base font-mono font-bold text-emerald-600">
-              {rec.estimatedSavings === "UNKNOWN" ? "UNKNOWN" : `$${(rec.estimatedSavings as number).toLocaleString()}`}
+              {rec.estimatedSavings === "UNKNOWN"
+                ? "UNKNOWN"
+                : (rec.estimatedSavings as number).toLocaleString()}
             </p>
           </div>
           <div className="rounded-md bg-muted/50 px-2.5 py-2 space-y-0.5">
@@ -324,6 +322,10 @@ export const RecommendationCard = memo(function RecommendationCard({
 
         <Separator className="my-1" />
 
+        <p className="text-[10px] text-muted-foreground">
+          Review state is session-only and is not written back to Odoo or SupplyCMD.
+        </p>
+
         {/* Action buttons */}
         <div className="flex gap-2 flex-wrap">
           {rec.status === "new" && (
@@ -333,7 +335,7 @@ export const RecommendationCard = memo(function RecommendationCard({
                 className="h-7 text-xs flex-1 min-w-[80px]"
                 onClick={() => onStatusChange(rec.id, "acknowledged")}
               >
-                <CheckCircle2 className="w-3 h-3 mr-1" /> Acknowledge
+                <CheckCircle2 className="w-3 h-3 mr-1" /> Mark Reviewed
               </Button>
               <Button
                 size="sm"
@@ -352,7 +354,7 @@ export const RecommendationCard = memo(function RecommendationCard({
                 className="h-7 text-xs flex-1 min-w-[80px]"
                 onClick={() => onStatusChange(rec.id, "in_progress")}
               >
-                <Loader2 className="w-3 h-3 mr-1" /> Start Action
+                <Loader2 className="w-3 h-3 mr-1" /> Review Action
               </Button>
               <Button
                 size="sm"
@@ -371,7 +373,7 @@ export const RecommendationCard = memo(function RecommendationCard({
                 className="h-7 text-xs flex-1 min-w-[80px] bg-emerald-600 hover:bg-emerald-700"
                 onClick={() => onStatusChange(rec.id, "applied")}
               >
-                <CheckCircle2 className="w-3 h-3 mr-1" /> Mark Applied
+                <CheckCircle2 className="w-3 h-3 mr-1" /> Review as Applied
               </Button>
             </>
           )}
@@ -382,7 +384,7 @@ export const RecommendationCard = memo(function RecommendationCard({
               className="h-7 text-xs text-muted-foreground"
               onClick={() => onStatusChange(rec.id, "new")}
             >
-              <RefreshCw className="w-3 h-3 mr-1" /> Reopen
+              <RefreshCw className="w-3 h-3 mr-1" /> Reset Review
             </Button>
           )}
         </div>

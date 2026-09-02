@@ -9,7 +9,7 @@ describe("executive-intelligence Phase 3", () => {
       recommendations: [
         {
           id: "1",
-          type: "mock",
+          type: "ALTERNATE_SUPPLIER",
           priority: "high",
           title: "Mock",
           recommendation: "Mock",

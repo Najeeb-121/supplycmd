@@ -33,7 +33,6 @@ import {
   CheckCircle2,
   XCircle,
   Zap,
-  DollarSign,
   BarChart3,
   Loader2,
   Wifi,
@@ -57,14 +56,12 @@ const PRIORITY_ORDER: RecommendationPriority[] = [
 ];
 
 const TYPE_LABELS: Record<RecommendationType, string> = {
-  reorder_material:             "Reorder Material",
-  delay_purchase_order:         "Delay PO",
-  increase_production_capacity: "Production Capacity",
-  transfer_inventory:           "Transfer Inventory",
-  reduce_safety_stock:          "Reduce Safety Stock",
-  flag_slow_moving:             "Slow Moving",
-  supplier_delay_detected:      "Supplier Delay",
-  predict_stockout:             "Predict Stockout",
+  ALTERNATE_SUPPLIER: "Alternate Supplier",
+  FOLLOW_UP_INBOUND: "Follow Up Inbound",
+  COVER_FROM_AVAILABLE_STOCK: "Cover From Available Stock",
+  PRIORITIZE_DOWNSTREAM_DEMAND: "Prioritize Downstream Demand",
+  MONITOR_UNVERIFIED_LEAD_TIME: "Monitor Unverified Lead Time",
+  CAPACITY_DATA_REQUIRED: "Capacity Data Required",
 };
 
 // ─── Summary stat card ────────────────────────────────────────────────────────
@@ -83,16 +80,16 @@ function StatCard({
   highlight?: "red" | "amber" | "green" | "blue";
 }) {
   const bg = {
-    red:   "bg-destructive/5 border-destructive/30",
+    red: "bg-destructive/5 border-destructive/30",
     amber: "bg-amber-50 border-amber-300/40 dark:bg-amber-900/10",
     green: "bg-emerald-50 border-emerald-300/40 dark:bg-emerald-900/10",
-    blue:  "bg-blue-50 border-blue-300/40 dark:bg-blue-900/10",
+    blue: "bg-blue-50 border-blue-300/40 dark:bg-blue-900/10",
   };
   const ic = {
-    red:   "text-destructive",
+    red: "text-destructive",
     amber: "text-amber-600",
     green: "text-emerald-600",
-    blue:  "text-blue-600",
+    blue: "text-blue-600",
   };
   return (
     <Card className={cn("border shadow-sm", highlight ? bg[highlight] : "border-border")}>
@@ -118,8 +115,10 @@ function StatCard({
 
 function ModelStatusBar({
   engine,
+  isError,
 }: {
   engine: DecisionEngineState;
+  isError: boolean;
 }) {
   const isAnalysing = engine.analysisStatus === "analysing";
   return (
@@ -128,46 +127,56 @@ function ModelStatusBar({
       <div className="flex items-center gap-1.5">
         <Brain className="w-3.5 h-3.5 text-primary" />
         <span className="font-mono font-semibold text-foreground">
-          SupplyCmd-AI {engine.modelVersion}
+          SupplyCmd Deterministic {engine.modelVersion}
         </span>
       </div>
 
       <span className="text-border">|</span>
 
-      {/* ERP connection */}
+      {/* ERP-backed decision data */}
       <div className="flex items-center gap-1.5">
-        <span className="relative flex h-2 w-2">
-          <span className={cn(
-            "absolute inline-flex h-full w-full rounded-full opacity-60",
-            isAnalysing ? "animate-ping bg-amber-500" : "bg-emerald-500"
-          )} />
-          <span className={cn(
-            "relative inline-flex h-2 w-2 rounded-full",
-            isAnalysing ? "bg-amber-500" : "bg-emerald-500"
-          )} />
-        </span>
+        <span
+          className={cn(
+            "inline-flex h-2 w-2 rounded-full",
+            isError
+              ? "bg-destructive"
+              : isAnalysing
+                ? "bg-amber-500 animate-pulse"
+                : "bg-emerald-500"
+          )}
+        />
         <Wifi className="w-3 h-3 text-muted-foreground" />
-        <span className="text-muted-foreground">Odoo ERP (Live)</span>
+        <span className="text-muted-foreground">Odoo-backed decision data</span>
       </div>
 
       <span className="text-border">|</span>
 
       {/* Last analysis */}
       <span className="text-muted-foreground">
-        Analysed{" "}
-        <span className="text-foreground font-medium">
-          {formatDistanceToNow(engine.lastAnalysedAt, { addSuffix: true })}
-        </span>
+        {engine.lastAnalysedAt ? (
+          <>
+            Analysed{" "}
+            <span className="text-foreground font-medium">
+              {formatDistanceToNow(engine.lastAnalysedAt, { addSuffix: true })}
+            </span>
+          </>
+        ) : (
+          <span className="text-foreground font-medium">Not analysed yet</span>
+        )}
       </span>
 
       <span className="ml-auto text-muted-foreground font-mono">
-        {isAnalysing ? (
+        {isError ? (
+          <span className="flex items-center gap-1 text-destructive">
+            <XCircle className="w-3 h-3" /> Unavailable
+          </span>
+        ) : isAnalysing ? (
           <span className="flex items-center gap-1 text-amber-600">
-            <Loader2 className="w-3 h-3 animate-spin" /> Analysing…
+            <Loader2 className="w-3 h-3 animate-spin" /> Analysing...
           </span>
         ) : (
           <span className="flex items-center gap-1 text-emerald-600">
-            <CheckCircle2 className="w-3 h-3" /> Live
+            <CheckCircle2 className="w-3 h-3" /> Available
           </span>
         )}
       </span>
@@ -179,16 +188,16 @@ function ModelStatusBar({
 
 interface Filters {
   priority: RecommendationPriority | "all";
-  status:   RecommendationStatus   | "all";
-  type:     RecommendationType     | "all";
-  dept:     Department             | "all";
+  status: RecommendationStatus | "all";
+  type: RecommendationType | "all";
+  dept: Department | "all";
 }
 
 const DEFAULT_FILTERS: Filters = {
   priority: "all",
-  status:   "all",
-  type:     "all",
-  dept:     "all",
+  status: "all",
+  type: "all",
+  dept: "all",
 };
 
 function FilterBar({
@@ -224,11 +233,11 @@ function FilterBar({
           <SelectValue placeholder="Status" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All statuses</SelectItem>
+          <SelectItem value="all">All review states</SelectItem>
           <SelectItem value="new">New</SelectItem>
-          <SelectItem value="acknowledged">Acknowledged</SelectItem>
-          <SelectItem value="in_progress">In Progress</SelectItem>
-          <SelectItem value="applied">Applied</SelectItem>
+          <SelectItem value="acknowledged">Reviewed</SelectItem>
+          <SelectItem value="in_progress">Reviewing Action</SelectItem>
+          <SelectItem value="applied">Reviewed as Applied</SelectItem>
           <SelectItem value="dismissed">Dismissed</SelectItem>
         </SelectContent>
       </Select>
@@ -251,7 +260,7 @@ function FilterBar({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All departments</SelectItem>
-          {(["Procurement","Warehouse","Production","Supply Chain","Finance","Logistics"] as Department[]).map((d) => (
+          {(["Procurement", "Warehouse", "Production", "Supply Chain", "Finance", "Logistics"] as Department[]).map((d) => (
             <SelectItem key={d} value={d}>{d}</SelectItem>
           ))}
         </SelectContent>
@@ -278,9 +287,9 @@ const PRIORITY_STYLE_MAP: Record<
   { dot: string; label: string }
 > = {
   critical: { dot: "bg-destructive", label: "text-destructive" },
-  high:     { dot: "bg-orange-500",  label: "text-orange-600"  },
-  medium:   { dot: "bg-amber-400",   label: "text-amber-600"   },
-  low:      { dot: "bg-blue-400",    label: "text-blue-600"    },
+  high: { dot: "bg-orange-500", label: "text-orange-600" },
+  medium: { dot: "bg-amber-400", label: "text-amber-600" },
+  low: { dot: "bg-blue-400", label: "text-blue-600" },
 };
 
 function SectionHeader({
@@ -306,11 +315,11 @@ function SectionHeader({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AiDecisionEnginePage() {
-  const { engine, isFetching, refetchAll, setStatus } = useRealDecisionEngine();
+  const { engine, isFetching, isError, refetchAll, setStatus } = useRealDecisionEngine();
 
-  const [filters,   setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [layout,    setLayout]  = useState<"grid" | "list">("grid");
-  const [flashIds,  setFlash]   = useState<Set<string>>(new Set());
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [flashIds, setFlash] = useState<Set<string>>(new Set());
 
   // Optionally flash new recs when they arrive (not strictly necessary for live sync, but nice)
   useEffect(() => {
@@ -331,9 +340,9 @@ export default function AiDecisionEnginePage() {
   // ── Filtering ─────────────────────────────────────────────────────────────
   const visible = engine.recommendations.filter((r) => {
     if (filters.priority !== "all" && r.priority !== filters.priority) return false;
-    if (filters.status   !== "all" && r.status   !== filters.status)   return false;
-    if (filters.type     !== "all" && r.type      !== filters.type)    return false;
-    if (filters.dept     !== "all" && r.affectedDepartment !== filters.dept) return false;
+    if (filters.status !== "all" && r.status !== filters.status) return false;
+    if (filters.type !== "all" && r.type !== filters.type) return false;
+    if (filters.dept !== "all" && r.affectedDepartment !== filters.dept) return false;
     return true;
   });
 
@@ -342,10 +351,10 @@ export default function AiDecisionEnginePage() {
     { critical: [], high: [], medium: [], low: [] }
   );
 
-  const totalRecs   = engine.recommendations.length;
-  const critical    = engine.recommendations.filter((r) => r.priority === "critical").length;
-  const actionable  = engine.recommendations.filter((r) => r.status === "new" || r.status === "acknowledged").length;
-  const applied     = engine.recommendations.filter((r) => r.status === "applied").length;
+  const totalRecs = engine.recommendations.length;
+  const critical = engine.recommendations.filter((r) => r.priority === "critical").length;
+  const actionable = engine.recommendations.filter((r) => r.status === "new" || r.status === "acknowledged").length;
+  const reviewedAsApplied = engine.recommendations.filter((r) => r.status === "applied").length;
 
   return (
     <div className="p-8 space-y-6 bg-background min-h-[100dvh]">
@@ -356,7 +365,7 @@ export default function AiDecisionEnginePage() {
           <div className="flex items-center gap-2 mb-1">
             <Brain className="w-5 h-5 text-primary" />
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-              AI Decision Engine
+              Deterministic Decision Engine
             </span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
@@ -384,13 +393,13 @@ export default function AiDecisionEnginePage() {
             className="gap-2 h-9"
           >
             <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
-            {isFetching ? "Analysing…" : "Re-Analyse"}
+            {isFetching ? "Analysing..." : "Re-Analyse"}
           </Button>
         </div>
       </div>
 
       {/* ── Model status bar ── */}
-      <ModelStatusBar engine={engine} />
+      <ModelStatusBar engine={engine} isError={isError} />
 
       {/* ── KPI summary strip ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -410,15 +419,19 @@ export default function AiDecisionEnginePage() {
         <StatCard
           label="Actionable"
           value={actionable}
-          sub={`${applied} already applied`}
+          sub={`${reviewedAsApplied} reviewed as applied`}
           icon={<Zap className="w-4 h-4" />}
           highlight={actionable > 0 ? "amber" : "green"}
         />
         <StatCard
-          label="Est. Total Savings"
-          value={engine.totalEstimatedSavings === "UNKNOWN" ? "UNKNOWN" : `$${(engine.totalEstimatedSavings as number).toLocaleString()}`}
-          sub="If all open recs applied"
-          icon={<DollarSign className="w-4 h-4" />}
+          label="Portfolio Revenue Impact"
+          value={
+            engine.totalEstimatedSavings === "UNKNOWN"
+              ? "UNKNOWN"
+              : (engine.totalEstimatedSavings as number).toLocaleString()
+          }
+          sub="Deterministic portfolio result"
+          icon={<BarChart3 className="w-4 h-4" />}
           highlight="green"
         />
       </div>
@@ -433,8 +446,8 @@ export default function AiDecisionEnginePage() {
             <div className="flex-1 grid grid-cols-4 gap-2">
               {PRIORITY_ORDER.map((p) => {
                 const count = engine.recommendations.filter((r) => r.priority === p).length;
-                const pct   = totalRecs > 0 ? (count / totalRecs) * 100 : 0;
-                const s     = PRIORITY_STYLE_MAP[p];
+                const pct = totalRecs > 0 ? (count / totalRecs) * 100 : 0;
+                const s = PRIORITY_STYLE_MAP[p];
                 return (
                   <div key={p} className="space-y-1">
                     <div className="flex justify-between items-center">
@@ -466,7 +479,7 @@ export default function AiDecisionEnginePage() {
             <p className="text-lg font-semibold text-foreground">No recommendations match your filters</p>
             <p className="text-sm text-muted-foreground mt-1">
               {engine.recommendations.length === 0
-                ? "The engine has no alerts at this time — all systems nominal."
+                ? "No deterministic recommendations are currently available."
                 : "Try clearing filters to see all recommendations."}
             </p>
           </CardContent>

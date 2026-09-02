@@ -15,7 +15,7 @@ export function useRealDecisionEngine() {
     setStatusOverrides((prev) => ({ ...prev, [id]: status }));
   };
 
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isError, dataUpdatedAt, refetch } = useQuery({
     queryKey: ["decision-engine"],
     queryFn: async () => {
       const res = await fetch("/api/ai/decision-engine", {
@@ -38,7 +38,7 @@ export function useRealDecisionEngine() {
     if (!data || !data.deterministicContext) {
       return {
         recommendations: [],
-        lastAnalysedAt: new Date(),
+        lastAnalysedAt: null,
         totalEstimatedSavings: "UNKNOWN",
         modelVersion: "SR-6 Deterministic Bridge",
         analysisStatus: isFetching ? "analysing" : "idle",
@@ -70,8 +70,7 @@ export function useRealDecisionEngine() {
           mit.targetProductId !== undefined
             ? `Mitigates supply risk for product ${mit.targetProductId}.`
             : "Mitigates a deterministic supply-chain risk.",
-        estimatedSavings:
-          data.deterministicContext.portfolioResult?.deduplicatedRevenueDelta ?? "UNKNOWN",
+        estimatedSavings: "UNKNOWN",
         confidenceScore: "UNKNOWN",
         reasoning: mit.reason,
         affectedDepartment: "Supply Chain",
@@ -114,7 +113,7 @@ export function useRealDecisionEngine() {
 
     return {
       recommendations: recs,
-      lastAnalysedAt: new Date(),
+      lastAnalysedAt: dataUpdatedAt > 0 ? new Date(dataUpdatedAt) : null,
       totalEstimatedSavings,
       modelVersion: "SR-6 Deterministic Bridge",
       analysisStatus: isFetching ? "analysing" : "complete",
@@ -126,5 +125,5 @@ export function useRealDecisionEngine() {
     refetch();
   };
 
-  return { engine, isFetching, refetchAll, setStatus };
+  return { engine, isFetching, isError, refetchAll, setStatus };
 }

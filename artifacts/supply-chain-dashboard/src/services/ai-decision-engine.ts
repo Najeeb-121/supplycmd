@@ -4,15 +4,12 @@
  */
 
 export type RecommendationType =
-  | "reorder_material"
-  | "delay_purchase_order"
-  | "increase_production_capacity"
-  | "transfer_inventory"
-  | "reduce_safety_stock"
-  | "flag_slow_moving"
-  | "supplier_delay_detected"
-  | "predict_stockout"
-  | string;
+  | "ALTERNATE_SUPPLIER"
+  | "FOLLOW_UP_INBOUND"
+  | "COVER_FROM_AVAILABLE_STOCK"
+  | "PRIORITIZE_DOWNSTREAM_DEMAND"
+  | "MONITOR_UNVERIFIED_LEAD_TIME"
+  | "CAPACITY_DATA_REQUIRED";
 
 export type RecommendationPriority = "critical" | "high" | "medium" | "low";
 
@@ -171,7 +168,7 @@ export interface DeterministicAIContext {
 
 export interface DecisionEngineState {
   recommendations: Recommendation[];
-  lastAnalysedAt: Date;
+  lastAnalysedAt: Date | null;
   totalEstimatedSavings: number | "UNKNOWN";
   modelVersion: string;
   analysisStatus: "idle" | "analysing" | "complete";
