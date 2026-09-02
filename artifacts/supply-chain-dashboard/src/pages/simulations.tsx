@@ -73,8 +73,8 @@ export default function SimulationsPage() {
   const [scenarioType, setScenarioType] = useState("SUPPLIER_DELAY");
 
   // Params
-  const [productId, setProductId] = useState("1");
-  const [supplierId, setSupplierId] = useState("1");
+  const [productId, setProductId] = useState("");
+  const [supplierId, setSupplierId] = useState("");
   const [delayDays, setDelayDays] = useState("7");
   const [surgePct, setSurgePct] = useState("50");
   const [failurePct, setFailurePct] = useState("10");
@@ -146,10 +146,22 @@ export default function SimulationsPage() {
 
             parameters: {
               productId: parseInt(productId),
-              supplierId: parseInt(supplierId),
-              delayDays: parseInt(delayDays),
-              surgePct: parseInt(surgePct),
-              failurePct: parseInt(failurePct)
+
+              ...(category === "Supply Risks" && {
+                supplierId: parseInt(supplierId),
+              }),
+
+              ...(scenarioType === "SUPPLIER_DELAY" && {
+                delayDays: parseInt(delayDays),
+              }),
+
+              ...(scenarioType === "DEMAND_SURGE" && {
+                surgePct: parseInt(surgePct),
+              }),
+
+              ...(scenarioType === "SUPPLIER_QUALITY_FAILURE" && {
+                failurePct: parseInt(failurePct),
+              }),
             }
           }
         })
@@ -193,7 +205,7 @@ export default function SimulationsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Professional Simulation Engine</h1>
           <p className="text-muted-foreground mt-1">
-            Deterministic scenario modeling over live ERP data.
+            Deterministic scenario modeling over ERP-backed data.
           </p>
         </div>
       </div>
@@ -201,7 +213,7 @@ export default function SimulationsPage() {
       <Tabs defaultValue="single" className="w-full h-full flex flex-col">
         <TabsList className="mb-4 w-max">
           <TabsTrigger value="single">Single Scenario (SR-4)</TabsTrigger>
-          <TabsTrigger value="portfolio">Portfolio Optimization (SR-5)</TabsTrigger>
+          <TabsTrigger value="portfolio">Portfolio Simulation (SR-6)</TabsTrigger>
         </TabsList>
 
         <TabsContent value="single" className="flex-1 mt-0">
@@ -216,12 +228,25 @@ export default function SimulationsPage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>1. Risk Category</Label>
-                    <Select value={category} onValueChange={setCategory}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select
+                      value={category}
+                      onValueChange={(value) => {
+                        setCategory(value);
+                        setSupplierId("");
+                        setProductId("");
+
+                        const firstScenario = SCENARIOS.find(
+                          (scenario) => scenario.category === value
+                        );
+
+                        setScenarioType(firstScenario?.id ?? "");
+                      }}
+                    >
+                      <SelectTrigger aria-label="Risk Category"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Supply Risks">Supply Risks</SelectItem>
                         <SelectItem value="Demand Risks">Demand Risks</SelectItem>
-                        <SelectItem value="Operational Risks">Operational Risks</SelectItem>
+
                       </SelectContent>
                     </Select>
                   </div>
@@ -229,7 +254,7 @@ export default function SimulationsPage() {
                   <div className="space-y-2">
                     <Label>2. Scenario Type</Label>
                     <Select value={scenarioType} onValueChange={setScenarioType}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label="Scenario Type"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {SCENARIOS.filter(s => s.category === category).map(s => (
                           <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
@@ -245,7 +270,7 @@ export default function SimulationsPage() {
                         setSupplierId(val);
                         setProductId("");
                       }}>
-                        <SelectTrigger><SelectValue placeholder="Select supplier..." /></SelectTrigger>
+                        <SelectTrigger aria-label="Target Supplier"><SelectValue placeholder="Select supplier..." /></SelectTrigger>
                         <SelectContent>
                           {filteredSuppliers.map((s: any) => (
                             <SelectItem key={s.id} value={String(s.id)}>{s.name?.value || s.name || "Unknown"}</SelectItem>
@@ -258,7 +283,7 @@ export default function SimulationsPage() {
                   <div className="space-y-2">
                     <Label>{category === "Supply Risks" ? "4. Target Product" : "3. Target Product"}</Label>
                     <Select value={productId} onValueChange={setProductId}>
-                      <SelectTrigger><SelectValue placeholder="Select product..." /></SelectTrigger>
+                      <SelectTrigger aria-label="Target Product"><SelectValue placeholder="Select product..." /></SelectTrigger>
                       <SelectContent>
                         {filteredProducts.map((p: any) => (
                           <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
@@ -274,8 +299,9 @@ export default function SimulationsPage() {
 
                   {scenarioType === "SUPPLIER_DELAY" && (
                     <div className="space-y-2">
-                      <Label>Delay in Days</Label>
+                      <Label htmlFor="delay-days">Delay in Days</Label>
                       <Input
+                        id="delay-days"
                         type="number"
                         min="0"
                         value={delayDays}
@@ -290,8 +316,9 @@ export default function SimulationsPage() {
 
                   {scenarioType === "DEMAND_SURGE" && (
                     <div className="space-y-2">
-                      <Label>Surge %</Label>
+                      <Label htmlFor="surge-percent">Surge %</Label>
                       <Input
+                        id="surge-percent"
                         type="number"
                         min="0"
                         value={surgePct}
@@ -306,8 +333,9 @@ export default function SimulationsPage() {
 
                   {scenarioType === "SUPPLIER_QUALITY_FAILURE" && (
                     <div className="space-y-2">
-                      <Label>Failure %</Label>
+                      <Label htmlFor="failure-percent">Failure %</Label>
                       <Input
+                        id="failure-percent"
                         type="number"
                         min="0"
                         max="100"
@@ -325,7 +353,15 @@ export default function SimulationsPage() {
                     <Button
                       className="w-full"
                       onClick={() => runSimulation.mutate()}
-                      disabled={runSimulation.isPending}
+                      disabled={
+                        runSimulation.isPending ||
+                        !scenarioType ||
+                        !productId ||
+                        (category === "Supply Risks" && !supplierId) ||
+                        (scenarioType === "SUPPLIER_DELAY" && delayDays === "") ||
+                        (scenarioType === "DEMAND_SURGE" && surgePct === "") ||
+                        (scenarioType === "SUPPLIER_QUALITY_FAILURE" && failurePct === "")
+                      }
                     >
                       {runSimulation.isPending ? "Running Loop..." : "Run Simulation"}
                     </Button>
@@ -390,7 +426,7 @@ export default function SimulationsPage() {
                               <span className="font-semibold">{result.result.metrics.totalUnmetDemand.toLocaleString()} units at risk</span>
                               {" | "}
                               {result.result.financials.revenueAtRisk.status === "VERIFIED"
-                                ? `$${result.result.financials.revenueAtRisk.value?.toLocaleString()} revenue`
+                                ? `${result.result.financials.revenueAtRisk.value?.toLocaleString()} revenue`
                                 : "NOT DETERMINABLE revenue"}
                             </p>
                           </>
@@ -456,7 +492,7 @@ export default function SimulationsPage() {
                           <p className="text-xl font-bold mt-1">
                             {result.result.financials.revenueAtRisk.status === "VERIFIED" &&
                               result.result.financials.revenueAtRisk.value != null
-                              ? `$${result.result.financials.revenueAtRisk.value.toLocaleString()}`
+                              ? result.result.financials.revenueAtRisk.value.toLocaleString()
                               : "NOT DETERMINABLE"}
                           </p>
                         </CardContent>
@@ -573,11 +609,11 @@ export default function SimulationsPage() {
                                 <div className="font-semibold">Revenue at Risk</div>
                                 <div className="text-lg font-mono mt-1">
                                   {result.result.financials.revenueAtRisk.status === "VERIFIED"
-                                    ? `$${result.result.financials.revenueAtRisk.value?.toLocaleString()}`
+                                    ? result.result.financials.revenueAtRisk.value?.toLocaleString()
                                     : "NOT DETERMINABLE"}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-2">
-                                  {result.result.financials.revenueAtRisk.status} · {result.result.financials.revenueAtRisk.confidence}
+                                  {result.result.financials.revenueAtRisk.status} - {result.result.financials.revenueAtRisk.confidence}
                                 </div>
                               </div>
 
@@ -585,11 +621,11 @@ export default function SimulationsPage() {
                                 <div className="font-semibold">Gross Margin at Risk</div>
                                 <div className="text-lg font-mono mt-1">
                                   {result.result.financials.grossMarginAtRisk.status === "VERIFIED"
-                                    ? `$${result.result.financials.grossMarginAtRisk.value?.toLocaleString()}`
+                                    ? result.result.financials.grossMarginAtRisk.value?.toLocaleString()
                                     : "NOT DETERMINABLE"}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-2">
-                                  {result.result.financials.grossMarginAtRisk.status} · {result.result.financials.grossMarginAtRisk.confidence}
+                                  {result.result.financials.grossMarginAtRisk.status} - {result.result.financials.grossMarginAtRisk.confidence}
                                 </div>
                               </div>
 
@@ -597,12 +633,12 @@ export default function SimulationsPage() {
                                 <div className="font-semibold">Incremental Procurement Cost</div>
                                 <div className="text-lg font-mono mt-1">
                                   {result.result.financials.incrementalCost?.value != null
-                                    ? `$${result.result.financials.incrementalCost.value.toLocaleString()}`
+                                    ? result.result.financials.incrementalCost.value.toLocaleString()
                                     : "NOT DETERMINABLE"}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-2">
                                   {result.result.financials.incrementalCost
-                                    ? `${result.result.financials.incrementalCost.status} · ${result.result.financials.incrementalCost.confidence}`
+                                    ? `${result.result.financials.incrementalCost.status} - ${result.result.financials.incrementalCost.confidence}`
                                     : "NOT AVAILABLE"}
                                 </div>
                               </div>
@@ -611,12 +647,12 @@ export default function SimulationsPage() {
                                 <div className="font-semibold">Inventory Carrying Cost</div>
                                 <div className="text-lg font-mono mt-1">
                                   {result.result.financials.inventoryCarryingCost?.value != null
-                                    ? `$${result.result.financials.inventoryCarryingCost.value.toLocaleString()}`
+                                    ? result.result.financials.inventoryCarryingCost.value.toLocaleString()
                                     : "NOT DETERMINABLE"}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-2">
                                   {result.result.financials.inventoryCarryingCost
-                                    ? `${result.result.financials.inventoryCarryingCost.status} · ${result.result.financials.inventoryCarryingCost.confidence}`
+                                    ? `${result.result.financials.inventoryCarryingCost.status} - ${result.result.financials.inventoryCarryingCost.confidence}`
                                     : "NOT AVAILABLE"}
                                 </div>
                               </div>

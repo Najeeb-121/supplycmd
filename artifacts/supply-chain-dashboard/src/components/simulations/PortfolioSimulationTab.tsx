@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -8,47 +8,100 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, CheckCircle2, TrendingUp, TrendingDown, DollarSign, ListTodo, FileWarning } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertCircle, CheckCircle2, ListTodo, FileWarning } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useRealDecisionEngine } from "@/hooks/use-real-decision-engine";
+import type { DeterministicAIContext } from "@/services/ai-decision-engine";
 
+type CandidateMitigation =
+  DeterministicAIContext["candidateMitigations"][number];
+
+const EXECUTABLE_MITIGATION_TYPES = new Set<CandidateMitigation["type"]>([
+  "COVER_FROM_AVAILABLE_STOCK",
+  "FOLLOW_UP_INBOUND",
+  "ALTERNATE_SUPPLIER",
+]);
+type PortfolioSimulationResult = {
+  totalProcurementCostDelta: number | "UNKNOWN";
+  deduplicatedRevenueDelta: number | "UNKNOWN";
+  netROI: number | "UNKNOWN";
+  actionExecutionTraces: Array<{
+    mitigationId: string;
+    type: string;
+    executedQuantity: number;
+    executedCost: number | "UNKNOWN";
+    wasSkipped: boolean;
+  }>;
+  affectedSalesOrders: Array<{
+    salesOrderId: number;
+    missedQuantity: number;
+    provenance: "SIMULATION_ALLOCATED";
+  }>;
+  provenance: {
+    revenue: "CALCULATED" | "UNKNOWN";
+    cost: "CALCULATED" | "UNKNOWN";
+    roi: "CALCULATED" | "UNKNOWN";
+  };
+};
 export default function PortfolioSimulationTab() {
   const { toast } = useToast();
-  const [mitigations, setMitigations] = useState<any[]>([]);
-  
-  // Dummy data for mitigation options since UI was just basic
+  const { engine, isFetching: isDecisionFetching, isError: isDecisionError } =
+    useRealDecisionEngine();
+
+  const [mitigations, setMitigations] = useState<CandidateMitigation[]>([]);
+
+  const executableCandidates =
+    engine.deterministicContext?.candidateMitigations.filter(
+      (mitigation) =>
+        mitigation.feasible &&
+        mitigation.targetProductId !== undefined &&
+        EXECUTABLE_MITIGATION_TYPES.has(mitigation.type)
+    ) ?? [];
+
+  const availableCandidates = executableCandidates.filter(
+    (candidate) =>
+      !mitigations.some((selected) => selected.id === candidate.id)
+  );
+
   const addMitigation = () => {
-    setMitigations([...mitigations, { id: `m-${Date.now()}`, type: "SUPPLIER_SWITCH", quantity: 100 }]);
+    const nextCandidate = availableCandidates[0];
+    if (!nextCandidate) return;
+
+    setMitigations((current) => [...current, nextCandidate]);
   };
+
   const removeMitigation = (id: string) => {
-    setMitigations(mitigations.filter(m => m.id !== id));
+    setMitigations((current) =>
+      current.filter((mitigation) => mitigation.id !== id)
+    );
   };
 
-  const { data: result, isPending, mutate: runSimulation, error } = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/simulation/portfolio", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          baselineSnapshotId: "CURRENT", // SR-5 uses 'CURRENT' for realtime extraction
-          mitigations
-        })
-      });
+  const { data: result, isPending, mutate: runSimulation, error } =
+    useMutation<PortfolioSimulationResult, Error>({
+      mutationFn: async () => {
+        const res = await fetch("/api/simulation/portfolio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            baselineSnapshotId: "CURRENT", // Use the current ERP-backed baseline snapshot
+            mitigations
+          })
+        });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || err.message || "Failed to run portfolio simulation");
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || err.message || "Failed to run portfolio simulation");
+        }
+
+        return res.json() as Promise<PortfolioSimulationResult>;
+      },
+      onSuccess: () => {
+        toast({ title: "Portfolio Simulation Complete", description: "Successfully ran deterministic simulation loop." });
+      },
+      onError: (err: any) => {
+        toast({ title: "Simulation Error", description: err.message, variant: "destructive" });
       }
-
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Portfolio Simulation Complete", description: "Successfully ran deterministic simulation loop." });
-    },
-    onError: (err: any) => {
-      toast({ title: "Simulation Error", description: err.message, variant: "destructive" });
-    }
-  });
+    });
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-full">
@@ -61,12 +114,12 @@ export default function PortfolioSimulationTab() {
           <CardContent className="space-y-4">
             <div className="space-y-2 text-sm">
               <p className="text-muted-foreground">
-                SR-5 evaluates the entire portfolio across all active relationships, BOMs, and demand streams.
+                SR-6 evaluates the current portfolio across active supply relationships, BOMs, and demand streams.
               </p>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Mitigations</CardTitle>
@@ -74,17 +127,36 @@ export default function PortfolioSimulationTab() {
           <CardContent className="space-y-4">
             {mitigations.map((m, i) => (
               <div key={m.id} className="flex justify-between items-center p-2 bg-muted rounded-md text-sm">
-                <span>Switch +{m.quantity}</span>
+                <span>
+                  {m.title} - Qty: {m.affectedQuantity}
+                </span>
                 <Button variant="ghost" size="sm" onClick={() => removeMitigation(m.id)}>Remove</Button>
               </div>
             ))}
-            <Button variant="outline" className="w-full" onClick={addMitigation}>+ Add Mitigation</Button>
-            
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={addMitigation}
+              disabled={
+                isDecisionFetching ||
+                isDecisionError ||
+                availableCandidates.length === 0
+              }
+            >
+              {isDecisionFetching
+                ? "Loading Deterministic Mitigations..."
+                : isDecisionError
+                  ? "Deterministic Mitigations Unavailable"
+                  : availableCandidates.length > 0
+                    ? "+ Add Deterministic Mitigation"
+                    : "No More Executable Mitigations"}
+            </Button>
+
             <div className="pt-4 border-t">
-              <Button 
-                className="w-full" 
-                onClick={() => runSimulation()} 
-                disabled={isPending}
+              <Button
+                className="w-full"
+                onClick={() => runSimulation()}
+                disabled={isPending || mitigations.length === 0}
               >
                 {isPending ? "Running..." : "Run Portfolio Simulation"}
               </Button>
@@ -116,10 +188,10 @@ export default function PortfolioSimulationTab() {
         {error && (
           <Card className="border-red-500 border-2">
             <CardContent className="p-6">
-               <h2 className="text-xl font-bold flex items-center gap-2 text-red-500">
-                  <AlertCircle className="w-6 h-6" /> Simulation Failed
-               </h2>
-               <p className="mt-2 text-muted-foreground">{error.message}</p>
+              <h2 className="text-xl font-bold flex items-center gap-2 text-red-500">
+                <AlertCircle className="w-6 h-6" /> Simulation Failed
+              </h2>
+              <p className="mt-2 text-muted-foreground">{error.message}</p>
             </CardContent>
           </Card>
         )}
@@ -129,46 +201,46 @@ export default function PortfolioSimulationTab() {
             <Card className="border-l-4 border-l-primary">
               <CardContent className="p-6">
                 <h2 className="text-xl font-bold flex items-center gap-2">
-                  <CheckCircle2 className="w-6 h-6 text-green-500" /> Portfolio Optimization Results
+                  <CheckCircle2 className="w-6 h-6 text-green-500" /> Portfolio Simulation Results
                 </h2>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
                   {/* Revenue */}
                   <div className="space-y-1">
                     <p className="text-sm font-semibold text-muted-foreground uppercase">Revenue Delta</p>
                     <p className="text-3xl font-bold">
-                      {result.deduplicatedRevenueDelta === "UNKNOWN" 
-                        ? <span className="text-yellow-500 flex items-center gap-2"><FileWarning className="w-5 h-5"/> UNKNOWN</span>
-                        : `$${result.deduplicatedRevenueDelta.toLocaleString()}`}
+                      {result.deduplicatedRevenueDelta === "UNKNOWN"
+                        ? <span className="text-yellow-500 flex items-center gap-2"><FileWarning className="w-5 h-5" /> UNKNOWN</span>
+                        : result.deduplicatedRevenueDelta.toLocaleString()}
                     </p>
                     <Badge variant="outline" className="mt-1">
-                      Provenance: {result.provenance?.revenue || "CALCULATED"}
+                      Provenance: {result.provenance.revenue}
                     </Badge>
                   </div>
-                  
+
                   {/* Cost */}
                   <div className="space-y-1">
                     <p className="text-sm font-semibold text-muted-foreground uppercase">Procurement Cost Delta</p>
                     <p className="text-3xl font-bold">
                       {result.totalProcurementCostDelta === "UNKNOWN"
-                         ? <span className="text-yellow-500 flex items-center gap-2"><FileWarning className="w-5 h-5"/> UNKNOWN</span>
-                         : `$${result.totalProcurementCostDelta.toLocaleString()}`}
+                        ? <span className="text-yellow-500 flex items-center gap-2"><FileWarning className="w-5 h-5" /> UNKNOWN</span>
+                        : result.totalProcurementCostDelta.toLocaleString()}
                     </p>
                     <Badge variant="outline" className="mt-1">
-                      Provenance: {result.provenance?.cost || "CALCULATED"}
+                      Provenance: {result.provenance.cost}
                     </Badge>
                   </div>
-                  
+
                   {/* ROI */}
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-muted-foreground uppercase">Net ROI</p>
+                    <p className="text-sm font-semibold text-muted-foreground uppercase">Net Portfolio Impact</p>
                     <p className={`text-3xl font-bold ${result.netROI !== 'UNKNOWN' && result.netROI > 0 ? 'text-green-500' : ''}`}>
                       {result.netROI === "UNKNOWN"
-                         ? <span className="text-yellow-500 flex items-center gap-2"><FileWarning className="w-5 h-5"/> UNKNOWN</span>
-                         : `$${result.netROI.toLocaleString()}`}
+                        ? <span className="text-yellow-500 flex items-center gap-2"><FileWarning className="w-5 h-5" /> UNKNOWN</span>
+                        : result.netROI.toLocaleString()}
                     </p>
                     <Badge variant="outline" className="mt-1">
-                      Provenance: {result.provenance?.roi || "CALCULATED"}
+                      Provenance: {result.provenance.roi}
                     </Badge>
                   </div>
                 </div>
@@ -184,18 +256,23 @@ export default function PortfolioSimulationTab() {
                 <CardContent>
                   {result.actionExecutionTraces?.length > 0 ? (
                     <div className="space-y-4">
-                      {result.actionExecutionTraces.map((trace: any, idx: number) => (
+                      {result.actionExecutionTraces.map((trace, idx) => (
                         <div key={idx} className="flex justify-between items-center p-3 bg-muted rounded-md border">
-                           <div>
-                             <p className="font-semibold">{trace.type}</p>
-                             <p className="text-sm text-muted-foreground text-xs uppercase mt-1">
-                               {trace.wasSkipped ? <span className="text-yellow-500">SKIPPED</span> : <span className="text-green-500">EXECUTED</span>}
-                             </p>
-                           </div>
-                           <div className="text-right text-sm space-y-1">
-                             <p>Qty: {trace.executedQuantity}</p>
-                             <p>Cost: {trace.executedCost === "UNKNOWN" ? <span className="text-yellow-500 font-bold">UNKNOWN</span> : `$${trace.executedCost}`}</p>
-                           </div>
+                          <div>
+                            <p className="font-semibold">{trace.type}</p>
+                            <p className="text-sm text-muted-foreground text-xs uppercase mt-1">
+                              {trace.wasSkipped ? <span className="text-yellow-500">SKIPPED</span> : <span className="text-green-500">EXECUTED</span>}
+                            </p>
+                          </div>
+                          <div className="text-right text-sm space-y-1">
+                            <p>Qty: {trace.executedQuantity}</p>
+                            <p>
+                              Cost:{" "}
+                              {trace.executedCost === "UNKNOWN"
+                                ? <span className="text-yellow-500 font-bold">UNKNOWN</span>
+                                : trace.executedCost.toLocaleString()}
+                            </p>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -213,13 +290,13 @@ export default function PortfolioSimulationTab() {
                 <CardContent>
                   {result.affectedSalesOrders?.length > 0 ? (
                     <div className="space-y-3">
-                      {result.affectedSalesOrders.map((so: any, idx: number) => (
+                      {result.affectedSalesOrders.map((so, idx) => (
                         <div key={idx} className="flex justify-between items-center p-2 border-b last:border-0">
-                           <span className="font-medium">SO-{so.salesOrderId}</span>
-                           <div className="flex gap-4">
-                             <span className="text-muted-foreground text-sm">Missed: {so.missedQuantity}</span>
-                             <Badge variant="secondary" className="text-xs">{so.provenance}</Badge>
-                           </div>
+                          <span className="font-medium">SO-{so.salesOrderId}</span>
+                          <div className="flex gap-4">
+                            <span className="text-muted-foreground text-sm">Missed: {so.missedQuantity}</span>
+                            <Badge variant="secondary" className="text-xs">{so.provenance}</Badge>
+                          </div>
                         </div>
                       ))}
                     </div>

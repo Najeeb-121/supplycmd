@@ -3,6 +3,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import PortfolioSimulationTab from '../../components/simulations/PortfolioSimulationTab';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+vi.mock('@/hooks/use-real-decision-engine', () => ({
+  useRealDecisionEngine: () => ({
+    engine: {
+      deterministicContext: {
+        candidateMitigations: [
+          {
+            id: "ALT_SUPPLIER_TEST",
+            type: "ALTERNATE_SUPPLIER",
+            title: "Use Test Alternate Supplier",
+            reason: "Test deterministic mitigation",
+            feasible: true,
+            affectedQuantity: 100,
+            mitigationCost: 500,
+            mitigationCostProvenance: "CALCULATED",
+            mitigationDateProvenance: "UNKNOWN",
+            targetSupplierId: 21,
+            targetSupplierName: "Test Supplier",
+            targetProductId: 17,
+          },
+        ],
+      },
+    },
+  }),
+}));
 
 // Setup basic query client
 const createTestQueryClient = () => new QueryClient({
@@ -21,7 +45,7 @@ window.matchMedia = vi.fn().mockImplementation(query => ({
   dispatchEvent: vi.fn(),
 }));
 
-describe('PortfolioSimulationTab (SR-5 Phase 3 Integration)', () => {
+describe('PortfolioSimulationTab (SR-6 Phase 9 Integration)', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -44,7 +68,13 @@ describe('PortfolioSimulationTab (SR-5 Phase 3 Integration)', () => {
       totalProcurementCostDelta: 25000,
       netROI: 75000,
       provenance: { revenue: "CALCULATED", cost: "CALCULATED", roi: "CALCULATED" },
-      actionExecutionTraces: [{ type: "SUPPLIER_SWITCH", executedQuantity: 100, executedCost: 500, wasSkipped: false }],
+      actionExecutionTraces: [{
+        mitigationId: "ALT_SUPPLIER_TEST",
+        type: "ALTERNATE_SUPPLIER",
+        executedQuantity: 100,
+        executedCost: 500,
+        wasSkipped: false
+      }],
       affectedSalesOrders: [{ salesOrderId: 10, missedQuantity: 5, provenance: "SIMULATION_ALLOCATED" }]
     };
 
@@ -55,6 +85,8 @@ describe('PortfolioSimulationTab (SR-5 Phase 3 Integration)', () => {
 
     renderComponent();
 
+    fireEvent.click(screen.getByText('+ Add Deterministic Mitigation'));
+
     // Click "Run Portfolio Simulation"
     const runBtn = screen.getByText('Run Portfolio Simulation');
     fireEvent.click(runBtn);
@@ -62,19 +94,37 @@ describe('PortfolioSimulationTab (SR-5 Phase 3 Integration)', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/simulation/portfolio', expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ baselineSnapshotId: "CURRENT", mitigations: [] })
+        body: JSON.stringify({
+          baselineSnapshotId: "CURRENT",
+          mitigations: [
+            {
+              id: "ALT_SUPPLIER_TEST",
+              type: "ALTERNATE_SUPPLIER",
+              title: "Use Test Alternate Supplier",
+              reason: "Test deterministic mitigation",
+              feasible: true,
+              affectedQuantity: 100,
+              mitigationCost: 500,
+              mitigationCostProvenance: "CALCULATED",
+              mitigationDateProvenance: "UNKNOWN",
+              targetSupplierId: 21,
+              targetSupplierName: "Test Supplier",
+              targetProductId: 17,
+            },
+          ],
+        })
       }));
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Portfolio Optimization Results')).toBeInTheDocument();
+      expect(screen.getByText('Portfolio Simulation Results')).toBeInTheDocument();
     });
 
     // B. Results are rendered correctly
-    expect(screen.getByText('$100,000')).toBeInTheDocument(); // Revenue
-    expect(screen.getByText('$25,000')).toBeInTheDocument(); // Cost
-    expect(screen.getByText('$75,000')).toBeInTheDocument(); // ROI
-    
+    expect(screen.getByText('100,000')).toBeInTheDocument(); // Revenue
+    expect(screen.getByText('25,000')).toBeInTheDocument(); // Cost
+    expect(screen.getByText('75,000')).toBeInTheDocument(); // ROI
+
     // Action traces
     expect(screen.getByText('EXECUTED')).toBeInTheDocument();
     expect(screen.getByText('Qty: 100')).toBeInTheDocument();
@@ -100,18 +150,19 @@ describe('PortfolioSimulationTab (SR-5 Phase 3 Integration)', () => {
     });
 
     renderComponent();
+    fireEvent.click(screen.getByText('+ Add Deterministic Mitigation'));
     fireEvent.click(screen.getByText('Run Portfolio Simulation'));
 
     await waitFor(() => {
-      expect(screen.getByText('Portfolio Optimization Results')).toBeInTheDocument();
+      expect(screen.getByText('Portfolio Simulation Results')).toBeInTheDocument();
     });
 
     // Check that UNKNOWN string is present multiple times (Cost, ROI)
     const unknownElements = screen.getAllByText('UNKNOWN');
     expect(unknownElements.length).toBeGreaterThan(0);
-    
+
     // Revenue is known
-    expect(screen.getByText('$50,000')).toBeInTheDocument();
+    expect(screen.getByText('50,000')).toBeInTheDocument();
   });
 
   it('D & E. Skipped mitigations and Sales Orders are rendered safely', async () => {
@@ -120,7 +171,13 @@ describe('PortfolioSimulationTab (SR-5 Phase 3 Integration)', () => {
       totalProcurementCostDelta: "UNKNOWN",
       netROI: "UNKNOWN",
       provenance: { revenue: "UNKNOWN", cost: "UNKNOWN", roi: "UNKNOWN" },
-      actionExecutionTraces: [{ type: "EXPEDITE", executedQuantity: 0, executedCost: 0, wasSkipped: true }],
+      actionExecutionTraces: [{
+        mitigationId: "FOLLOW_UP_TEST",
+        type: "FOLLOW_UP_INBOUND",
+        executedQuantity: 0,
+        executedCost: 0,
+        wasSkipped: true
+      }],
       affectedSalesOrders: []
     };
 
@@ -130,10 +187,11 @@ describe('PortfolioSimulationTab (SR-5 Phase 3 Integration)', () => {
     });
 
     renderComponent();
+    fireEvent.click(screen.getByText('+ Add Deterministic Mitigation'));
     fireEvent.click(screen.getByText('Run Portfolio Simulation'));
 
     await waitFor(() => {
-      expect(screen.getByText('Portfolio Optimization Results')).toBeInTheDocument();
+      expect(screen.getByText('Portfolio Simulation Results')).toBeInTheDocument();
     });
 
     expect(screen.getByText('SKIPPED')).toBeInTheDocument();
@@ -147,6 +205,7 @@ describe('PortfolioSimulationTab (SR-5 Phase 3 Integration)', () => {
     });
 
     renderComponent();
+    fireEvent.click(screen.getByText('+ Add Deterministic Mitigation'));
     fireEvent.click(screen.getByText('Run Portfolio Simulation'));
 
     await waitFor(() => {
