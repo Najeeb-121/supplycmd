@@ -126,7 +126,10 @@ runTest("inbound supply", () => {
   const p = createMockProduct({
     inboundPOs: [{ poId: 1, odooId: 1, supplierId: 1, productId: 1, orderedQuantity: 50, receivedQuantity: 0, remainingQuantity: 50, expectedArrivalDate: "2026-08-20", status: "purchase", confirmedForSupply: true, currentlyInbound: true }]
   });
-  const e = createMockExposure({ currentlyInboundQuantity: 50 });
+  const e = createMockExposure({
+    targetSupplierId: 1,
+    currentlyInboundQuantity: 50
+  });
   return generateMitigations({ ...snapshot, products: { 1: p } }, e);
 }, (res) => {
   const c = res.actions.find((a: any) => a.type === "FOLLOW_UP_INBOUND");
@@ -135,6 +138,54 @@ runTest("inbound supply", () => {
   if (c.mitigationDate !== "2026-08-20") throw new Error("Expected expectedArrivalDate");
   if (c.mitigationDateProvenance !== "EXPECTED_ARRIVAL") throw new Error("Expected EXPECTED_ARRIVAL provenance");
 });
+
+runTest("inbound follow-up uses only the affected supplier's earliest arrival", () => {
+  const p = createMockProduct({
+    inboundPOs: [
+      {
+        poId: 1,
+        odooId: 1,
+        supplierId: 2,
+        productId: 1,
+        orderedQuantity: 100,
+        receivedQuantity: 0,
+        remainingQuantity: 100,
+        expectedArrivalDate: "2026-09-03",
+        status: "purchase",
+        confirmedForSupply: true,
+        currentlyInbound: true
+      },
+      {
+        poId: 2,
+        odooId: 2,
+        supplierId: 1,
+        productId: 1,
+        orderedQuantity: 50,
+        receivedQuantity: 0,
+        remainingQuantity: 50,
+        expectedArrivalDate: "2026-09-07",
+        status: "purchase",
+        confirmedForSupply: true,
+        currentlyInbound: true
+      }
+    ]
+  });
+
+  const e = createMockExposure({
+    targetSupplierId: 1,
+    currentlyInboundQuantity: 50
+  });
+
+  return generateMitigations({ ...snapshot, products: { 1: p } }, e);
+}, (res) => {
+  const c = res.actions.find((a: any) => a.type === "FOLLOW_UP_INBOUND");
+
+  if (!c) throw new Error("Missing inbound follow up");
+  if (c.mitigationDate !== "2026-09-07") {
+    throw new Error("Expected affected supplier's own earliest arrival date");
+  }
+});
+
 
 runTest("no inbound supply", () => {
   const p = createMockProduct({ inboundPOs: [] });

@@ -25,7 +25,11 @@ export function generateMitigations(snapshot: SupplyRiskSnapshot, exposure: Risk
   if (exposure.currentlyInboundQuantity > 0 && product) {
     let earliestDate: string | undefined = undefined;
     for (const po of product.inboundPOs) {
-      if (po.currentlyInbound && po.expectedArrivalDate) {
+      if (
+        po.supplierId === targetSupplierId &&
+        po.currentlyInbound &&
+        po.expectedArrivalDate
+      ) {
         if (!earliestDate || po.expectedArrivalDate < earliestDate) {
           earliestDate = po.expectedArrivalDate;
         }
