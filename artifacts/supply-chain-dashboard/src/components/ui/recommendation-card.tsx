@@ -104,31 +104,41 @@ const STATUS_META: Record<
 // ─── Type icons ───────────────────────────────────────────────────────────────
 
 const TYPE_ICONS: Record<RecommendationType, React.ReactNode> = {
-  reorder_material:            <ShoppingCart   className="w-4 h-4" />,
-  delay_purchase_order:        <Clock          className="w-4 h-4" />,
-  increase_production_capacity: <Activity      className="w-4 h-4" />,
-  transfer_inventory:          <ArrowLeftRight className="w-4 h-4" />,
-  reduce_safety_stock:         <TrendDown      className="w-4 h-4" />,
-  flag_slow_moving:            <Tag            className="w-4 h-4" />,
-  supplier_delay_detected:     <AlertTriangle  className="w-4 h-4" />,
-  predict_stockout:            <Zap            className="w-4 h-4" />,
+  reorder_material: <ShoppingCart className="w-4 h-4" />,
+  delay_purchase_order: <Clock className="w-4 h-4" />,
+  increase_production_capacity: <Activity className="w-4 h-4" />,
+  transfer_inventory: <ArrowLeftRight className="w-4 h-4" />,
+  reduce_safety_stock: <TrendDown className="w-4 h-4" />,
+  flag_slow_moving: <Tag className="w-4 h-4" />,
+  supplier_delay_detected: <AlertTriangle className="w-4 h-4" />,
+  predict_stockout: <Zap className="w-4 h-4" />,
 };
 
 // ─── Confidence ring ──────────────────────────────────────────────────────────
 
-function ConfidenceRing({ score }: { score: number }) {
+function ConfidenceRing({ score }: { score: number | "UNKNOWN" }) {
   const r = 14;
   const circ = 2 * Math.PI * r;
-  const dash = (score / 100) * circ;
+
+  const numericScore = score === "UNKNOWN" ? null : score;
+  const dash = numericScore === null ? 0 : (numericScore / 100) * circ;
   const color =
-    score >= 85 ? "#10b981" : score >= 70 ? "#f59e0b" : "#ef4444";
+    numericScore === null
+      ? "hsl(var(--muted-foreground))"
+      : numericScore >= 85
+        ? "#10b981"
+        : numericScore >= 70
+          ? "#f59e0b"
+          : "#ef4444";
 
   return (
     <div className="relative flex items-center justify-center">
       <svg width="38" height="38" className="-rotate-90">
         <circle cx="19" cy="19" r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth="3.5" />
         <circle
-          cx="19" cy="19" r={r}
+          cx="19"
+          cy="19"
+          r={r}
           fill="none"
           stroke={color}
           strokeWidth="3.5"
@@ -137,8 +147,8 @@ function ConfidenceRing({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[10px] font-mono font-bold text-foreground leading-none">
-          {score}
+        <span className="text-[9px] font-mono font-bold text-foreground leading-none">
+          {score === "UNKNOWN" ? "N/A" : score}
         </span>
       </div>
     </div>
@@ -184,9 +194,9 @@ export const RecommendationCard = memo(function RecommendationCard({
 }: RecommendationCardProps) {
   const [expanded, setExpanded] = useState(false);
   const pStyles = PRIORITY_STYLES[rec.priority];
-  const sMeta   = STATUS_META[rec.status];
+  const sMeta = STATUS_META[rec.status];
   const isDismissed = rec.status === "dismissed";
-  const isApplied   = rec.status === "applied";
+  const isApplied = rec.status === "applied";
 
   return (
     <Card

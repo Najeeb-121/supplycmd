@@ -33,7 +33,7 @@ describe("SR-6 Phase 2 AI Orchestration", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Set up a mock Express app that injects req.user like requireAuth would
     app = express();
     app.use(express.json());
@@ -41,16 +41,18 @@ describe("SR-6 Phase 2 AI Orchestration", () => {
       (req as any).user = { companyId: 1 };
       next();
     });
-    
+
     // Mount the routes being tested
     app.use(decisionEngineRouter);
     app.use(financialEngineRouter);
-    
+
     // Setup default mock bridge response
     (generateDeterministicDecision as any).mockResolvedValue({
       baselineRiskDetected: true,
       baselineExposures: [],
       candidateMitigations: [],
+      contingencyExposures: [],
+      contingencyMitigations: [],
       portfolioResult: {
         totalProcurementCostDelta: 4000,
         deduplicatedRevenueDelta: "UNKNOWN",
@@ -66,7 +68,7 @@ describe("SR-6 Phase 2 AI Orchestration", () => {
         financialSimulation: "DETERMINISTIC"
       }
     });
-    
+
     // Setup default mock AI response
     mockGenerateContent.mockResolvedValue({
       text: JSON.stringify({ dummyResponse: true })
@@ -84,26 +86,26 @@ describe("SR-6 Phase 2 AI Orchestration", () => {
       });
 
     expect(res.status).toBe(200);
-    
+
     // A. generateDeterministicDecision() executes before Gemini
     expect(generateDeterministicDecision).toHaveBeenCalledWith(1);
     expect(mockGenerateContent).toHaveBeenCalledTimes(1);
 
     const callArgs = mockGenerateContent.mock.calls[0][0];
     const userPrompt = callArgs.contents[0].parts[0].text;
-    
+
     // B/C/D/E. Exact SR-5 fields reach the AI context
     expect(userPrompt).toContain("SR6_DETERMINISTIC_RESULTS");
     expect(userPrompt).toContain('"totalProcurementCostDelta": 4000');
-    
+
     // F. UNKNOWN remains UNKNOWN
     expect(userPrompt).toContain('"deduplicatedRevenueDelta": "UNKNOWN"');
     expect(userPrompt).toContain('"netROI": "UNKNOWN"');
-    
+
     // Exact affectedSalesOrders reach the context
     expect(userPrompt).toContain('"affectedSalesOrders": [');
     expect(userPrompt).toContain('"orderId": 999');
-    
+
     // H/I. No financial calculation occurs (prompt rule check)
     const systemInstruction = callArgs.config.systemInstruction;
     expect(systemInstruction).toContain("You MUST NOT invent financial values");
@@ -128,22 +130,22 @@ describe("SR-6 Phase 2 AI Orchestration", () => {
       });
 
     expect(res.status).toBe(200);
-    
+
     // A. generateDeterministicDecision() executes before Gemini
     expect(generateDeterministicDecision).toHaveBeenCalledWith(1);
     expect(mockGenerateContent).toHaveBeenCalledTimes(1);
 
     const callArgs = mockGenerateContent.mock.calls[0][0];
     const userPrompt = callArgs.contents[0].parts[0].text;
-    
+
     // B/C/D/E. Exact SR-5 fields reach the AI context
     expect(userPrompt).toContain("SR6_DETERMINISTIC_RESULTS");
     expect(userPrompt).toContain('"totalProcurementCostDelta": 4000');
-    
+
     // F. UNKNOWN remains UNKNOWN
     expect(userPrompt).toContain('"deduplicatedRevenueDelta": "UNKNOWN"');
     expect(userPrompt).toContain('"netROI": "UNKNOWN"');
-    
+
     // G. INSUFFICIENT_PRODUCTION_TIMING_DATA remains explicit (from prior testing knowledge, but we check UNKNOWN rule)
     const systemInstruction = callArgs.config.systemInstruction;
     expect(systemInstruction).toContain("You NEVER calculate financial figures independently");
@@ -155,17 +157,17 @@ describe("SR-6 Phase 2 AI Orchestration", () => {
     expect(res.body).toHaveProperty("aiExplanation");
     expect(res.body).toHaveProperty("deterministicContext");
   });
-  
+
   it("identical deterministic input produces identical AI context string", async () => {
     await request(app).post("/ai/decision-engine").send({ simulationResult: {}, scenario: {}, rootCause: {}, riskIntelligence: {} });
     const callArgs1 = mockGenerateContent.mock.calls[0][0];
     const userPrompt1 = callArgs1.contents[0].parts[0].text;
-    
+
     vi.clearAllMocks();
     await request(app).post("/ai/decision-engine").send({ simulationResult: {}, scenario: {}, rootCause: {}, riskIntelligence: {} });
     const callArgs2 = mockGenerateContent.mock.calls[0][0];
     const userPrompt2 = callArgs2.contents[0].parts[0].text;
-    
+
     // J. Identical deterministic input produces identical AI context
     expect(userPrompt1).toEqual(userPrompt2);
   });

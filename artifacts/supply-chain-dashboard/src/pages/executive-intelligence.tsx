@@ -51,32 +51,35 @@ const TOOLTIP_STYLE = {
 };
 
 const RISK_STYLES = {
-  critical: { bar: "bg-destructive",  badge: "bg-destructive text-destructive-foreground",           dot: "bg-destructive"  },
-  high:     { bar: "bg-orange-500",   badge: "bg-orange-500 text-white",                             dot: "bg-orange-500"   },
-  medium:   { bar: "bg-amber-400",    badge: "bg-amber-100 text-amber-700",                          dot: "bg-amber-400"    },
-  low:      { bar: "bg-blue-400",     badge: "bg-blue-100 text-blue-700",                            dot: "bg-blue-400"     },
+  critical: { bar: "bg-destructive", badge: "bg-destructive text-destructive-foreground", dot: "bg-destructive" },
+  high: { bar: "bg-orange-500", badge: "bg-orange-500 text-white", dot: "bg-orange-500" },
+  medium: { bar: "bg-amber-400", badge: "bg-amber-100 text-amber-700", dot: "bg-amber-400" },
+  low: { bar: "bg-blue-400", badge: "bg-blue-100 text-blue-700", dot: "bg-blue-400" },
 };
 
 const DEPT_COLORS: Record<string, string> = {
-  Procurement:  "hsl(var(--primary))",
-  Warehouse:    "#10b981",
-  Production:   "#f59e0b",
+  Procurement: "hsl(var(--primary))",
+  Warehouse: "#10b981",
+  Production: "#f59e0b",
   "Supply Chain": "#8b5cf6",
-  Logistics:    "#06b6d4",
-  Finance:      "#ec4899",
+  Logistics: "#06b6d4",
+  Finance: "#ec4899",
 };
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
-const fmt$ = (n: number | "UNKNOWN") =>
-  n === "UNKNOWN" ? "UNKNOWN" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n as number);
-
 const fmtK = (n: number | "UNKNOWN") =>
-  n === "UNKNOWN" ? "UNKNOWN" : (n as number) >= 1_000_000 ? `$${((n as number) / 1_000_000).toFixed(1)}M` : (n as number) >= 1_000 ? `$${((n as number) / 1_000).toFixed(0)}K` : `$${n}`;
+  n === "UNKNOWN"
+    ? "UNKNOWN"
+    : (n as number) >= 1_000_000
+      ? `${((n as number) / 1_000_000).toFixed(1)}M`
+      : (n as number) >= 1_000
+        ? `${((n as number) / 1_000).toFixed(0)}K`
+        : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n as number);
 
 function TrendIcon({ trend, size = "sm" }: { trend: "up" | "down" | "flat"; size?: "sm" | "xs" }) {
   const cls = size === "xs" ? "w-3 h-3" : "w-3.5 h-3.5";
-  if (trend === "up")   return <TrendingUp   className={cn(cls, "text-emerald-500")} />;
+  if (trend === "up") return <TrendingUp className={cn(cls, "text-emerald-500")} />;
   if (trend === "down") return <TrendingDown className={cn(cls, "text-destructive")} />;
   return <Minus className={cn(cls, "text-muted-foreground")} />;
 }
@@ -90,15 +93,15 @@ function SummaryCard({
   icon: React.ReactNode; color: "red" | "green" | "amber" | "blue" | "purple";
 }) {
   const ring = {
-    red:    "border-destructive/30 bg-destructive/5",
-    green:  "border-emerald-400/30 bg-emerald-50/50 dark:bg-emerald-900/10",
-    amber:  "border-amber-400/30 bg-amber-50/50 dark:bg-amber-900/10",
-    blue:   "border-blue-400/30 bg-blue-50/50 dark:bg-blue-900/10",
+    red: "border-destructive/30 bg-destructive/5",
+    green: "border-emerald-400/30 bg-emerald-50/50 dark:bg-emerald-900/10",
+    amber: "border-amber-400/30 bg-amber-50/50 dark:bg-amber-900/10",
+    blue: "border-blue-400/30 bg-blue-50/50 dark:bg-blue-900/10",
     purple: "border-purple-400/30 bg-purple-50/50 dark:bg-purple-900/10",
   };
   const ic = {
-    red:    "text-destructive", green: "text-emerald-600",
-    amber:  "text-amber-600",   blue:  "text-blue-600", purple: "text-purple-600",
+    red: "text-destructive", green: "text-emerald-600",
+    amber: "text-amber-600", blue: "text-blue-600", purple: "text-purple-600",
   };
   return (
     <Card className={cn("border shadow-sm", ring[color])}>
@@ -155,12 +158,12 @@ function RiskRow({ risk, rank }: { risk: RiskItem; rank: number }) {
           </Badge>
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">{risk.department}</Badge>
         </div>
-        
+
         {/* Highlighted Recommendation/Detail Box */}
-        <div className={cn("mt-2 p-2.5 rounded-md flex gap-2 items-start", 
-          risk.severity === "critical" ? "bg-destructive/10 text-destructive dark:text-red-400 border border-destructive/20" : 
-          risk.severity === "high" ? "bg-amber-500/10 text-amber-900 dark:text-amber-400 border border-amber-500/20" : 
-          "bg-muted/50 text-foreground dark:text-muted-foreground"
+        <div className={cn("mt-2 p-2.5 rounded-md flex gap-2 items-start",
+          risk.severity === "critical" ? "bg-destructive/10 text-destructive dark:text-red-400 border border-destructive/20" :
+            risk.severity === "high" ? "bg-amber-500/10 text-amber-900 dark:text-amber-400 border border-amber-500/20" :
+              "bg-muted/50 text-foreground dark:text-muted-foreground"
         )}>
           <Zap className="w-4 h-4 shrink-0 mt-0.5" />
           <p className="text-xs font-medium leading-relaxed">
@@ -182,8 +185,8 @@ function EfficiencyStrip({ metric }: { metric: EfficiencyMetric }) {
   const pct = metric.value === "UNKNOWN" || metric.target === "UNKNOWN" ? 0 : Math.min(100, ((metric.value as number) / (metric.unit === "/100" ? 100 : Math.max((metric.target as number) * 1.2, metric.value as number))) * 100);
   const color =
     metric.status === "good" ? "bg-emerald-500" :
-    metric.status === "warning" ? "bg-amber-500" :
-    metric.status === "critical" ? "bg-destructive" : "bg-muted";
+      metric.status === "warning" ? "bg-amber-500" :
+        metric.status === "critical" ? "bg-destructive" : "bg-muted";
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
@@ -208,7 +211,10 @@ function EfficiencyStrip({ metric }: { metric: EfficiencyMetric }) {
 function DeptRow({ dept }: { dept: DeptScore }) {
   const color = DEPT_COLORS[dept.department] ?? "hsl(var(--primary))";
   const scoreColor = dept.score === "UNKNOWN" ? "text-muted-foreground" : dept.score >= 80 ? "text-emerald-600" : dept.score >= 60 ? "text-amber-600" : "text-destructive";
-  const delta = dept.score === "UNKNOWN" || dept.prevScore === "UNKNOWN" ? 0 : dept.score - dept.prevScore;
+  const delta =
+    dept.score === "UNKNOWN" || dept.prevScore === "UNKNOWN"
+      ? "UNKNOWN"
+      : dept.score - dept.prevScore;
   return (
     <div className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0">
       <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
@@ -217,20 +223,50 @@ function DeptRow({ dept }: { dept: DeptScore }) {
         <p className="text-[10px] text-muted-foreground">{dept.kpiLabel}</p>
       </div>
       <div className="flex-1">
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${dept.score === "UNKNOWN" ? 0 : dept.score}%`, backgroundColor: dept.score === "UNKNOWN" ? "var(--muted)" : color }} />
-        </div>
+        {dept.score === "UNKNOWN" ? (
+          <div className="h-2 rounded-full bg-muted flex items-center justify-center">
+            <span className="text-[9px] text-muted-foreground">UNKNOWN</span>
+          </div>
+        ) : (
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${dept.score}%`, backgroundColor: color }}
+            />
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={cn("text-sm font-mono font-bold w-12 text-right", scoreColor)}>{dept.score}</span>
         <div className="flex items-center gap-0.5">
-          {delta > 0 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> :
-           delta < 0 ? <TrendingDown className="w-3 h-3 text-destructive" /> :
-           <Minus className="w-3 h-3 text-muted-foreground" />}
-          <span className={cn("text-[10px] font-mono", delta > 0 ? "text-emerald-600" : delta < 0 ? "text-destructive" : "text-muted-foreground")}>
-            {delta > 0 ? "+" : ""}{delta}
-          </span>
+          {delta === "UNKNOWN" ? (
+            <span className="text-[10px] font-mono text-muted-foreground">
+              UNKNOWN
+            </span>
+          ) : (
+            <>
+              {delta > 0 ? (
+                <TrendingUp className="w-3 h-3 text-emerald-500" />
+              ) : delta < 0 ? (
+                <TrendingDown className="w-3 h-3 text-destructive" />
+              ) : (
+                <Minus className="w-3 h-3 text-muted-foreground" />
+              )}
+              <span
+                className={cn(
+                  "text-[10px] font-mono",
+                  delta > 0
+                    ? "text-emerald-600"
+                    : delta < 0
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                )}
+              >
+                {delta > 0 ? "+" : ""}
+                {delta}
+              </span>
+            </>
+          )}
         </div>
         {dept.issueCount > 0 && (
           <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-destructive/10 text-destructive">
@@ -245,7 +281,7 @@ function DeptRow({ dept }: { dept: DeptScore }) {
 // ─── Opportunity row ──────────────────────────────────────────────────────────
 
 function OppRow({ opp, rank }: { opp: ExecState["aiOpportunities"][0]; rank: number }) {
-  const pct = Math.round(opp.confidence);
+  const pct = opp.confidence === "UNKNOWN" ? "UNKNOWN" : Math.round(opp.confidence);
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-border/50 last:border-0">
       <span className="text-xs font-mono text-muted-foreground w-4 text-center shrink-0">#{rank}</span>
@@ -253,7 +289,9 @@ function OppRow({ opp, rank }: { opp: ExecState["aiOpportunities"][0]; rank: num
         <p className="text-xs font-semibold text-foreground leading-tight truncate">{opp.title}</p>
         <div className="flex items-center gap-1.5 mt-0.5">
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">{opp.department}</Badge>
-          <span className="text-[10px] text-muted-foreground">{pct}% confidence</span>
+          <span className="text-[10px] text-muted-foreground">
+            {pct === "UNKNOWN" ? "Confidence UNKNOWN" : `${pct}% confidence`}
+          </span>
         </div>
       </div>
       <div className="text-right shrink-0">
@@ -280,7 +318,7 @@ function ChartTooltip({ active, payload, label, unit = "" }: {
             <span className="text-muted-foreground">{p.name}</span>
           </div>
           <span className="font-mono font-semibold text-foreground ml-4">
-            {typeof p.value === "number" && unit === "$" ? fmtK(p.value) : p.value + unit}
+            {typeof p.value === "number" && unit === "value" ? fmtK(p.value) : p.value + unit}
           </span>
         </div>
       ))}
@@ -310,18 +348,16 @@ export default function ExecutiveIntelligencePage() {
     ordersQuery.refetch();
   }
 
-  // We don't actually use cycleCount from ERP anymore, but we can compute exec safely
   const exec = computeExecState(
     { system: { name: "Odoo" }, entities: [] } as any,
     ops,
     engine,
-    1,
     ordersQuery.data || []
   );
 
   const visibleRisks = showAllRisks ? exec.todaysRisks : exec.todaysRisks.slice(0, 5);
-  const riskColor    = exec.riskScore === "UNKNOWN" ? "blue" : exec.riskScore >= 60 ? "red" : exec.riskScore >= 35 ? "amber" : "green";
-  const effColor     = exec.efficiencyIndex === "UNKNOWN" ? "blue" : exec.efficiencyIndex >= 80 ? "green" : exec.efficiencyIndex >= 60 ? "amber" : "red";
+  const riskColor = exec.riskScore === "UNKNOWN" ? "blue" : exec.riskScore >= 60 ? "red" : exec.riskScore >= 35 ? "amber" : "green";
+  const effColor = exec.efficiencyIndex === "UNKNOWN" ? "blue" : exec.efficiencyIndex >= 80 ? "green" : exec.efficiencyIndex >= 60 ? "amber" : "red";
 
   return (
     <div className="p-4 lg:p-8 bg-background min-h-[100dvh] flex flex-col gap-6 max-w-[1800px] mx-auto font-sans">
@@ -339,8 +375,8 @@ export default function ExecutiveIntelligencePage() {
             Supply Chain Command
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            {format(exec.lastUpdatedAt, "EEEE, d MMMM yyyy")} � Updated{" "}
-            {formatDistanceToNow(exec.lastUpdatedAt, { addSuffix: true })} � Cycle #{exec.cycleCount}
+            {format(exec.lastUpdatedAt, "EEEE, d MMMM yyyy")} · Updated{" "}
+            {formatDistanceToNow(exec.lastUpdatedAt, { addSuffix: true })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -445,8 +481,14 @@ export default function ExecutiveIntelligencePage() {
               <ComposedChart data={exec.monthlyCosts} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} dy={8} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} dx={-4} />
-                <Tooltip content={<ChartTooltip unit="$" />} />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)}
+                  dx={-4}
+                />
+                <Tooltip content={<ChartTooltip unit="value" />} />
                 <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs font-medium text-foreground">{v}</span>} />
                 <Bar dataKey="spend" name="Monthly Spend" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} barSize={32} />
                 <Line type="monotone" dataKey="budget" name="Budget Target" stroke="#f59e0b" strokeWidth={3} dot={false} strokeDasharray="6 4" />
@@ -479,8 +521,8 @@ export default function ExecutiveIntelligencePage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} dy={8} />
-                <YAxis domain={[50, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} dx={-4} />
-                <Tooltip content={<ChartTooltip unit="%" />} />
+                <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} dx={-4} />
+                <Tooltip content={<ChartTooltip unit="" />} />
                 <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs font-medium text-foreground">{v}</span>} wrapperStyle={{ fontSize: '10px' }} />
                 <Area type="monotone" dataKey="ordersPlaced" name="Orders Placed" stroke="hsl(var(--primary))" fill="url(#grad-placed)" strokeWidth={3} dot={false} />
                 <Area type="monotone" dataKey="deliveriesExpected" name="Deliveries" stroke="#10b981" fill="url(#grad-expected)" strokeWidth={3} dot={false} />
@@ -516,7 +558,13 @@ export default function ExecutiveIntelligencePage() {
             ) : (
               <>
                 {Array.from(new Map([...exec.todaysRisks, ...exec.top5Issues].map(item => [item.id, item])).values())
-                  .sort((a, b) => (a.financialExposure === "UNKNOWN" ? 0 : a.financialExposure) - (b.financialExposure === "UNKNOWN" ? 0 : b.financialExposure))
+                  .sort((a, b) => {
+                    if (a.financialExposure === "UNKNOWN" && b.financialExposure === "UNKNOWN") return 0;
+                    if (a.financialExposure === "UNKNOWN") return 1;
+                    if (b.financialExposure === "UNKNOWN") return -1;
+
+                    return b.financialExposure - a.financialExposure;
+                  })
                   .map((issue, i) => (
                     <RiskRow key={issue.id} risk={issue} rank={i + 1} />
                   ))}
@@ -540,13 +588,54 @@ export default function ExecutiveIntelligencePage() {
                 <EfficiencyStrip key={m.label} metric={m} />
               ))}
             </div>
-            
+
             <div className="pt-4 border-t border-border/50">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Departmental Health</h4>
               {exec.deptPerformance.map((d) => <DeptRow key={d.department} dept={d} />)}
             </div>
           </div>
         </div>
+      </div>
+
+      {/* -- Contingency / What-If Risks -- */}
+      <div className="rounded-2xl border border-border/50 bg-card shadow-sm p-5">
+        <div className="flex justify-between items-center mb-4 pb-4 border-b border-border/50">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-500" />
+              Contingency / What-If
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Deterministic stress scenarios based on current ERP supply exposure. These are not live failures.
+            </p>
+          </div>
+
+          <Badge variant="outline" className="font-mono text-xs">
+            {exec.contingencyRisks.length} scenarios
+          </Badge>
+        </div>
+
+        {exec.contingencyRisks.length === 0 ? (
+          <div className="py-8 text-center">
+            <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+            <p className="text-sm font-medium text-foreground">
+              No active contingency scenarios
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              No confirmed inbound supplier exposure currently qualifies for a high-severity stress scenario.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {exec.contingencyRisks.map((risk, i) => (
+              <RiskRow
+                key={risk.id}
+                risk={risk}
+                rank={i + 1}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Sync History UI */}
@@ -583,9 +672,9 @@ export default function ExecutiveIntelligencePage() {
                     <td className="px-4 py-3">
                       <Badge variant="outline" className={cn(
                         "text-[10px]",
-                        log.status === "success" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
-                        log.status === "partial" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" : 
-                        "bg-destructive/10 text-destructive border-destructive/20"
+                        log.status === "success" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                          log.status === "partial" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                            "bg-destructive/10 text-destructive border-destructive/20"
                       )}>
                         {log.status}
                       </Badge>

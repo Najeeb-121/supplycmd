@@ -18,7 +18,7 @@ export interface OpportunityItem {
   id: string;
   title: string;
   estimatedSavings: number | "UNKNOWN";
-  confidence: number;
+  confidence: number | "UNKNOWN";
   department: string;
   type: string;
 }
@@ -66,6 +66,7 @@ export interface ExecState {
   activeIssues: number;
 
   todaysRisks: RiskItem[];
+  contingencyRisks: RiskItem[];
   aiOpportunities: OpportunityItem[];
   top5Issues: RiskItem[];
 
@@ -76,7 +77,6 @@ export interface ExecState {
   efficiencyMetrics: EfficiencyMetric[];
 
   lastUpdatedAt: Date;
-  cycleCount: number;
 }
 
 function deriveRisks(engine: DecisionEngineState): RiskItem[] {
@@ -84,14 +84,20 @@ function deriveRisks(engine: DecisionEngineState): RiskItem[] {
 
   if (engine.deterministicContext?.baselineExposures) {
     for (const exp of engine.deterministicContext.baselineExposures) {
+      if (exp.severity === "UNKNOWN") continue;
+
       risks.push({
-        id: exp.riskId || "UNKNOWN",
-        severity: (exp.severity ? String(exp.severity).toLowerCase() : "medium") as RiskSeverity,
-        title: "Risk Detected: " + (exp.type || exp.exposureType || "Unknown"),
-        detail: "Buffer depletion in " + (exp.productId || "Unknown"),
+        id: [
+          exp.scenarioType,
+          exp.targetProductId ?? "UNKNOWN",
+          exp.targetSupplierId ?? "NONE"
+        ].join(":"),
+        severity: exp.severity.toLowerCase() as RiskSeverity,
+        title: "Risk Detected: " + exp.scenarioType.replace(/_/g, " "),
+        detail: exp.exposureReason,
         module: "Deterministic Engine",
         department: "Supply Chain",
-        financialExposure: exp.financialImpact !== undefined ? exp.financialImpact : "UNKNOWN"
+        financialExposure: "UNKNOWN"
       });
     }
   }
@@ -101,6 +107,39 @@ function deriveRisks(engine: DecisionEngineState): RiskItem[] {
     return order[a.severity] - order[b.severity];
   });
 }
+
+function deriveContingencyRisks(engine: DecisionEngineState): RiskItem[] {
+  const risks: RiskItem[] = [];
+
+  if (engine.deterministicContext?.contingencyExposures) {
+    for (const exp of engine.deterministicContext.contingencyExposures) {
+      if (exp.severity === "UNKNOWN") continue;
+
+      risks.push({
+        id: [
+          "CONTINGENCY",
+          exp.scenarioType,
+          exp.targetProductId ?? "UNKNOWN",
+          exp.targetSupplierId ?? "NONE"
+        ].join(":"),
+        severity: exp.severity.toLowerCase() as RiskSeverity,
+        title:
+          "Contingency / What-If: " +
+          exp.scenarioType.replace(/_/g, " "),
+        detail: exp.exposureReason,
+        module: "Deterministic Contingency",
+        department: "Supply Chain",
+        financialExposure: "UNKNOWN"
+      });
+    }
+  }
+
+  return risks.sort((a, b) => {
+    const order = { critical: 0, high: 1, medium: 2, low: 3 };
+    return order[a.severity] - order[b.severity];
+  });
+}
+
 
 function deriveOpportunities(engine: DecisionEngineState): OpportunityItem[] {
   return engine.recommendations
@@ -139,7 +178,7 @@ function buildWeeklyTrends(orders: any[]): WeeklyTrendPoint[] {
 function buildMonthlyCosts(orders: any[]): MonthlyCostPoint[] {
   const points: MonthlyCostPoint[] = [];
   const now = new Date();
-  
+
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthStr = d.toLocaleDateString("en-US", { month: "short" });
@@ -163,12 +202,12 @@ function buildMonthlyCosts(orders: any[]): MonthlyCostPoint[] {
 
 function buildDeptPerformance(): DeptScore[] {
   return [
-    { department: "Procurement",  score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "Lead Time / Supplier", trend: "UNKNOWN" },
-    { department: "Warehouse",    score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "Accuracy / Fill Rate", trend: "UNKNOWN" },
-    { department: "Production",   score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "Utilisation", trend: "UNKNOWN" },
+    { department: "Procurement", score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "Lead Time / Supplier", trend: "UNKNOWN" },
+    { department: "Warehouse", score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "Accuracy / Fill Rate", trend: "UNKNOWN" },
+    { department: "Production", score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "Utilisation", trend: "UNKNOWN" },
     { department: "Supply Chain", score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "Turnover / OTIF", trend: "UNKNOWN" },
-    { department: "Logistics",    score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "OTIF / Delays", trend: "UNKNOWN" },
-    { department: "Finance",      score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "Working Capital", trend: "UNKNOWN" },
+    { department: "Logistics", score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "OTIF / Delays", trend: "UNKNOWN" },
+    { department: "Finance", score: "UNKNOWN", prevScore: "UNKNOWN", issueCount: 0, kpiLabel: "Working Capital", trend: "UNKNOWN" },
   ];
 }
 
@@ -185,21 +224,32 @@ export function computeExecState(
   _erp: ErpConnectionState,
   ops: OpsIntelState,
   engine: DecisionEngineState,
-  cycle: number,
   orders: any[] = []
 ): ExecState {
-  const risks       = deriveRisks(engine);
-  const opps        = deriveOpportunities(engine);
-  const weekly      = buildWeeklyTrends(orders);
-  const monthly     = buildMonthlyCosts(orders);
-  const depts       = buildDeptPerformance();
-  const efficiency  = buildEfficiencyMetrics();
+  const risks = deriveRisks(engine);
+  const contingencyRisks = deriveContingencyRisks(engine);
+  const opps = deriveOpportunities(engine);
+  const weekly = buildWeeklyTrends(orders);
+  const monthly = buildMonthlyCosts(orders);
+  const depts = buildDeptPerformance();
+  const efficiency = buildEfficiencyMetrics();
 
   const riskScore = "UNKNOWN";
 
   const opportunityValue = engine.totalEstimatedSavings;
 
-  const spendYTD = monthly.reduce((s, m) => s + m.spend, 0);
+  const currentYear = new Date().getFullYear();
+
+  const spendYTD = orders.reduce((sum, order) => {
+    if (!order.orderDate) return sum;
+
+    const orderDate = new Date(order.orderDate);
+    if (Number.isNaN(orderDate.getTime())) return sum;
+
+    if (orderDate.getFullYear() !== currentYear) return sum;
+
+    return sum + (order.totalValue || 0);
+  }, 0);
 
   return {
     riskScore,
@@ -208,6 +258,7 @@ export function computeExecState(
     activeIssues: risks.length,
 
     todaysRisks: risks,
+    contingencyRisks,
     aiOpportunities: opps,
     top5Issues: risks.slice(0, 5),
 
@@ -223,6 +274,6 @@ export function computeExecState(
     },
 
     lastUpdatedAt: new Date(),
-    cycleCount: cycle,
+
   };
 }

@@ -11,7 +11,9 @@ import { PortfolioCompositionResult } from "./portfolio-contracts";
 export interface DeterministicAIContext {
   baselineRiskDetected: boolean;
   baselineExposures: RiskExposure[];
+  contingencyExposures: RiskExposure[];
   candidateMitigations: RiskMitigation[];
+  contingencyMitigations: RiskMitigation[];
   portfolioResult: PortfolioCompositionResult | null;
   provenance: {
     mitigationGeneration: "DETERMINISTIC";
