@@ -40,6 +40,7 @@ vi.mock("@workspace/db", () => ({
 }));
 
 import app from "../app.js";
+import { isCommittedRelationshipPO } from "../routes/inventory.js";
 
 // ── Minimal valid inventory body ──────────────────────────────────────────────
 const validBody = {
@@ -207,5 +208,14 @@ describe("GET /api/inventory/reorder-alerts", () => {
     expect(res.body[0]).not.toHaveProperty("safetyStock");
     expect(res.body[0]).not.toHaveProperty("eoq");
     expect(res.body[0]).not.toHaveProperty("urgency");
+  });
+
+  describe("inventory relationship committed inbound rule", () => {
+    it("counts only confirmed purchase orders with remaining quantity", () => {
+      expect(isCommittedRelationshipPO("confirmed", 1000)).toBe(true);
+      expect(isCommittedRelationshipPO("pending", 5603)).toBe(false);
+      expect(isCommittedRelationshipPO("cancelled", 900)).toBe(false);
+      expect(isCommittedRelationshipPO("confirmed", 0)).toBe(false);
+    });
   });
 });

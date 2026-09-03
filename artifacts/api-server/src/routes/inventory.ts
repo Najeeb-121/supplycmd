@@ -16,6 +16,13 @@ import { validateBody } from "../lib/validate.js";
 class NotFoundError extends Error { }
 class InsufficientStockError extends Error { }
 
+export function isCommittedRelationshipPO(
+  status: string,
+  remainingQuantity: number | null | undefined,
+): boolean {
+  return status === "confirmed" && Number(remainingQuantity ?? 0) > 0;
+}
+
 // ── Stricter inventory schema with cross-field rules ───────────────────────────
 export const StrictInventoryBody = CreateInventoryItemBody
   .extend({
@@ -191,8 +198,8 @@ router.get("/inventory/relationships", async (req: Request, res: Response): Prom
   for (const po of poLines) {
     if (po.supplierId === null || po.productId === null) continue;
 
-    // Only count POs that are active (pending) and have remaining quantity
-    const isActivePo = po.status === 'pending' && (po.remainingQuantity || 0) > 0;
+    // Only count committed inbound POs with remaining quantity
+    const isActivePo = isCommittedRelationshipPO(po.status, po.remainingQuantity);
     if (!isActivePo) continue;
 
     const key = `${po.supplierId}-${po.productId}`;
