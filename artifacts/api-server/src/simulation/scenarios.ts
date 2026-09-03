@@ -20,7 +20,11 @@ export function buildScenarioModifiers(scenario: ScenarioDef, snapshot: ERPSnaps
   switch (scenario.type) {
     // Group A
     case "SUPPLIER_DELAY": {
-      if (params.delayDays == null || params.delayDays <= 0) {
+      if (
+        params.delayDays == null ||
+        params.delayDays <= 0 ||
+        !Number.isInteger(params.delayDays)
+      ) {
         throw new Error("INVALID_SCENARIO_PARAMETER:delayDays");
       }
 

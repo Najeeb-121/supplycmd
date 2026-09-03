@@ -304,4 +304,33 @@ describe("Simulation Engine Core", () => {
     expect(() => buildScenarioModifiers(wholeDayScenario, snap)).not.toThrow();
   });
 
+  it("rejects fractional supplier delay days", () => {
+    const snap = buildBaseSnapshot();
+
+    const fractionalScenario: ScenarioDef = {
+      id: "test-fractional-supplier-delay",
+      type: "SUPPLIER_DELAY",
+      title: "Test",
+      description: "Test",
+      parameters: {
+        supplierId: 1,
+        delayDays: 1.5,
+      },
+    };
+
+    expect(() => buildScenarioModifiers(fractionalScenario, snap))
+      .toThrow("INVALID_SCENARIO_PARAMETER:delayDays");
+
+    const wholeDayScenario: ScenarioDef = {
+      ...fractionalScenario,
+      id: "test-whole-day-supplier-delay",
+      parameters: {
+        supplierId: 1,
+        delayDays: 1,
+      },
+    };
+
+    expect(() => buildScenarioModifiers(wholeDayScenario, snap)).not.toThrow();
+  });
+
 });
