@@ -5,6 +5,7 @@ import {
   ScenarioModifiers,
   isCommittedInboundPO,
   snapshotUsesProductionLine,
+  getMOEffectiveCompletionDate,
 } from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
 import { ScenarioDef } from "@workspace/db";
@@ -331,6 +332,31 @@ describe("Simulation Engine Core", () => {
     };
 
     expect(() => buildScenarioModifiers(wholeDayScenario, snap)).not.toThrow();
+  });
+
+  it("uses scheduled MO completion timing as a deterministic simulation anchor", () => {
+    const snap = buildBaseSnapshot();
+
+    snap.inboundPOs = [];
+    snap.salesOrders = [];
+    snap.dependentDemands = [];
+    snap.scheduledMOs = [
+      {
+        id: 201,
+        scheduledDate: "2026-09-10",
+        dateDeadline: "2026-09-12",
+        qty: 500,
+        lineIds: [7],
+        status: "confirmed",
+        moState: "confirmed",
+      },
+    ];
+
+    const startCandidates = snap.scheduledMOs
+      .map(getMOEffectiveCompletionDate)
+      .filter((date): date is string => Boolean(date));
+
+    expect(startCandidates).toEqual(["2026-09-12"]);
   });
 
 });

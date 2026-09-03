@@ -25,6 +25,7 @@ import {
   extractLoopMetrics,
   isCommittedInboundPO,
   snapshotUsesProductionLine,
+  getMOEffectiveCompletionDate,
   type ERPSnapshot,
 } from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
@@ -847,6 +848,9 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       ...(snapshot.dependentDemands ?? [])
         .map(dd => dd.requiredDate)
         .filter((date): date is string => date !== null),
+      ...snapshot.scheduledMOs
+        .map(getMOEffectiveCompletionDate)
+        .filter((date): date is string => Boolean(date)),
     ].sort();
 
     if (startCandidates.length === 0) {

@@ -88,6 +88,14 @@ export function snapshotUsesProductionLine(
   );
 }
 
+export function getMOEffectiveCompletionDate(
+  mo: ERPSnapshot["scheduledMOs"][number],
+): string | null {
+  return mo.dateDeadline !== undefined
+    ? mo.dateDeadline
+    : mo.scheduledDate;
+}
+
 export function runDailyLoop(
   snapshot: ERPSnapshot,
   horizonDays: number,
@@ -139,7 +147,7 @@ export function runDailyLoop(
     for (const mo of snapshot.scheduledMOs) {
       // Step 5: Finished manufactured output becomes available on dateDeadline if present.
       // If dateDeadline is explicitly null, preserve explicit missing-data behavior (do not invent completion).
-      const completionDate = mo.dateDeadline !== undefined ? mo.dateDeadline : mo.scheduledDate;
+      const completionDate = getMOEffectiveCompletionDate(mo);
       if (completionDate && completionDate.startsWith(dateStr)) {
         let produces = true;
 
