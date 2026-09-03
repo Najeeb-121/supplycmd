@@ -9,6 +9,7 @@ export const productionRunsTable = pgTable("production_runs", {
     .notNull()
     .references(() => companiesTable.id, { onDelete: "cascade" }),
   odooId: integer("odoo_id"),
+  productOdooId: integer("product_odoo_id"),
   productName: text("product_name").notNull(),
   plannedUnits: real("planned_units").notNull(),
   actualUnits: real("actual_units").notNull(),

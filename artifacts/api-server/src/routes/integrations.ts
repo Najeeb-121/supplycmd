@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { desc, eq, and, isNotNull, notInArray, sql } from "drizzle-orm";
-import { db, suppliersTable, inventoryItemsTable, odooSyncLogTable, odooConnectionsTable, ordersTable, stockMovementsTable, productionRunsTable, demandRecordsTable, salesOrdersTable, salesOrderLinesTable, bomsTable, bomLinesTable, purchaseOrderLinesTable, productSuppliersTable } from "@workspace/db";
+import { db, suppliersTable, inventoryItemsTable, odooSyncLogTable, odooConnectionsTable, ordersTable, stockMovementsTable, productionRunsTable, productionWorkOrdersTable, demandRecordsTable, salesOrdersTable, salesOrderLinesTable, bomsTable, bomLinesTable, purchaseOrderLinesTable, productSuppliersTable } from "@workspace/db";
 import { OdooClient, encryptSecret, decryptSecret, type OdooConfig } from "@workspace/integrations-odoo-server";
 import { StrictSupplierBody } from "./suppliers";
 import { StrictInventoryBody } from "./inventory";
@@ -1747,8 +1747,11 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
       Record<string, unknown>[]
     >();
 
+    const fetchedWorkOrderIds = new Set<number>();
+    let workOrderDataComplete = mfgOrderIds.length === 0;
     if (mfgOrderIds.length > 0) {
       try {
+        let hasInvalidWorkOrder = false;
         const workOrders =
           await client.searchRead<Record<string, unknown>>(
             "mrp.workorder",
@@ -1756,6 +1759,7 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
             [
               "id",
               "production_id",
+              "workcenter_id",
               "duration_expected",
               "duration",
               "state",
@@ -1768,13 +1772,26 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
             workOrder.production_id,
           );
 
-          if (workOrderId === null || productionId === null) {
+          const workcenterId = many2oneId(
+            workOrder.workcenter_id,
+
+          );
+
+          if (
+            workOrderId === null ||
+            productionId === null ||
+            workcenterId === null
+          ) {
+
+            hasInvalidWorkOrder = true;
             failed++;
             errors.push(
-              "Work order has an invalid Odoo ID or manufacturing order.",
+              "Work order has an invalid Odoo ID, manufacturing order, or work center.",
             );
             continue;
           }
+
+          fetchedWorkOrderIds.add(workOrderId);
 
           const groupedWorkOrders =
             workOrdersByProductionId.get(productionId) ?? [];
@@ -1785,6 +1802,8 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
             groupedWorkOrders,
           );
         }
+
+        workOrderDataComplete = !hasInvalidWorkOrder;
       } catch (err) {
         failed++;
         errors.push(
@@ -1865,9 +1884,10 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
       }
 
       try {
-        await db.insert(productionRunsTable).values({
+        const [productionRun] = await db.insert(productionRunsTable).values({
           companyId,
           odooId,
+          productOdooId: odooProductId,
           productName,
           runDate,
           plannedUnits,
@@ -1882,6 +1902,7 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
         }).onConflictDoUpdate({
           target: [productionRunsTable.companyId, productionRunsTable.odooId],
           set: {
+            productOdooId: odooProductId,
             productName,
             plannedUnits,
             actualUnits,
@@ -1894,7 +1915,70 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
             dateDeadline,
             moState,
           }
+        }).returning({
+          id: productionRunsTable.id,
         });
+
+        if (!productionRun) {
+          throw new Error(`MO #${odooId}: Failed to resolve local production run.`);
+        }
+
+        const productionWorkOrders =
+          workOrdersByProductionId.get(odooId) ?? [];
+
+        for (const workOrder of productionWorkOrders) {
+          const workOrderId = parsePositiveOdooId(workOrder.id);
+          const workcenterId = many2oneId(
+            workOrder.workcenter_id,
+          );
+
+          if (workOrderId === null || workcenterId === null) {
+            throw new Error(
+              `MO #${odooId}: Invalid work order or work center.`,
+            );
+          }
+
+          const state =
+            typeof workOrder.state === "string" &&
+              workOrder.state.trim()
+              ? workOrder.state
+              : null;
+
+          const plannedTimeMin =
+            parsePositiveOdooNumber(
+              workOrder.duration_expected,
+            );
+
+          const actualTimeMin =
+            workOrder.state === "done"
+              ? parseNonNegativeOdooNumber(
+                workOrder.duration,
+              )
+              : null;
+
+          await db.insert(productionWorkOrdersTable).values({
+            companyId,
+            productionRunId: productionRun.id,
+            odooWorkOrderId: workOrderId,
+            workcenterId,
+            state,
+            plannedTimeMin,
+            actualTimeMin,
+          }).onConflictDoUpdate({
+            target: [
+              productionWorkOrdersTable.companyId,
+              productionWorkOrdersTable.odooWorkOrderId,
+            ],
+            set: {
+              productionRunId: productionRun.id,
+              workcenterId,
+              state,
+              plannedTimeMin,
+              actualTimeMin,
+            },
+          });
+        }
+
         synced++;
       } catch (err) { failed++; errors.push(`MO #${odooId}: ${(err as Error).message}`); }
     }
@@ -1950,6 +2034,69 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
         `Suspicious empty result. Local record count (${localRecordCount}) > 5. Skipping auto-delete.`,
       );
     }
+    const fetchedWorkOrderIdList =
+      Array.from(fetchedWorkOrderIds);
+
+    let localWorkOrderCount = 0;
+
+    if (
+      fetchedWorkOrderIdList.length === 0 &&
+      workOrderDataComplete
+    ) {
+      const localWorkOrders = await db
+        .select({ id: productionWorkOrdersTable.id })
+        .from(productionWorkOrdersTable)
+        .where(
+          eq(
+            productionWorkOrdersTable.companyId,
+            companyId,
+          ),
+        );
+
+      localWorkOrderCount = localWorkOrders.length;
+    }
+
+    const workOrderCleanupDecision =
+      getOdooCleanupDecision(
+        fetchedWorkOrderIdList.length,
+        workOrderDataComplete ? 0 : 1,
+        localWorkOrderCount,
+      );
+
+    if (workOrderCleanupDecision === "delete_missing") {
+      await db
+        .delete(productionWorkOrdersTable)
+        .where(
+          and(
+            eq(
+              productionWorkOrdersTable.companyId,
+              companyId,
+            ),
+            notInArray(
+              productionWorkOrdersTable.odooWorkOrderId,
+              fetchedWorkOrderIdList,
+            ),
+          ),
+        );
+    } else if (workOrderCleanupDecision === "delete_all") {
+      await db
+        .delete(productionWorkOrdersTable)
+        .where(
+          eq(
+            productionWorkOrdersTable.companyId,
+            companyId,
+          ),
+        );
+    } else if (
+      workOrderCleanupDecision ===
+      "preserve_suspicious_empty"
+    ) {
+      syncStatus = "suspicious_empty_result";
+      errors.push(
+        `Suspicious empty work-order result. Local record count (${localWorkOrderCount}) > 5. Skipping work-order auto-delete.`,
+      );
+    }
+
     await db.insert(odooSyncLogTable).values({ companyId, entity: "production", status: syncStatus, recordsSynced: synced, recordsFailed: failed, message: generateSyncMessage(synced, failed, errors) });
     res.json({ synced, failed, errors });
   } catch (err) {

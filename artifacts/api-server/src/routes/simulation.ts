@@ -14,6 +14,7 @@ import {
   bomsTable,
   bomLinesTable,
   productionRunsTable,
+  productionWorkOrdersTable,
   type SimulationResult,
   type ScenarioDef,
 } from "@workspace/db";
@@ -515,6 +516,7 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
     const [product] = await db
       .select({
         id: inventoryItemsTable.id,
+        odooId: inventoryItemsTable.odooId,
         name: inventoryItemsTable.name,
         currentStock: inventoryItemsTable.currentStock,
         sellingPrice: inventoryItemsTable.sellingPrice,
@@ -650,6 +652,52 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       run => run.moState === "confirmed" && run.bomId != null
     );
 
+    const productionWorkOrders = await db
+      .select()
+      .from(productionWorkOrdersTable)
+      .where(eq(productionWorkOrdersTable.companyId, companyId));
+
+    const workcenterIdsByProductionRunId = new Map<number, number[]>();
+
+    for (const workOrder of productionWorkOrders) {
+      const existing =
+        workcenterIdsByProductionRunId.get(workOrder.productionRunId) ?? [];
+
+      if (!existing.includes(workOrder.workcenterId)) {
+        existing.push(workOrder.workcenterId);
+      }
+
+      workcenterIdsByProductionRunId.set(
+        workOrder.productionRunId,
+        existing,
+      );
+    }
+
+    const scheduledMOs: ERPSnapshot["scheduledMOs"] =
+      confirmedProductionRuns
+        .filter(
+          run =>
+            product.odooId != null &&
+            run.productOdooId === product.odooId,
+        )
+        .map(run => ({
+          id: run.id,
+          scheduledDate: run.runDate ?? run.dateDeadline ?? "",
+          qty: run.plannedUnits,
+          lineIds:
+            workcenterIdsByProductionRunId.get(run.id) ?? [],
+          status: run.moState,
+          dateDeadline: run.dateDeadline,
+          bomId: run.bomId,
+          moState: run.moState,
+          productOdooId: run.productOdooId,
+        }))
+        .filter(
+          mo =>
+            Boolean(mo.scheduledDate) &&
+            mo.lineIds.length > 0,
+        );
+
     const confirmedBomOdooIds = new Set(
       confirmedProductionRuns.map(run => run.bomId as number)
     );
@@ -720,7 +768,7 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       dailyDemandRate: 0,
       safetyStock: product.safetyStock,
       inboundPOs,
-      scheduledMOs: [],
+      scheduledMOs,
       salesOrders,
       dependentDemands,
     };

@@ -133,7 +133,7 @@ export function buildScenarioModifiers(scenario: ScenarioDef, snapshot: ERPSnaps
       mods.moLineDowntime = {
         lineId: params.lineId,
         startDay: 0,
-        endDay: params.downtimeDays,
+        endDay: params.downtimeDays - 1,
       };
 
       break;

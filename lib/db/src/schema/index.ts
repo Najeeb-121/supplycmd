@@ -11,3 +11,4 @@ export * from "./odooSyncLog";
 export * from "./odooConnections";
 export * from "./sales";
 export * from "./bom";
+export * from "./productionWorkOrders";

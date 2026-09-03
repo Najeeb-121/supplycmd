@@ -68,7 +68,7 @@ describe("Simulation Engine Core", () => {
       parameters: { supplierId: 1, shockPct: 20 }
     };
     const mods = buildScenarioModifiers(scenario, snap);
-    
+
     // Inventory shouldn't change
     const traceWithShock = runDailyLoop(snap, 15, mods);
     const traceWithoutShock = runDailyLoop(snap, 15, {});
@@ -94,4 +94,41 @@ describe("Simulation Engine Core", () => {
     expect(fins.revenueAtRisk.value).toBeNull();
     expect(fins.revenueAtRisk.status).toBe("MISSING");
   });
+
+  it("PRODUCTION_LINE_FAILURE blocks one MO once when it uses multiple workcenters", () => {
+    const snap = buildBaseSnapshot();
+
+    snap.dailyDemandRate = 0;
+    snap.scheduledMOs = [
+      {
+        id: 201,
+        scheduledDate: "2026-09-03",
+        dateDeadline: "2026-09-03",
+        qty: 500,
+        lineIds: [7, 8],
+        status: "confirmed",
+        moState: "confirmed",
+      },
+    ];
+
+    const baseline = runDailyLoop(snap, 1, {});
+    expect(baseline[0].moOutput).toBe(500);
+
+    const scenario: ScenarioDef = {
+      id: "test",
+      type: "PRODUCTION_LINE_FAILURE",
+      title: "Test",
+      description: "Test",
+      parameters: {
+        lineId: 8,
+        downtimeDays: 1,
+      },
+    };
+
+    const mods = buildScenarioModifiers(scenario, snap);
+    const failedLine = runDailyLoop(snap, 1, mods);
+
+    expect(failedLine[0].moOutput).toBe(0);
+  });
+
 });

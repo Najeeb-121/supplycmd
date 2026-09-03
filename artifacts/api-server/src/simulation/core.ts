@@ -11,6 +11,7 @@ export interface ERPSnapshot {
     scheduledDate: string;
     qty: number;
     lineId?: number;
+    lineIds?: number[];
     status: string;
     dateDeadline?: string | null;
     bomId?: number | null;
@@ -131,7 +132,11 @@ export function runDailyLoop(
         let produces = true;
 
         // Line failure
-        if (modifiers.moLineDowntime && mo.lineId === modifiers.moLineDowntime.lineId) {
+        const usesFailedLine =
+          mo.lineId === modifiers.moLineDowntime?.lineId ||
+          mo.lineIds?.includes(modifiers.moLineDowntime?.lineId ?? -1);
+
+        if (modifiers.moLineDowntime && usesFailedLine) {
           if (day >= modifiers.moLineDowntime.startDay && day <= modifiers.moLineDowntime.endDay) {
             produces = false;
           }
