@@ -975,8 +975,16 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       narration: "Deterministic simulation completed from current local ERP facts.",
     });
   } catch (error: any) {
+    const message =
+      error instanceof Error ? error.message : String(error);
+
+    if (message.startsWith("INVALID_SCENARIO_PARAMETER:")) {
+      res.status(422).json({ error: message });
+      return;
+    }
+
     logger.error({ error }, "Error running deterministic simulation");
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: message });
   }
 });
 

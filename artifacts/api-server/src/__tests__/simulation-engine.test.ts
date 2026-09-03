@@ -161,4 +161,33 @@ describe("Simulation Engine Core", () => {
     expect(snapshotUsesProductionLine(snap, 999)).toBe(false);
   });
 
+  it("rejects zero-day production line failures", () => {
+    const snap = buildBaseSnapshot();
+
+    const zeroDayScenario: ScenarioDef = {
+      id: "test-zero-day",
+      type: "PRODUCTION_LINE_FAILURE",
+      title: "Test",
+      description: "Test",
+      parameters: {
+        lineId: 8,
+        downtimeDays: 0,
+      },
+    };
+
+    expect(() => buildScenarioModifiers(zeroDayScenario, snap))
+      .toThrow("INVALID_SCENARIO_PARAMETER:downtimeDays");
+
+    const oneDayScenario: ScenarioDef = {
+      ...zeroDayScenario,
+      id: "test-one-day",
+      parameters: {
+        lineId: 8,
+        downtimeDays: 1,
+      },
+    };
+
+    expect(() => buildScenarioModifiers(oneDayScenario, snap)).not.toThrow();
+  });
+
 });
