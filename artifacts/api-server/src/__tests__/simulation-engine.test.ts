@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { runDailyLoop, ERPSnapshot, ScenarioModifiers } from "../simulation/core";
+import {
+  runDailyLoop,
+  ERPSnapshot,
+  ScenarioModifiers,
+  isCommittedInboundPO,
+} from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
 import { ScenarioDef } from "@workspace/db";
 
@@ -129,6 +134,12 @@ describe("Simulation Engine Core", () => {
     const failedLine = runDailyLoop(snap, 1, mods);
 
     expect(failedLine[0].moOutput).toBe(0);
+  });
+
+  it("only confirmed local purchase orders count as committed inbound supply", () => {
+    expect(isCommittedInboundPO("confirmed")).toBe(true);
+    expect(isCommittedInboundPO("pending")).toBe(false);
+    expect(isCommittedInboundPO("cancelled")).toBe(false);
   });
 
 });

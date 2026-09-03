@@ -20,7 +20,12 @@ import {
 } from "@workspace/db";
 import { OdooClient, decryptSecret } from "@workspace/integrations-odoo-server";
 import { logger } from "../lib/logger";
-import { runDailyLoop, extractLoopMetrics, type ERPSnapshot } from "../simulation/core";
+import {
+  runDailyLoop,
+  extractLoopMetrics,
+  isCommittedInboundPO,
+  type ERPSnapshot,
+} from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
 
 const router: IRouter = Router();
@@ -547,8 +552,7 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       .filter(po =>
         po.expectedDate &&
         po.remainingQuantity > 0 &&
-        po.status !== "done" &&
-        po.status !== "cancelled"
+        isCommittedInboundPO(po.status)
       )
       .map(po => ({
         id: po.id,

@@ -75,6 +75,9 @@ export interface ScenarioModifiers {
 
   seasonality?: Record<number, number>; // Month -> multiplier
 }
+export function isCommittedInboundPO(status: string): boolean {
+  return status === "confirmed";
+}
 
 export function runDailyLoop(
   snapshot: ERPSnapshot,
