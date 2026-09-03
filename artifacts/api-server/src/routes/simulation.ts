@@ -541,6 +541,33 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       return;
     }
 
+    const supplierScenarioTypes = new Set([
+      "SUPPLIER_DELAY",
+      "SUPPLIER_QUALITY_FAILURE",
+      "SINGLE_SOURCE_FAILURE",
+      "SUPPLIER_PRICE_SHOCK",
+    ]);
+
+    if (supplierScenarioTypes.has(scenario.type) && supplierId != null) {
+      const [productSupplier] = await db
+        .select({ id: productSuppliersTable.id })
+        .from(productSuppliersTable)
+        .where(and(
+          eq(productSuppliersTable.companyId, companyId),
+          eq(productSuppliersTable.inventoryItemId, productId),
+          eq(productSuppliersTable.supplierId, supplierId)
+        ));
+
+      if (!productSupplier) {
+        res.status(422).json({
+          error: "INVALID_SUPPLIER_FOR_PRODUCT",
+          message:
+            "The requested supplier is not linked to this product for the current company.",
+        });
+        return;
+      }
+    }
+
     const poLines = await db
       .select()
       .from(purchaseOrderLinesTable)
