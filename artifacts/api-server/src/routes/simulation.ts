@@ -590,6 +590,19 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
         status: po.status,
       }));
 
+    if (
+      supplierScenarioTypes.has(scenario.type) &&
+      supplierId != null &&
+      !inboundPOs.some(po => po.supplierId === supplierId)
+    ) {
+      res.status(422).json({
+        error: "INSUFFICIENT_COMMITTED_INBOUND",
+        message:
+          "No committed inbound purchase order is available from the requested supplier for this product.",
+      });
+      return;
+    }
+
     const salesRows = await db
       .select({
         line: salesOrderLinesTable,
