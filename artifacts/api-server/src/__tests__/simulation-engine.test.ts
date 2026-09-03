@@ -88,6 +88,31 @@ describe("Simulation Engine Core", () => {
     expect(fins.incrementalCost?.value).toBe(1000);
   });
 
+  it("does not report zero procurement impact when price-shock cost data is missing", () => {
+    const snap = buildBaseSnapshot();
+
+    const scenario: ScenarioDef = {
+      id: "test",
+      type: "SUPPLIER_PRICE_SHOCK",
+      title: "Test",
+      description: "Test",
+      parameters: { supplierId: 1, shockPct: 20 },
+    };
+
+    const mods = buildScenarioModifiers(scenario, snap);
+
+    const productInfo: any = {
+      unitSellingPrice: { value: 100, status: "VERIFIED" },
+      unitCost: { value: null, status: "MISSING" },
+    };
+
+    const fins = calculateFinancials(0, snap, productInfo, mods);
+
+    expect(fins.incrementalCost?.value).toBeNull();
+    expect(fins.incrementalCost?.status).toBe("MISSING");
+    expect(fins.incrementalCost?.confidence).toBe("LOW");
+  });
+
   it("TEST 5 & 6: Missing demand and pricing", () => {
     const snap = buildBaseSnapshot();
     snap.dailyDemandRate = 0; // Missing demand

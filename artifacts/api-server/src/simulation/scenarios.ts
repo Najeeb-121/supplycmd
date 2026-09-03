@@ -165,12 +165,25 @@ export function calculateFinancials(
     ? (incrementalUnmetDemand * (unitSellingPrice - unitCost))
     : null;
 
-  let incrementalProcCost = 0;
-  if (modifiers?.priceShockMultiplier && modifiers?.priceShockSupplierId && unitCost !== null) {
-    const affectedQty = snapshot.inboundPOs
-      .filter(po => po.supplierId === modifiers.priceShockSupplierId)
-      .reduce((sum, po) => sum + po.qty, 0);
-    incrementalProcCost = affectedQty * (unitCost * modifiers.priceShockMultiplier - unitCost);
+  const hasPriceShock =
+    modifiers?.priceShockMultiplier !== undefined &&
+    modifiers?.priceShockSupplierId !== undefined;
+
+  let incrementalProcCost: number | null = 0;
+
+  if (hasPriceShock) {
+    if (unitCost === null || costStatus !== "VERIFIED") {
+      incrementalProcCost = null;
+    } else {
+      const affectedQty = snapshot.inboundPOs
+        .filter(po => po.supplierId === modifiers.priceShockSupplierId)
+        .reduce((sum, po) => sum + po.qty, 0);
+
+      const priceShockMultiplier = modifiers!.priceShockMultiplier!;
+
+      incrementalProcCost =
+        affectedQty * (unitCost * priceShockMultiplier - unitCost);
+    }
   }
 
   return {
@@ -188,9 +201,9 @@ export function calculateFinancials(
     },
     incrementalCost: {
       value: incrementalProcCost,
-      status: incrementalProcCost > 0 ? "VERIFIED" : "DERIVED",
+      status: incrementalProcCost === null ? "MISSING" : incrementalProcCost > 0 ? "VERIFIED" : "DERIVED",
       source: "Simulation",
-      confidence: "HIGH"
+      confidence: incrementalProcCost === null ? "LOW" : "HIGH"
     },
     inventoryCarryingCost: {
       value: null,
