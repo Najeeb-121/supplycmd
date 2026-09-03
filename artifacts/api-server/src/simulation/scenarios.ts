@@ -126,7 +126,11 @@ export function buildScenarioModifiers(scenario: ScenarioDef, snapshot: ERPSnaps
         throw new Error("INVALID_SCENARIO_PARAMETER:lineId");
       }
 
-      if (params.downtimeDays == null || params.downtimeDays < 1) {
+      if (
+        params.downtimeDays == null ||
+        params.downtimeDays < 1 ||
+        !Number.isInteger(params.downtimeDays)
+      ) {
         throw new Error("INVALID_SCENARIO_PARAMETER:downtimeDays");
       }
 

@@ -250,4 +250,33 @@ describe("Simulation Engine Core", () => {
     }
   });
 
+  it("rejects fractional production downtime days", () => {
+    const snap = buildBaseSnapshot();
+
+    const fractionalScenario: ScenarioDef = {
+      id: "test-fractional-downtime",
+      type: "PRODUCTION_LINE_FAILURE",
+      title: "Test",
+      description: "Test",
+      parameters: {
+        lineId: 8,
+        downtimeDays: 1.5,
+      },
+    };
+
+    expect(() => buildScenarioModifiers(fractionalScenario, snap))
+      .toThrow("INVALID_SCENARIO_PARAMETER:downtimeDays");
+
+    const wholeDayScenario: ScenarioDef = {
+      ...fractionalScenario,
+      id: "test-whole-day-downtime",
+      parameters: {
+        lineId: 8,
+        downtimeDays: 1,
+      },
+    };
+
+    expect(() => buildScenarioModifiers(wholeDayScenario, snap)).not.toThrow();
+  });
+
 });
