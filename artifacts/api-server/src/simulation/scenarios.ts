@@ -20,7 +20,7 @@ export function buildScenarioModifiers(scenario: ScenarioDef, snapshot: ERPSnaps
   switch (scenario.type) {
     // Group A
     case "SUPPLIER_DELAY": {
-      if (params.delayDays == null || params.delayDays < 0) {
+      if (params.delayDays == null || params.delayDays <= 0) {
         throw new Error("INVALID_SCENARIO_PARAMETER:delayDays");
       }
 
@@ -45,7 +45,7 @@ export function buildScenarioModifiers(scenario: ScenarioDef, snapshot: ERPSnaps
     case "SUPPLIER_QUALITY_FAILURE":
       if (
         params.failurePct == null ||
-        params.failurePct < 0 ||
+        params.failurePct <= 0 ||
         params.failurePct > 100
       ) {
         throw new Error("INVALID_SCENARIO_PARAMETER:failurePct");
@@ -66,7 +66,7 @@ export function buildScenarioModifiers(scenario: ScenarioDef, snapshot: ERPSnaps
       mods.poRemoveSupplier = params.supplierId;
       break;
     case "SUPPLIER_PRICE_SHOCK": {
-      if (params.shockPct == null || params.shockPct < 0) {
+      if (params.shockPct == null || params.shockPct <= 0) {
         throw new Error("INVALID_SCENARIO_PARAMETER:shockPct");
       }
 
@@ -80,7 +80,7 @@ export function buildScenarioModifiers(scenario: ScenarioDef, snapshot: ERPSnaps
       break;
     }
     case "DEMAND_SURGE":
-      if (params.surgePct == null || params.surgePct < 0) {
+      if (params.surgePct == null || params.surgePct <= 0) {
         throw new Error("INVALID_SCENARIO_PARAMETER:surgePct");
       }
 
@@ -94,7 +94,7 @@ export function buildScenarioModifiers(scenario: ScenarioDef, snapshot: ERPSnaps
     case "DEMAND_COLLAPSE":
       if (
         params.collapsePct == null ||
-        params.collapsePct < 0 ||
+        params.collapsePct <= 0 ||
         params.collapsePct > 100
       ) {
         throw new Error("INVALID_SCENARIO_PARAMETER:collapsePct");

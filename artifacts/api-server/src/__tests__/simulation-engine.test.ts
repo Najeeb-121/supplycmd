@@ -190,4 +190,64 @@ describe("Simulation Engine Core", () => {
     expect(() => buildScenarioModifiers(oneDayScenario, snap)).not.toThrow();
   });
 
+  it("rejects zero-impact scenario parameters", () => {
+    const snap = buildBaseSnapshot();
+
+    const zeroImpactScenarios: ScenarioDef[] = [
+      {
+        id: "zero-delay",
+        type: "SUPPLIER_DELAY",
+        title: "Test",
+        description: "Test",
+        parameters: {
+          supplierId: 1,
+          delayDays: 0,
+        },
+      },
+      {
+        id: "zero-quality-failure",
+        type: "SUPPLIER_QUALITY_FAILURE",
+        title: "Test",
+        description: "Test",
+        parameters: {
+          supplierId: 1,
+          failurePct: 0,
+        },
+      },
+      {
+        id: "zero-price-shock",
+        type: "SUPPLIER_PRICE_SHOCK",
+        title: "Test",
+        description: "Test",
+        parameters: {
+          supplierId: 1,
+          shockPct: 0,
+        },
+      },
+      {
+        id: "zero-demand-surge",
+        type: "DEMAND_SURGE",
+        title: "Test",
+        description: "Test",
+        parameters: {
+          surgePct: 0,
+        },
+      },
+      {
+        id: "zero-demand-collapse",
+        type: "DEMAND_COLLAPSE",
+        title: "Test",
+        description: "Test",
+        parameters: {
+          collapsePct: 0,
+        },
+      },
+    ];
+
+    for (const scenario of zeroImpactScenarios) {
+      expect(() => buildScenarioModifiers(scenario, snap))
+        .toThrow("INVALID_SCENARIO_PARAMETER:");
+    }
+  });
+
 });
