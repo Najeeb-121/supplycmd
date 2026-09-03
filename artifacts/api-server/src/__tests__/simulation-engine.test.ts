@@ -4,6 +4,7 @@ import {
   ERPSnapshot,
   ScenarioModifiers,
   isCommittedInboundPO,
+  snapshotUsesProductionLine,
 } from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
 import { ScenarioDef } from "@workspace/db";
@@ -140,6 +141,24 @@ describe("Simulation Engine Core", () => {
     expect(isCommittedInboundPO("confirmed")).toBe(true);
     expect(isCommittedInboundPO("pending")).toBe(false);
     expect(isCommittedInboundPO("cancelled")).toBe(false);
+  });
+
+  it("detects whether a requested production line exists in scheduled MOs", () => {
+    const snap = buildBaseSnapshot();
+
+    snap.scheduledMOs = [
+      {
+        id: 201,
+        scheduledDate: "2026-09-03",
+        qty: 500,
+        lineIds: [7, 8],
+        status: "confirmed",
+      },
+    ];
+
+    expect(snapshotUsesProductionLine(snap, 7)).toBe(true);
+    expect(snapshotUsesProductionLine(snap, 8)).toBe(true);
+    expect(snapshotUsesProductionLine(snap, 999)).toBe(false);
   });
 
 });

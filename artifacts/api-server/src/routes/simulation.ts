@@ -24,6 +24,7 @@ import {
   runDailyLoop,
   extractLoopMetrics,
   isCommittedInboundPO,
+  snapshotUsesProductionLine,
   type ERPSnapshot,
 } from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
@@ -787,6 +788,19 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       });
       return;
     }
+
+    if (
+      scenario.type === "PRODUCTION_LINE_FAILURE" &&
+      !snapshotUsesProductionLine(snapshot, scenario.parameters.lineId!)
+    ) {
+      res.status(422).json({
+        error: "INVALID_PRODUCTION_LINE",
+        message:
+          "The requested production line is not used by any scheduled manufacturing order for this product.",
+      });
+      return;
+    }
+
     const startCandidates = [
       ...snapshot.inboundPOs.map(po => po.expectedDate),
       ...snapshot.salesOrders.map(so => so.demandDate),

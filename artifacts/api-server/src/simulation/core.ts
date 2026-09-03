@@ -79,6 +79,15 @@ export function isCommittedInboundPO(status: string): boolean {
   return status === "confirmed";
 }
 
+export function snapshotUsesProductionLine(
+  snapshot: ERPSnapshot,
+  lineId: number,
+): boolean {
+  return snapshot.scheduledMOs.some(
+    mo => mo.lineId === lineId || mo.lineIds?.includes(lineId),
+  );
+}
+
 export function runDailyLoop(
   snapshot: ERPSnapshot,
   horizonDays: number,
