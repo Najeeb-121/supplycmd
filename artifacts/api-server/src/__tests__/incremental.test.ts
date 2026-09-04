@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { runDailyLoop, extractLoopMetrics, ERPSnapshot } from '../simulation/core';
+import {
+  runDailyLoop,
+  extractLoopMetrics,
+  calculateIncrementalOperationalMetrics,
+  ERPSnapshot
+} from '../simulation/core';
 import { buildScenarioModifiers, calculateFinancials } from '../simulation/scenarios';
 
 const baseSnapshot: ERPSnapshot = {
@@ -40,8 +45,8 @@ describe('Incremental Impact Simulation', () => {
 
   it('Test B: Existing baseline shortage + delay makes it worse', () => {
     const snapshot = JSON.parse(JSON.stringify(baseSnapshot));
-    snapshot.openingStock = 50; 
-    const startDate = new Date('2026-08-06T12:00:00.000Z'); 
+    snapshot.openingStock = 50;
+    const startDate = new Date('2026-08-06T12:00:00.000Z');
     // Horizon 14 days (15 total). Total demand = 150.
     // Opening 50 + PO 50 = 100. Baseline shortage = 50 (Days 5-8 short, PO on Day 9, then runs out again Day 14).
     const baselineTrace = runDailyLoop(snapshot, 14, {}, startDate);
@@ -61,12 +66,12 @@ describe('Incremental Impact Simulation', () => {
   it('Test C: Existing baseline shortage + delay has no additional effect', () => {
     const snapshot = JSON.parse(JSON.stringify(baseSnapshot));
     snapshot.openingStock = 50;
-    const startDate = new Date('2026-08-06T12:00:00.000Z'); 
-    const baselineTrace = runDailyLoop(snapshot, 7, {}, startDate); 
+    const startDate = new Date('2026-08-06T12:00:00.000Z');
+    const baselineTrace = runDailyLoop(snapshot, 7, {}, startDate);
     const baselineMetrics = extractLoopMetrics(baselineTrace, snapshot);
     expect(baselineMetrics.totalUnmetDemand).toBe(30);
 
-    const modifiers = { poDateShifts: { 1: 10 } }; 
+    const modifiers = { poDateShifts: { 1: 10 } };
     const scenarioTrace = runDailyLoop(snapshot, 7, modifiers, startDate);
     const scenarioMetrics = extractLoopMetrics(scenarioTrace, snapshot);
     expect(scenarioMetrics.totalUnmetDemand).toBe(30);
@@ -75,7 +80,7 @@ describe('Incremental Impact Simulation', () => {
   it('Test D: No demand', () => {
     const snapshot = JSON.parse(JSON.stringify(baseSnapshot));
     snapshot.dailyDemandRate = 0;
-    const startDate = new Date('2026-08-06T12:00:00.000Z'); 
+    const startDate = new Date('2026-08-06T12:00:00.000Z');
     const baselineTrace = runDailyLoop(snapshot, 20, {}, startDate);
     const baselineMetrics = extractLoopMetrics(baselineTrace, snapshot);
     expect(baselineMetrics.coverageDays).toBe('NOT_APPLICABLE');
@@ -89,4 +94,36 @@ describe('Incremental Impact Simulation', () => {
     expect(financials.grossMarginAtRisk.status).toBe('MISSING');
     expect(financials.grossMarginAtRisk.value).toBeNull();
   });
+
+  it('Test F: Beneficial demand reduction preserves negative operational deltas', () => {
+    const snapshot = JSON.parse(JSON.stringify(baseSnapshot));
+    snapshot.openingStock = 50;
+    snapshot.inboundPOs = [];
+
+    const startDate = new Date('2026-08-06T12:00:00.000Z');
+
+    const baselineTrace = runDailyLoop(snapshot, 9, {}, startDate);
+    const baselineMetrics = extractLoopMetrics(baselineTrace, snapshot);
+
+    const scenarioTrace = runDailyLoop(
+      snapshot,
+      9,
+      { demandMultiplier: 0.5 },
+      startDate
+    );
+    const scenarioMetrics = extractLoopMetrics(scenarioTrace, snapshot);
+
+    const incremental = calculateIncrementalOperationalMetrics(
+      baselineMetrics,
+      scenarioMetrics
+    );
+
+    expect(baselineMetrics.totalUnmetDemand).toBe(50);
+    expect(scenarioMetrics.totalUnmetDemand).toBe(0);
+
+    expect(incremental.incrementalUnmetDemand).toBe(-50);
+    expect(incremental.incrementalShortage).toBe(-10);
+    expect(incremental.incrementalStockoutDuration).toBe(-5);
+  });
+
 });

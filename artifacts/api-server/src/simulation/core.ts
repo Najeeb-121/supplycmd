@@ -316,3 +316,17 @@ export function extractLoopMetrics(records: DayRecord[], snapshot: ERPSnapshot) 
     peakInventoryDay
   };
 }
+
+export function calculateIncrementalOperationalMetrics(
+  baselineMetrics: ReturnType<typeof extractLoopMetrics>,
+  scenarioMetrics: ReturnType<typeof extractLoopMetrics>,
+) {
+  return {
+    incrementalUnmetDemand:
+      scenarioMetrics.totalUnmetDemand - baselineMetrics.totalUnmetDemand,
+    incrementalShortage:
+      scenarioMetrics.maxShortageUnits - baselineMetrics.maxShortageUnits,
+    incrementalStockoutDuration:
+      scenarioMetrics.stockoutDuration - baselineMetrics.stockoutDuration,
+  };
+}

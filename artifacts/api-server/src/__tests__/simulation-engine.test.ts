@@ -142,8 +142,9 @@ describe("Simulation Engine Core", () => {
         moState: "confirmed",
       },
     ];
+    const startDate = new Date("2026-09-03T12:00:00.000Z");
 
-    const baseline = runDailyLoop(snap, 1, {});
+    const baseline = runDailyLoop(snap, 1, {}, startDate);
     expect(baseline[0].moOutput).toBe(500);
 
     const scenario: ScenarioDef = {
@@ -158,7 +159,7 @@ describe("Simulation Engine Core", () => {
     };
 
     const mods = buildScenarioModifiers(scenario, snap);
-    const failedLine = runDailyLoop(snap, 1, mods);
+    const failedLine = runDailyLoop(snap, 1, mods, startDate);
 
     expect(failedLine[0].moOutput).toBe(0);
   });

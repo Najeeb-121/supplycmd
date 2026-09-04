@@ -26,6 +26,7 @@ import {
   isCommittedInboundPO,
   snapshotUsesProductionLine,
   getMOEffectiveCompletionDate,
+  calculateIncrementalOperationalMetrics,
   type ERPSnapshot,
 } from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
@@ -872,10 +873,14 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
     const baselineMetrics = extractLoopMetrics(baselineTrace, snapshot);
     const scenarioMetrics = extractLoopMetrics(scenarioTrace, snapshot);
 
-    const incrementalUnmetDemand = Math.max(
-      0,
-      scenarioMetrics.totalUnmetDemand - baselineMetrics.totalUnmetDemand
-    );
+    const incrementalOperationalMetrics =
+      calculateIncrementalOperationalMetrics(
+        baselineMetrics,
+        scenarioMetrics
+      );
+
+    const incrementalUnmetDemand =
+      incrementalOperationalMetrics.incrementalUnmetDemand;
 
     const unitSellingPrice =
       product.sellingPrice !== null && product.sellingPrice !== undefined && product.sellingPrice > 0
@@ -932,7 +937,7 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
     };
 
     const financials = calculateFinancials(
-      incrementalUnmetDemand,
+      Math.max(0, incrementalUnmetDemand),
       snapshot,
       productGraph,
       modifiers
@@ -976,14 +981,10 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       scenarioMetrics,
       incrementalMetrics: {
         incrementalUnmetDemand,
-        incrementalShortage: Math.max(
-          0,
-          scenarioMetrics.maxShortageUnits - baselineMetrics.maxShortageUnits
-        ),
-        incrementalStockoutDuration: Math.max(
-          0,
-          scenarioMetrics.stockoutDuration - baselineMetrics.stockoutDuration
-        ),
+        incrementalShortage:
+          incrementalOperationalMetrics.incrementalShortage,
+        incrementalStockoutDuration:
+          incrementalOperationalMetrics.incrementalStockoutDuration,
         incrementalRevenueAtRisk: financials.revenueAtRisk,
         incrementalGrossMarginAtRisk: financials.grossMarginAtRisk,
         incrementalProcurementCost: financials.incrementalCost,
