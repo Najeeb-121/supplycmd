@@ -324,6 +324,28 @@ export function hasMeasurableDemandSurgeImpact(
   return scenarioMetrics.totalDemand > baselineMetrics.totalDemand;
 }
 
+export function hasFiniteOperationalMetrics(
+  metrics: ReturnType<typeof extractLoopMetrics>,
+) {
+  const numericMetrics = [
+    metrics.stockoutDuration,
+    metrics.totalUnmetDemand,
+    metrics.totalDemand,
+    metrics.maxShortageUnits,
+    metrics.peakInventoryDay,
+  ];
+
+  if (metrics.firstStockoutDay !== null) {
+    numericMetrics.push(metrics.firstStockoutDay);
+  }
+
+  if (typeof metrics.coverageDays === "number") {
+    numericMetrics.push(metrics.coverageDays);
+  }
+
+  return numericMetrics.every(Number.isFinite);
+}
+
 export function calculateIncrementalOperationalMetrics(
   baselineMetrics: ReturnType<typeof extractLoopMetrics>,
   scenarioMetrics: ReturnType<typeof extractLoopMetrics>,

@@ -8,6 +8,7 @@ import {
   getMOEffectiveCompletionDate,
   extractLoopMetrics,
   hasMeasurableDemandSurgeImpact,
+  hasFiniteOperationalMetrics,
 } from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
 import { ScenarioDef } from "@workspace/db";
@@ -410,6 +411,48 @@ describe("Simulation Engine Core", () => {
     expect(
       hasMeasurableDemandSurgeImpact(baselineMetrics, surgedMetrics)
     ).toBe(false);
+  });
+
+  it("rejects non-finite operational metrics from extreme scenario arithmetic", () => {
+    const snap = buildBaseSnapshot();
+    const startDate = new Date("2026-09-04T12:00:00.000Z");
+
+    snap.openingStock = 140000;
+    snap.inboundPOs = [];
+    snap.scheduledMOs = [];
+    snap.dependentDemands = [];
+    snap.salesOrders = [
+      {
+        salesOrderId: 501,
+        salesOrderLineId: 601,
+        customerId: 25,
+        demandDate: "2026-09-04",
+        orderedQty: 100000,
+        deliveredQty: 0,
+        remainingQty: 100000,
+        unitPrice: 1,
+        currency: "JOD",
+        status: "sale",
+      },
+    ];
+
+    const scenario: ScenarioDef = {
+      id: "extreme-demand-surge",
+      type: "DEMAND_SURGE",
+      title: "Extreme demand surge",
+      description: "Extreme arithmetic must not escape as valid metrics",
+      parameters: {
+        productId: snap.productId,
+        customerId: 25,
+        surgePct: 1e308,
+      },
+    };
+
+    const modifiers = buildScenarioModifiers(scenario, snap);
+    const trace = runDailyLoop(snap, 1, modifiers, startDate);
+    const metrics = extractLoopMetrics(trace, snap);
+
+    expect(hasFiniteOperationalMetrics(metrics)).toBe(false);
   });
 
 });

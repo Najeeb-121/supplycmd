@@ -28,6 +28,7 @@ import {
   getMOEffectiveCompletionDate,
   calculateIncrementalOperationalMetrics,
   hasMeasurableDemandSurgeImpact,
+  hasFiniteOperationalMetrics,
   type ERPSnapshot,
 } from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
@@ -889,6 +890,14 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
 
     const baselineMetrics = extractLoopMetrics(baselineTrace, snapshot);
     const scenarioMetrics = extractLoopMetrics(scenarioTrace, snapshot);
+    if (!hasFiniteOperationalMetrics(scenarioMetrics)) {
+      res.status(422).json({
+        error: "NON_FINITE_SIMULATION_METRICS",
+        message:
+          "The requested scenario produces non-finite simulation metrics and cannot be evaluated safely.",
+      });
+      return;
+    }
     if (
       scenario.type === "DEMAND_SURGE" &&
       !hasMeasurableDemandSurgeImpact(baselineMetrics, scenarioMetrics)
