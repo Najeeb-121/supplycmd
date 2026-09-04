@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Card,
@@ -50,13 +50,24 @@ export default function PortfolioSimulationTab() {
 
   const [mitigations, setMitigations] = useState<CandidateMitigation[]>([]);
 
-  const executableCandidates =
-    engine.deterministicContext?.candidateMitigations.filter(
-      (mitigation) =>
-        mitigation.feasible &&
-        mitigation.targetProductId !== undefined &&
-        EXECUTABLE_MITIGATION_TYPES.has(mitigation.type)
-    ) ?? [];
+  const executableCandidates = useMemo(
+    () =>
+      engine.deterministicContext?.candidateMitigations.filter(
+        (mitigation) =>
+          mitigation.feasible &&
+          mitigation.targetProductId !== undefined &&
+          EXECUTABLE_MITIGATION_TYPES.has(mitigation.type)
+      ) ?? [],
+    [engine.deterministicContext?.candidateMitigations]
+  );
+
+  useEffect(() => {
+    setMitigations((current) =>
+      current.filter((selected) =>
+        executableCandidates.some((candidate) => candidate.id === selected.id)
+      )
+    );
+  }, [executableCandidates]);
 
   const availableCandidates = executableCandidates.filter(
     (candidate) =>

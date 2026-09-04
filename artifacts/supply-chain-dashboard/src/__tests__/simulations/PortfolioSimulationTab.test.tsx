@@ -3,26 +3,33 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import PortfolioSimulationTab from '../../components/simulations/PortfolioSimulationTab';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+const decisionEngineMockState = vi.hoisted(() => {
+  const defaultCandidate = {
+    id: "ALT_SUPPLIER_TEST",
+    type: "ALTERNATE_SUPPLIER" as const,
+    title: "Use Test Alternate Supplier",
+    reason: "Test deterministic mitigation",
+    feasible: true,
+    affectedQuantity: 100,
+    mitigationCost: 500,
+    mitigationCostProvenance: "CALCULATED" as const,
+    mitigationDateProvenance: "UNKNOWN" as const,
+    targetSupplierId: 21,
+    targetSupplierName: "Test Supplier",
+    targetProductId: 17,
+  };
+
+  return {
+    defaultCandidate,
+    candidateMitigations: [defaultCandidate],
+  };
+});
+
 vi.mock('@/hooks/use-real-decision-engine', () => ({
   useRealDecisionEngine: () => ({
     engine: {
       deterministicContext: {
-        candidateMitigations: [
-          {
-            id: "ALT_SUPPLIER_TEST",
-            type: "ALTERNATE_SUPPLIER",
-            title: "Use Test Alternate Supplier",
-            reason: "Test deterministic mitigation",
-            feasible: true,
-            affectedQuantity: 100,
-            mitigationCost: 500,
-            mitigationCostProvenance: "CALCULATED",
-            mitigationDateProvenance: "UNKNOWN",
-            targetSupplierId: 21,
-            targetSupplierName: "Test Supplier",
-            targetProductId: 17,
-          },
-        ],
+        candidateMitigations: decisionEngineMockState.candidateMitigations,
       },
     },
   }),
@@ -52,6 +59,9 @@ describe('PortfolioSimulationTab (SR-6 Phase 9 Integration)', () => {
     queryClient = createTestQueryClient();
     vi.restoreAllMocks();
     global.fetch = vi.fn();
+    decisionEngineMockState.candidateMitigations = [
+      decisionEngineMockState.defaultCandidate,
+    ];
   });
 
   const renderComponent = () => {
@@ -214,8 +224,37 @@ describe('PortfolioSimulationTab (SR-6 Phase 9 Integration)', () => {
     });
   });
 
-  it('G. No legacy simulation-engine is used', () => {
+  it('H. No legacy simulation-engine is used', () => {
     const sourceCode = `import { simulatePortfolio } from '../simulation/portfolio-engine';`;
     expect(sourceCode).not.toContain('simulation-engine'); // Just a sanity check for the test context
   });
+
+  it('G. Refreshed candidates remove a stale selected mitigation', async () => {
+    const { rerender } = renderComponent();
+
+    fireEvent.click(screen.getByText('+ Add Deterministic Mitigation'));
+
+    expect(
+      screen.getByText('Use Test Alternate Supplier - Qty: 100')
+    ).toBeInTheDocument();
+
+    decisionEngineMockState.candidateMitigations = [];
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <PortfolioSimulationTab />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Use Test Alternate Supplier - Qty: 100')
+      ).not.toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText('Run Portfolio Simulation')
+    ).toBeDisabled();
+  });
+
 });
