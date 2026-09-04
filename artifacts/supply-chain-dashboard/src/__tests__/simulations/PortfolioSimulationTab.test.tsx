@@ -291,4 +291,71 @@ describe('PortfolioSimulationTab (SR-6 Phase 9 Integration)', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('J. Candidate refresh clears stale portfolio simulation results', async () => {
+    const mockResult = {
+      deduplicatedRevenueDelta: 100000,
+      totalProcurementCostDelta: 25000,
+      netROI: 75000,
+      provenance: {
+        revenue: "CALCULATED",
+        cost: "CALCULATED",
+        roi: "CALCULATED",
+      },
+      actionExecutionTraces: [
+        {
+          mitigationId: "ALT_SUPPLIER_TEST",
+          type: "ALTERNATE_SUPPLIER",
+          executedQuantity: 100,
+          executedCost: 500,
+          wasSkipped: false,
+        },
+      ],
+      affectedSalesOrders: [
+        {
+          salesOrderId: 10,
+          missedQuantity: 5,
+          provenance: "SIMULATION_ALLOCATED",
+        },
+      ],
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResult,
+    });
+
+    const { rerender } = renderComponent();
+
+    fireEvent.click(screen.getByText('+ Add Deterministic Mitigation'));
+    fireEvent.click(screen.getByText('Run Portfolio Simulation'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Portfolio Simulation Results')).toBeInTheDocument();
+    });
+
+    decisionEngineMockState.candidateMitigations = [
+      {
+        ...decisionEngineMockState.defaultCandidate,
+        affectedQuantity: 250,
+        mitigationCost: 900,
+      },
+    ];
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <PortfolioSimulationTab />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Use Test Alternate Supplier - Qty: 250')
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByText('Portfolio Simulation Results')
+    ).not.toBeInTheDocument();
+  });
+
 });

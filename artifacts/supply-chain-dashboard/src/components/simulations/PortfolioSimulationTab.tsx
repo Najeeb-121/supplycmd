@@ -91,7 +91,13 @@ export default function PortfolioSimulationTab() {
     );
   };
 
-  const { data: result, isPending, mutate: runSimulation, error } =
+  const {
+    data: result,
+    isPending,
+    mutate: runSimulation,
+    error,
+    reset: resetSimulation,
+  } =
     useMutation<PortfolioSimulationResult, Error>({
       mutationFn: async () => {
         const res = await fetch("/api/simulation/portfolio", {
@@ -117,6 +123,10 @@ export default function PortfolioSimulationTab() {
         toast({ title: "Simulation Error", description: err.message, variant: "destructive" });
       }
     });
+
+  useEffect(() => {
+    resetSimulation();
+  }, [mitigations, resetSimulation]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-full">
