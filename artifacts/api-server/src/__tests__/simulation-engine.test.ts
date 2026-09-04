@@ -125,6 +125,8 @@ describe("Simulation Engine Core", () => {
     const fins = calculateFinancials(metrics, snap, productInfo, {});
     expect(fins.revenueAtRisk.value).toBeNull();
     expect(fins.revenueAtRisk.status).toBe("MISSING");
+    expect(fins.revenueAtRisk.confidence).toBe("LOW");
+    expect(fins.grossMarginAtRisk.confidence).toBe("LOW");
   });
 
   it("PRODUCTION_LINE_FAILURE blocks one MO once when it uses multiple workcenters", () => {

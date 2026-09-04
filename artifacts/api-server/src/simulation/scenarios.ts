@@ -195,13 +195,16 @@ export function calculateFinancials(
       value: revVal,
       status: revStatus,
       source: "Simulation",
-      confidence: "HIGH"
+      confidence: revStatus === "VERIFIED" ? "HIGH" : "LOW"
     },
     grossMarginAtRisk: {
       value: marginVal,
       status: (revStatus === "VERIFIED" && costStatus === "VERIFIED") ? "VERIFIED" : "MISSING",
       source: "Simulation",
-      confidence: "HIGH"
+      confidence:
+        revStatus === "VERIFIED" && costStatus === "VERIFIED"
+          ? "HIGH"
+          : "LOW"
     },
     incrementalCost: {
       value: incrementalProcCost,
