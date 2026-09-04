@@ -657,6 +657,22 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
         };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
+    if (
+      scenario.type === "DEMAND_SURGE" &&
+      scenario.parameters.customerId != null &&
+      !salesOrders.some(
+        so =>
+          so.customerId === scenario.parameters.customerId &&
+          so.remainingQty > 0
+      )
+    ) {
+      res.status(422).json({
+        error: "INVALID_CUSTOMER_FOR_PRODUCT",
+        message:
+          "The requested customer has no firm dated remaining demand for this product.",
+      });
+      return;
+    }
     const demandSeeds = allSalesRows
       .filter(({ line, order }) => isFirmDemand(line.status, order.status))
       .map(({ line, order }) => {
