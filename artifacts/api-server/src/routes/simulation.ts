@@ -27,6 +27,7 @@ import {
   snapshotUsesProductionLine,
   getMOEffectiveCompletionDate,
   calculateIncrementalOperationalMetrics,
+  hasMeasurableDemandSurgeImpact,
   type ERPSnapshot,
 } from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
@@ -888,6 +889,17 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
 
     const baselineMetrics = extractLoopMetrics(baselineTrace, snapshot);
     const scenarioMetrics = extractLoopMetrics(scenarioTrace, snapshot);
+    if (
+      scenario.type === "DEMAND_SURGE" &&
+      !hasMeasurableDemandSurgeImpact(baselineMetrics, scenarioMetrics)
+    ) {
+      res.status(422).json({
+        error: "INSUFFICIENT_SCENARIO_IMPACT",
+        message:
+          "The requested demand surge does not create a measurable unit-level demand increase.",
+      });
+      return;
+    }
 
     const incrementalOperationalMetrics =
       calculateIncrementalOperationalMetrics(

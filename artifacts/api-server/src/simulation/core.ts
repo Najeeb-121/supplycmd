@@ -317,6 +317,13 @@ export function extractLoopMetrics(records: DayRecord[], snapshot: ERPSnapshot) 
   };
 }
 
+export function hasMeasurableDemandSurgeImpact(
+  baselineMetrics: ReturnType<typeof extractLoopMetrics>,
+  scenarioMetrics: ReturnType<typeof extractLoopMetrics>,
+) {
+  return scenarioMetrics.totalDemand > baselineMetrics.totalDemand;
+}
+
 export function calculateIncrementalOperationalMetrics(
   baselineMetrics: ReturnType<typeof extractLoopMetrics>,
   scenarioMetrics: ReturnType<typeof extractLoopMetrics>,

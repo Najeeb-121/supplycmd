@@ -6,6 +6,8 @@ import {
   isCommittedInboundPO,
   snapshotUsesProductionLine,
   getMOEffectiveCompletionDate,
+  extractLoopMetrics,
+  hasMeasurableDemandSurgeImpact,
 } from "../simulation/core";
 import { buildScenarioModifiers, calculateFinancials, validateConsistency } from "../simulation/scenarios";
 import { ScenarioDef } from "@workspace/db";
@@ -360,6 +362,54 @@ describe("Simulation Engine Core", () => {
       .filter((date): date is string => Boolean(date));
 
     expect(startCandidates).toEqual(["2026-09-12"]);
+  });
+
+  it("customer-specific demand surge cannot silently round to zero impact", () => {
+    const snap = buildBaseSnapshot();
+    const startDate = new Date("2026-09-04T12:00:00.000Z");
+
+    snap.openingStock = 100;
+    snap.inboundPOs = [];
+    snap.scheduledMOs = [];
+    snap.dependentDemands = [];
+    snap.salesOrders = [
+      {
+        salesOrderId: 301,
+        salesOrderLineId: 401,
+        customerId: 25,
+        demandDate: "2026-09-04",
+        orderedQty: 1,
+        deliveredQty: 0,
+        remainingQty: 1,
+        unitPrice: 1,
+        currency: "JOD",
+        status: "sale",
+      },
+    ];
+
+    const scenario: ScenarioDef = {
+      id: "tiny-customer-demand-surge",
+      type: "DEMAND_SURGE",
+      title: "Tiny customer demand surge",
+      description: "Customer-specific surge must create a measurable demand change",
+      parameters: {
+        productId: snap.productId,
+        customerId: 25,
+        surgePct: 1,
+      },
+    };
+
+    const baseline = runDailyLoop(snap, 1, {}, startDate);
+    const modifiers = buildScenarioModifiers(scenario, snap);
+    const surged = runDailyLoop(snap, 1, modifiers, startDate);
+
+    const baselineMetrics = extractLoopMetrics(baseline, snap);
+    const surgedMetrics = extractLoopMetrics(surged, snap);
+
+    expect(surged[0].consumption).toBe(baseline[0].consumption);
+    expect(
+      hasMeasurableDemandSurgeImpact(baselineMetrics, surgedMetrics)
+    ).toBe(false);
   });
 
 });
