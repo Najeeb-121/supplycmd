@@ -1039,7 +1039,10 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
     const message =
       error instanceof Error ? error.message : String(error);
 
-    if (message.startsWith("INVALID_SCENARIO_PARAMETER:")) {
+    if (
+      message.startsWith("INVALID_SCENARIO_PARAMETER:") ||
+      message.startsWith("UNSUPPORTED_SCENARIO_TYPE:")
+    ) {
       res.status(422).json({ error: message });
       return;
     }
