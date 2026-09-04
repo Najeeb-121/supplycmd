@@ -257,4 +257,38 @@ describe('PortfolioSimulationTab (SR-6 Phase 9 Integration)', () => {
     ).toBeDisabled();
   });
 
+  it('I. Refreshed candidate values replace stale selected mitigation values', async () => {
+    const { rerender } = renderComponent();
+
+    fireEvent.click(screen.getByText('+ Add Deterministic Mitigation'));
+
+    expect(
+      screen.getByText('Use Test Alternate Supplier - Qty: 100')
+    ).toBeInTheDocument();
+
+    decisionEngineMockState.candidateMitigations = [
+      {
+        ...decisionEngineMockState.defaultCandidate,
+        affectedQuantity: 250,
+        mitigationCost: 900,
+      },
+    ];
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <PortfolioSimulationTab />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Use Test Alternate Supplier - Qty: 250')
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByText('Use Test Alternate Supplier - Qty: 100')
+    ).not.toBeInTheDocument();
+  });
+
 });

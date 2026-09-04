@@ -63,9 +63,13 @@ export default function PortfolioSimulationTab() {
 
   useEffect(() => {
     setMitigations((current) =>
-      current.filter((selected) =>
-        executableCandidates.some((candidate) => candidate.id === selected.id)
-      )
+      current.flatMap((selected) => {
+        const refreshed = executableCandidates.find(
+          (candidate) => candidate.id === selected.id
+        );
+
+        return refreshed ? [refreshed] : [];
+      })
     );
   }, [executableCandidates]);
 
