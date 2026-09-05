@@ -258,7 +258,14 @@ export const RecommendationCard = memo(function RecommendationCard({
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
               Action Financial Impact
             </p>
-            <p className="text-base font-mono font-bold text-emerald-600">
+            <p
+              className={cn(
+                "text-base font-mono font-bold",
+                rec.estimatedSavings === "UNKNOWN"
+                  ? "text-muted-foreground"
+                  : "text-emerald-600"
+              )}
+            >
               {rec.estimatedSavings === "UNKNOWN"
                 ? "UNKNOWN"
                 : (rec.estimatedSavings as number).toLocaleString()}

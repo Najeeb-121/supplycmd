@@ -127,7 +127,7 @@ function ModelStatusBar({
       <div className="flex items-center gap-1.5">
         <Brain className="w-3.5 h-3.5 text-primary" />
         <span className="font-mono font-semibold text-foreground">
-          SupplyCmd Deterministic {engine.modelVersion}
+          SupplyCmd {engine.modelVersion}
         </span>
       </div>
 
@@ -432,7 +432,11 @@ export default function AiDecisionEnginePage() {
           }
           sub="Deterministic portfolio result"
           icon={<BarChart3 className="w-4 h-4" />}
-          highlight="green"
+          highlight={
+            engine.totalEstimatedSavings === "UNKNOWN"
+              ? undefined
+              : "green"
+          }
         />
       </div>
 
@@ -476,10 +480,14 @@ export default function AiDecisionEnginePage() {
         <Card className="border-border shadow-sm">
           <CardContent className="py-16 text-center">
             <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-            <p className="text-lg font-semibold text-foreground">No recommendations match your filters</p>
+            <p className="text-lg font-semibold text-foreground">
+              {engine.recommendations.length === 0
+                ? "No deterministic recommendations available"
+                : "No recommendations match your filters"}
+            </p>
             <p className="text-sm text-muted-foreground mt-1">
               {engine.recommendations.length === 0
-                ? "No deterministic recommendations are currently available."
+                ? "The current ERP-backed baseline does not produce an actionable deterministic recommendation."
                 : "Try clearing filters to see all recommendations."}
             </p>
           </CardContent>

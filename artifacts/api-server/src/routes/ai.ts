@@ -5,7 +5,7 @@ import { logger } from "../lib/logger";
 const router: IRouter = Router();
 
 const COPILOT_SYSTEM_PROMPT = `SYSTEM ROLE:
-You are the SupplyCmd Operational Copilot. You receive the current values of 8 operational KPIs and produce a clear, highly structured, and strictly non-repetitive operations report for an executive audience.
+You are the SupplyCmd Operational Copilot. You receive only the currently supported operational KPIs and produce a clear, highly structured, and strictly non-repetitive operations report for an executive audience.
 
 OUTPUT FORMAT — use exactly these four section headers, in order, no emojis, no icons, no decorative characters:
 
@@ -30,6 +30,10 @@ OUTPUT FORMAT — use exactly these four section headers, in order, no emojis, n
 - Be concise and actionable (e.g., "Expedite PO-1029 to restore safety stock").
 
 CRITICAL RULES:
+- STRICT GROUNDING: Discuss only KPIs explicitly supplied in the user message.
+- Never mention, infer, or assume unsupported KPIs, metrics, operational conditions, causal relationships, or data that were not supplied.
+- If there are not enough supplied KPIs to establish a cross-metric relationship, explicitly state that no supported relationship can be established from the current KPI set.
+- Do not describe the data as real-time or live.
 - ZERO DUPLICATION: Do not repeat points, metrics, or insights across sections. Each section must serve a unique purpose.
 - Keep the structure perfectly clear using Markdown bullets and numbers.
 - Maintain a professional, executive tone.
@@ -72,7 +76,7 @@ router.post("/ai/analyze", async (req, res): Promise<void> => {
   const userMessage =
     `Overall Operations Health Score: ${healthScore}/100\n` +
     `KPIs on target: ${onTarget}/${kpis.length}\n\n` +
-    `Live KPI Data:\n${kpiText}`;
+    `Current Supported KPI Data:\n${kpiText}`;
 
   try {
     const stream = await openai.chat.completions.create({
@@ -96,29 +100,54 @@ router.post("/ai/analyze", async (req, res): Promise<void> => {
     res.end();
   } catch (err) {
     logger.warn({ err }, "AI copilot analysis failed, using local fallback generation");
-    
+
     // Generative fallback if OpenAI key is invalid or model fails
     const rating = healthScore >= 80 ? "Healthy" : healthScore >= 50 ? "At Risk" : "Critical";
     const gaps = kpis.filter(k => k.status !== "good").map(k => `- **${k.label}** is currently sitting at ${k.value.toFixed(1)}${k.unit} against a target of ${k.target}${k.unit}. This variance requires immediate attention as it is degrading overall performance.`);
-    const gapText = gaps.length > 0 ? gaps.slice(0, 4).join("\n") : "- All KPIs are currently operating within acceptable tolerances, demonstrating strong operational control and supply chain stability across all tracked vectors.";
-    const risks = kpis.filter(k => k.status === "critical").map(k => `- **${k.label}** has dropped to critical levels. If this trend continues, it will cause severe downstream bottlenecks, potentially halting production lines or leading to stockouts for key accounts.`);
-    const riskText = risks.length > 0 ? risks.slice(0, 3).join("\n") : "- The supply chain is currently resilient with no critical operational risks identified based on the real-time KPI data. System health is optimal.";
-    const actions = kpis.filter(k => k.status !== "good").map(k => `- Immediately dispatch an investigation team to root-cause the ${k.label} variance. Coordinate with procurement and logistics to implement short-term buffers while a permanent fix is established.`);
-    const actionText = actions.length > 0 ? actions.slice(0, 3).join("\n") : "- No immediate corrective actions are required. Continue monitoring automated alerts and maintain current inventory policies.";
+    const gapText =
+      gaps.length > 0
+        ? gaps.slice(0, 4).join("\n")
+        : "- All currently supported KPIs are within acceptable tolerances.";
+
+    const risks = kpis
+      .filter(k => k.status !== "good")
+      .map(
+        k =>
+          `- **${k.label}** is outside its healthy range and may negatively affect operations if the condition persists.`
+      );
+
+    const riskText =
+      risks.length > 0
+        ? risks.slice(0, 3).join("\n")
+        : "- No material risks are identified from the currently supported KPI set.";
+
+    const actions = kpis
+      .filter(k => k.status !== "good")
+      .map(
+        k =>
+          `- Investigate the ${k.label} variance and determine the operational cause before selecting corrective action.`
+      );
+
+    const actionText =
+      actions.length > 0
+        ? actions.slice(0, 3).join("\n")
+        : "- No immediate corrective action is indicated by the currently supported KPI set.";
+
+    const relationshipText =
+      kpis.length >= 2
+        ? "- No causal relationship is asserted unless it is directly supported by the supplied KPI data."
+        : "- Not enough supported KPIs are available to establish cross-metric relationships.";
 
     const fallbackResponse = `## 1. Overall Operations Summary
-- The overall health of the operational pipeline is currently rated as **${rating}** with an aggregate score of ${healthScore}/100. This score reflects the compounded performance across inventory, production, and logistics metrics.
-- Currently, ${onTarget} out of the ${kpis.length} tracked Key Performance Indicators are meeting or exceeding their operational targets.
-- We are observing a stable overall momentum, though localized friction points in the supply chain require strategic intervention to prevent cascading delays.
+- The current supported KPI set is rated as **${rating}** with an aggregate score of ${healthScore}/100.
+- ${onTarget} of ${kpis.length} currently supported KPIs are within their healthy operating range.
 ${gapText}
 
 ## 2. Top Risks
 ${riskText}
 
 ## 3. KPI Relationships
-- **Inventory & Fulfillment Synergy:** Analysis of the current dataset indicates a tight coupling between our warehouse fill rates and order fulfillment capabilities. Any dip in stock turnover is heavily penalized by an immediate spike in late deliveries.
-- **Supplier Volatility:** Supplier performance variations are acting as a leading indicator for purchase lead times. When supplier quality drops, the required QA overhead increases the effective lead time exponentially.
-- **Production Resilience:** Production utilization remains relatively insulated from minor logistics shocks, provided that safety stock levels are strictly adhered to.
+${relationshipText}
 
 ## 4. Priority Action Plan
 ${actionText}`;

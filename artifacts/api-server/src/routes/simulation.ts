@@ -1054,7 +1054,7 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
 
     res.json({
       result,
-      narration: "Deterministic simulation completed from current local ERP facts.",
+      narration: "Deterministic simulation completed using the current ERP-backed SupplyCMD snapshot.",
     });
   } catch (error: any) {
     const message =

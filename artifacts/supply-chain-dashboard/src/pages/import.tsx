@@ -69,7 +69,7 @@ const ENTITIES: Record<Entity, EntityConfig> = {
   inventory: {
     label: "Inventory Items",
     description:
-      "SKU master list with stock levels, costs, and EOQ parameters. EOQ, safety stock, and reorder points are auto-calculated.",
+      "SKU master list with stock levels, costs, and planning inputs. EOQ is calculated when sufficient supported inputs are available.",
     color: "text-blue-600",
     columns: [
       { key: "name", label: "Name", required: true, hint: "Product or item name" },
@@ -77,10 +77,10 @@ const ENTITIES: Record<Entity, EntityConfig> = {
       { key: "category", label: "Category", required: false },
       { key: "currentStock", label: "Current Stock", required: true, hint: "Units on hand" },
       { key: "leadTimeDays", label: "Lead Time (Days)", required: true },
-      { key: "unitCost", label: "Unit Cost ($)", required: true },
+      { key: "unitCost", label: "Unit Cost", required: true },
       { key: "annualDemand", label: "Annual Demand", required: true },
       { key: "holdingCostRate", label: "Holding Cost Rate (0–1)", required: true },
-      { key: "orderingCost", label: "Ordering Cost ($)", required: true },
+      { key: "orderingCost", label: "Ordering Cost", required: true },
     ],
   },
   production: {
@@ -94,8 +94,8 @@ const ENTITIES: Record<Entity, EntityConfig> = {
       { key: "actualUnits", label: "Actual Units", required: true },
       { key: "plannedTimeMin", label: "Planned Time (min)", required: true },
       { key: "actualTimeMin", label: "Actual Time (min)", required: true },
-      { key: "defects", label: "Defects", required: false },
-      { key: "downtimeMin", label: "Downtime (min)", required: false },
+      { key: "defects", label: "Defects", required: true },
+      { key: "downtimeMin", label: "Downtime (min)", required: true },
       {
         key: "runDate",
         label: "Run Date",
@@ -119,7 +119,7 @@ const ENTITIES: Record<Entity, EntityConfig> = {
   suppliers: {
     label: "Suppliers",
     description:
-      "Supplier master data including performance metrics used to compute fill rate and OTIF.",
+      "Supplier master data including lead time, fill rate, on-time delivery, and quality metrics.",
     color: "text-green-600",
     columns: [
       { key: "name", label: "Name", required: true },
@@ -146,11 +146,11 @@ const ENTITIES: Record<Entity, EntityConfig> = {
         required: true,
         hint: "Numeric ID from the suppliers table",
       },
-      { key: "totalValue", label: "Total Value ($)", required: true },
+      { key: "totalValue", label: "Total Value", required: true },
       {
         key: "status",
         label: "Status",
-        required: false,
+        required: true,
         hint: "pending / confirmed / shipped / delivered / cancelled",
       },
       {
@@ -165,7 +165,7 @@ const ENTITIES: Record<Entity, EntityConfig> = {
         required: true,
         hint: "YYYY-MM-DD, MM/DD/YYYY, or DD-MM-YYYY",
       },
-      { key: "itemCount", label: "Item Count", required: false },
+      { key: "itemCount", label: "Item Count", required: true },
     ],
   },
 };
@@ -211,22 +211,20 @@ function StepIndicator({ current }: { current: number }) {
       {STEPS.map((label, i) => (
         <div key={label} className="flex items-center gap-1">
           <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors ${
-              i < current
-                ? "bg-primary/10 text-primary font-medium"
-                : i === current
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors ${i < current
+              ? "bg-primary/10 text-primary font-medium"
+              : i === current
                 ? "bg-primary text-primary-foreground font-semibold"
                 : "text-muted-foreground"
-            }`}
+              }`}
           >
             <span
-              className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                i < current
-                  ? "bg-primary text-primary-foreground"
-                  : i === current
+              className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i < current
+                ? "bg-primary text-primary-foreground"
+                : i === current
                   ? "bg-white/30 text-primary-foreground"
                   : "bg-muted text-muted-foreground"
-              }`}
+                }`}
             >
               {i < current ? "✓" : i + 1}
             </span>
@@ -234,9 +232,8 @@ function StepIndicator({ current }: { current: number }) {
           </div>
           {i < STEPS.length - 1 && (
             <ChevronRight
-              className={`w-3 h-3 shrink-0 ${
-                i < current ? "text-primary" : "text-muted-foreground/30"
-              }`}
+              className={`w-3 h-3 shrink-0 ${i < current ? "text-primary" : "text-muted-foreground/30"
+                }`}
             />
           )}
         </div>
@@ -355,13 +352,12 @@ function MappingStep({
             return (
               <div
                 key={col.key}
-                className={`grid grid-cols-[1fr_24px_1fr] gap-3 items-center p-3 rounded-lg border transition-colors ${
-                  isWarn
-                    ? "border-destructive/40 bg-destructive/5"
-                    : isMapped
+                className={`grid grid-cols-[1fr_24px_1fr] gap-3 items-center p-3 rounded-lg border transition-colors ${isWarn
+                  ? "border-destructive/40 bg-destructive/5"
+                  : isMapped
                     ? "border-border/60 bg-background"
                     : "border-dashed border-border bg-muted/20"
-                }`}
+                  }`}
               >
                 {/* Left: expected field */}
                 <div className="min-w-0">
@@ -401,9 +397,8 @@ function MappingStep({
                     <CircleAlert className="w-4 h-4 text-destructive" />
                   ) : (
                     <ChevronRight
-                      className={`w-4 h-4 ${
-                        isMapped ? "text-primary" : "text-muted-foreground/30"
-                      }`}
+                      className={`w-4 h-4 ${isMapped ? "text-primary" : "text-muted-foreground/30"
+                        }`}
                     />
                   )}
                 </div>
@@ -416,9 +411,8 @@ function MappingStep({
                   }
                 >
                   <SelectTrigger
-                    className={`h-8 text-xs ${
-                      isWarn ? "border-destructive" : ""
-                    }`}
+                    className={`h-8 text-xs ${isWarn ? "border-destructive" : ""
+                      }`}
                   >
                     <SelectValue placeholder="— select column —" />
                   </SelectTrigger>
@@ -735,11 +729,10 @@ export default function ImportPage() {
                 {/* Drop zone */}
                 <div className="lg:col-span-2">
                   <Card
-                    className={`border-2 border-dashed transition-colors cursor-pointer h-full min-h-[280px] ${
-                      isDragging
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50 hover:bg-muted/30"
-                    }`}
+                    className={`border-2 border-dashed transition-colors cursor-pointer h-full min-h-[280px] ${isDragging
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50 hover:bg-muted/30"
+                      }`}
                     onDragOver={(e) => {
                       e.preventDefault();
                       setIsDragging(true);
@@ -750,9 +743,8 @@ export default function ImportPage() {
                   >
                     <CardContent className="p-12 flex flex-col items-center text-center gap-4 h-full justify-center">
                       <Upload
-                        className={`w-12 h-12 transition-colors ${
-                          isDragging ? "text-primary" : "text-muted-foreground"
-                        }`}
+                        className={`w-12 h-12 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground"
+                          }`}
                       />
                       <div>
                         <p className="font-semibold text-foreground text-lg">
@@ -802,11 +794,10 @@ export default function ImportPage() {
             {step === "result" && result && (
               <div className="space-y-4 max-w-2xl">
                 <Card
-                  className={`border ${
-                    result.errors.length === 0
-                      ? "border-green-200 bg-green-50 dark:bg-green-950/20"
-                      : "border-amber-200 bg-amber-50 dark:bg-amber-950/20"
-                  }`}
+                  className={`border ${result.errors.length === 0
+                    ? "border-green-200 bg-green-50 dark:bg-green-950/20"
+                    : "border-amber-200 bg-amber-50 dark:bg-amber-950/20"
+                    }`}
                 >
                   <CardContent className="p-5 space-y-4">
                     <div className="flex items-center gap-3">

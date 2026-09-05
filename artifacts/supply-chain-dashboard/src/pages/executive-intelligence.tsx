@@ -193,9 +193,13 @@ function EfficiencyStrip({ metric }: { metric: EfficiencyMetric }) {
         <span className="text-xs text-muted-foreground">{metric.label}</span>
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-mono font-bold text-foreground">
-            {metric.value === "UNKNOWN" ? "UNKNOWN" : (metric.value as number).toFixed(metric.unit === "×" ? 1 : 1)}{metric.unit}
+            {metric.value === "UNKNOWN"
+              ? "UNKNOWN"
+              : `${(metric.value as number).toFixed(1)}${metric.unit}`}
           </span>
-          <span className="text-[10px] text-muted-foreground">/ {metric.target === "UNKNOWN" ? "UNKNOWN" : metric.target}{metric.unit}</span>
+          <span className="text-[10px] text-muted-foreground">
+            / {metric.target === "UNKNOWN" ? "UNKNOWN" : `${metric.target}${metric.unit}`}
+          </span>
         </div>
       </div>
       <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -295,7 +299,16 @@ function OppRow({ opp, rank }: { opp: ExecState["aiOpportunities"][0]; rank: num
         </div>
       </div>
       <div className="text-right shrink-0">
-        <p className="text-sm font-mono font-bold text-emerald-600">{fmtK(opp.estimatedSavings)}</p>
+        <p
+          className={cn(
+            "text-sm font-mono font-bold",
+            opp.estimatedSavings === "UNKNOWN"
+              ? "text-muted-foreground"
+              : "text-emerald-600"
+          )}
+        >
+          {fmtK(opp.estimatedSavings)}
+        </p>
       </div>
     </div>
   );
@@ -399,7 +412,18 @@ export default function ExecutiveIntelligencePage() {
         <div className="rounded-2xl border border-border/50 bg-card shadow-sm p-5 hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-4">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Risk Index</span>
-            <ShieldAlert className={cn("w-4 h-4", riskColor === "red" ? "text-destructive" : riskColor === "amber" ? "text-amber-500" : "text-emerald-500")} />
+            <ShieldAlert
+              className={cn(
+                "w-4 h-4",
+                exec.riskScore === "UNKNOWN"
+                  ? "text-muted-foreground"
+                  : riskColor === "red"
+                    ? "text-destructive"
+                    : riskColor === "amber"
+                      ? "text-amber-500"
+                      : "text-emerald-500"
+              )}
+            />
           </div>
           <div className="flex items-center gap-4">
             <div className="relative shrink-0">
@@ -421,7 +445,14 @@ export default function ExecutiveIntelligencePage() {
         <div className="rounded-2xl border border-border/50 bg-card shadow-sm p-5 hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-4">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Opportunity</span>
-            <Lightbulb className="w-4 h-4 text-emerald-500" />
+            <Lightbulb
+              className={cn(
+                "w-4 h-4",
+                exec.opportunityValue === "UNKNOWN"
+                  ? "text-muted-foreground"
+                  : "text-emerald-500"
+              )}
+            />
           </div>
           <div className="text-3xl font-mono font-extrabold tracking-tight leading-none text-foreground">
             {fmtK(exec.opportunityValue)}
@@ -433,7 +464,18 @@ export default function ExecutiveIntelligencePage() {
         <div className="rounded-2xl border border-border/50 bg-card shadow-sm p-5 hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-4">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Efficiency</span>
-            <Activity className={cn("w-4 h-4", effColor === "red" ? "text-destructive" : effColor === "amber" ? "text-amber-500" : "text-emerald-500")} />
+            <Activity
+              className={cn(
+                "w-4 h-4",
+                exec.efficiencyIndex === "UNKNOWN"
+                  ? "text-muted-foreground"
+                  : effColor === "red"
+                    ? "text-destructive"
+                    : effColor === "amber"
+                      ? "text-amber-500"
+                      : "text-emerald-500"
+              )}
+            />
           </div>
           <div className="flex items-end gap-2">
             <div className="text-3xl font-mono font-extrabold tracking-tight leading-none text-foreground">
@@ -542,18 +584,40 @@ export default function ExecutiveIntelligencePage() {
                 <Zap className="w-4 h-4 text-amber-500" />
                 Action Center
               </h3>
-              <p className="text-xs text-muted-foreground mt-1">Live critical issues and top priorities requiring executive intervention</p>
+              <p className="text-xs text-muted-foreground mt-1">Current critical issues and top priorities requiring executive intervention</p>
             </div>
-            <Badge variant="destructive" className="font-mono text-xs shadow-sm">
-              {fmtK(exec.top5Issues.some(r => r.financialExposure === "UNKNOWN") ? "UNKNOWN" : exec.top5Issues.reduce((s, r) => s + (r.financialExposure as number), 0))} Exposure
+            <Badge
+              variant={
+                exec.top5Issues.length > 0 &&
+                  !exec.top5Issues.some((r) => r.financialExposure === "UNKNOWN") &&
+                  exec.top5Issues.reduce(
+                    (sum, r) => sum + (r.financialExposure as number),
+                    0
+                  ) > 0
+                  ? "destructive"
+                  : "outline"
+              }
+              className="font-mono text-xs shadow-sm"
+            >
+              {fmtK(
+                exec.top5Issues.some((r) => r.financialExposure === "UNKNOWN")
+                  ? "UNKNOWN"
+                  : exec.top5Issues.reduce(
+                    (sum, r) => sum + (r.financialExposure as number),
+                    0
+                  )
+              )}{" "}
+              Exposure
             </Badge>
           </div>
           <div className="flex-1 overflow-y-auto pr-2 space-y-2">
             {exec.top5Issues.length === 0 && exec.todaysRisks.length === 0 ? (
               <div className="py-12 text-center h-full flex flex-col items-center justify-center">
                 <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-                <p className="text-base font-medium text-foreground">All Systems Nominal</p>
-                <p className="text-sm text-muted-foreground mt-1">No outstanding issues detected by the AI Engine.</p>
+                <p className="text-base font-medium text-foreground">No active executive issues detected</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  No current deterministic risks or priority issues are available in the ERP-backed executive view.
+                </p>
               </div>
             ) : (
               <>

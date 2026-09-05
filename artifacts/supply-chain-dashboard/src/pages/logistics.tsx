@@ -229,7 +229,13 @@ export default function LogisticsPage() {
     });
   };
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
+  const formatValue = (val: number) =>
+    new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(val);
+
+  const openOrders =
+    orders?.filter((order) =>
+      ["pending", "confirmed", "shipped"].includes(order.status)
+    ).length ?? 0;
 
   return (
     <div className="p-8 space-y-8">
@@ -261,7 +267,7 @@ export default function LogisticsPage() {
                 {suppliers?.length ?? 0}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">Active vendor scorecards</p>
+            <p className="text-xs text-muted-foreground mt-1">Registered suppliers</p>
           </CardContent>
         </Card>
 
@@ -281,31 +287,31 @@ export default function LogisticsPage() {
         </Card>
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Fill Rate</CardTitle>
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Supplier Fill Rate</CardTitle>
             <PackageCheck className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent>
             {kpisLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
               <div className="text-3xl font-mono font-bold text-foreground">
-                {(kpis?.fillRate ?? 0).toFixed(1)}%
+                {kpis?.fillRate != null ? `${kpis.fillRate.toFixed(1)}%` : "N/A"}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">% of demand met from stock</p>
+            <p className="text-xs text-muted-foreground mt-1">Average observed supplier fill rate</p>
           </CardContent>
         </Card>
 
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">OTIF Score</CardTitle>
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Supplier On-Time Rate</CardTitle>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
             {kpisLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
               <div className="text-3xl font-mono font-bold text-emerald-600">
-                {(kpis?.otifPercent ?? 0).toFixed(1)}%
+                {kpis?.otifPercent != null ? `${kpis.otifPercent.toFixed(1)}%` : "N/A"}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">On Time In Full deliveries</p>
+            <p className="text-xs text-muted-foreground mt-1">Average observed on-time delivery rate</p>
           </CardContent>
         </Card>
 
@@ -317,7 +323,14 @@ export default function LogisticsPage() {
           <CardContent>
             {kpisLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
               <div className="text-3xl font-mono font-bold text-foreground">
-                {(kpis?.avgLeadTimeDays ?? 0).toFixed(1)} <span className="text-sm font-sans font-normal text-muted-foreground">days</span>
+                {kpis?.avgLeadTimeDays != null ? (
+                  <>
+                    {kpis.avgLeadTimeDays.toFixed(1)}{" "}
+                    <span className="text-sm font-sans font-normal text-muted-foreground">days</span>
+                  </>
+                ) : (
+                  "N/A"
+                )}
               </div>
             )}
             <p className="text-xs text-muted-foreground mt-1">Order to receipt duration</p>
@@ -326,16 +339,16 @@ export default function LogisticsPage() {
 
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active Orders</CardTitle>
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Open Orders</CardTitle>
             <Truck className="w-4 h-4 text-accent" />
           </CardHeader>
           <CardContent>
             {kpisLoading ? <div className="h-8 w-20 bg-muted animate-pulse rounded"></div> : (
               <div className="text-3xl font-mono font-bold text-accent">
-                {(kpis?.totalOrders ?? 0) - (kpis?.ordersFulfilled ?? 0)}
+                {openOrders}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">Purchase orders in transit</p>
+            <p className="text-xs text-muted-foreground mt-1">Pending, confirmed, and shipped</p>
           </CardContent>
         </Card>
       </div>
@@ -364,7 +377,7 @@ export default function LogisticsPage() {
                       <TableHead className="text-right">Lead Time</TableHead>
                       <TableHead className="text-right">OTD %</TableHead>
                       <TableHead className="text-right">Quality</TableHead>
-                      <TableHead className="text-right">Fill Rate</TableHead>
+                      <TableHead className="text-right">Supplier Fill Rate</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -499,7 +512,7 @@ export default function LogisticsPage() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right font-mono font-medium">
-                              {formatCurrency(o.totalValue)}
+                              {formatValue(o.totalValue)}
                             </TableCell>
                             <TableCell className="text-right font-mono text-sm text-muted-foreground">
                               {format(new Date(o.expectedDelivery), 'MMM dd')}
@@ -611,7 +624,7 @@ export default function LogisticsPage() {
                   name="totalValue"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Total Value ($)</FormLabel>
+                      <FormLabel>Total Value</FormLabel>
                       <FormControl>
                         <Input type="number" min="0" step="1" {...field} />
                       </FormControl>
@@ -716,7 +729,7 @@ export default function LogisticsPage() {
                   name="fillRate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Fill Rate (0-100)</FormLabel>
+                      <FormLabel>Supplier Fill Rate (0-100)</FormLabel>
                       <FormControl>
                         <Input type="number" min="0" max="100" step="0.1" {...field} value={field.value ?? ""} />
                       </FormControl>

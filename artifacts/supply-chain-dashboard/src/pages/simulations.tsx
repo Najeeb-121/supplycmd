@@ -212,8 +212,8 @@ export default function SimulationsPage() {
 
       <Tabs defaultValue="single" className="w-full h-full flex flex-col">
         <TabsList className="mb-4 w-max">
-          <TabsTrigger value="single">Single Scenario (SR-4)</TabsTrigger>
-          <TabsTrigger value="portfolio">Portfolio Simulation (SR-6)</TabsTrigger>
+          <TabsTrigger value="single">Single Disruption (SR-4)</TabsTrigger>
+          <TabsTrigger value="portfolio">Mitigation Portfolio (SR-6)</TabsTrigger>
         </TabsList>
 
         <TabsContent value="single" className="flex-1 mt-0">
@@ -303,11 +303,11 @@ export default function SimulationsPage() {
                       <Input
                         id="delay-days"
                         type="number"
-                        min="0"
+                        min="1"
                         value={delayDays}
                         onChange={e => {
                           const val = parseInt(e.target.value);
-                          if (!isNaN(val) && val >= 0) setDelayDays(val.toString());
+                          if (!isNaN(val) && val >= 1) setDelayDays(val.toString());
                           else if (e.target.value === "") setDelayDays("");
                         }}
                       />
@@ -320,11 +320,11 @@ export default function SimulationsPage() {
                       <Input
                         id="surge-percent"
                         type="number"
-                        min="0"
+                        min="1"
                         value={surgePct}
                         onChange={e => {
                           const val = parseInt(e.target.value);
-                          if (!isNaN(val) && val >= 0) setSurgePct(val.toString());
+                          if (!isNaN(val) && val >= 1) setSurgePct(val.toString());
                           else if (e.target.value === "") setSurgePct("");
                         }}
                       />
@@ -337,12 +337,12 @@ export default function SimulationsPage() {
                       <Input
                         id="failure-percent"
                         type="number"
-                        min="0"
+                        min="1"
                         max="100"
                         value={failurePct}
                         onChange={e => {
                           const val = parseInt(e.target.value);
-                          if (!isNaN(val) && val >= 0 && val <= 100) setFailurePct(val.toString());
+                          if (!isNaN(val) && val >= 1 && val <= 100) setFailurePct(val.toString());
                           else if (e.target.value === "") setFailurePct("");
                         }}
                       />
@@ -374,9 +374,22 @@ export default function SimulationsPage() {
             <div className="md:col-span-9 space-y-6">
               {!result && !runSimulation.isPending && (
                 <Card className="h-full flex items-center justify-center bg-muted/20 border-dashed">
-                  <CardContent className="flex flex-col items-center py-20 text-muted-foreground">
-                    <Factory className="w-12 h-12 mb-4 opacity-50" />
-                    <p>Configure a scenario on the left and run the simulation.</p>
+                  <CardContent className="flex flex-col items-center py-20 text-center">
+                    <Factory className="w-12 h-12 mb-4 text-muted-foreground/50" />
+
+                    <h3 className="text-lg font-semibold text-foreground">
+                      Test a disruption against the current ERP baseline
+                    </h3>
+
+                    <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+                      Select a real ERP-backed scenario, product, and required business relationship.
+                      SupplyCMD will compare the baseline with the disrupted outcome and show the
+                      operational impact, timing, financial effect, inventory trace, and available mitigations.
+                    </p>
+
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      Results are calculated from the current SupplyCMD snapshot and scenario inputs.
+                    </p>
                   </CardContent>
                 </Card>
               )}
@@ -423,11 +436,15 @@ export default function SimulationsPage() {
                               )}
                             </h2>
                             <p className="text-lg mt-1">
-                              <span className="font-semibold">{result.result.metrics.totalUnmetDemand.toLocaleString()} units at risk</span>
-                              {" | "}
-                              {result.result.financials.revenueAtRisk.status === "VERIFIED"
-                                ? `${result.result.financials.revenueAtRisk.value?.toLocaleString()} revenue`
-                                : "NOT DETERMINABLE revenue"}
+                              <span className="font-semibold">
+                                {result.result.metrics.totalUnmetDemand.toLocaleString()} units at risk
+                              </span>
+                              <span className="text-muted-foreground">
+                                {" • "}
+                                {result.result.financials.revenueAtRisk.status === "VERIFIED"
+                                  ? `Revenue at risk: ${result.result.financials.revenueAtRisk.value?.toLocaleString()}`
+                                  : "Revenue at risk: not determinable"}
+                              </span>
                             </p>
                           </>
                         )}
@@ -506,7 +523,9 @@ export default function SimulationsPage() {
                           <p className="text-xl font-bold mt-1">
                             {typeof result.result.metrics.coverageDays === "number"
                               ? `${result.result.metrics.coverageDays.toFixed(1)}d`
-                              : result.result.metrics.coverageDays}
+                              : result.result.metrics.coverageDays === "NOT_APPLICABLE"
+                                ? "NOT APPLICABLE"
+                                : result.result.metrics.coverageDays}
                           </p>
                         </CardContent>
                       </Card>
@@ -550,8 +569,7 @@ export default function SimulationsPage() {
                         <Card>
                           <CardContent className="p-6">
                             <p className="text-sm text-muted-foreground">
-                              Production & BOM timing is unavailable until real production schedule data
-                              is returned by the simulation API.
+                              Production & BOM timing is unavailable for this result because verified production schedule data is not available.
                             </p>
                           </CardContent>
                         </Card>
@@ -569,6 +587,8 @@ export default function SimulationsPage() {
                                   <th className="px-4 py-3">Date</th>
                                   <th className="px-4 py-3">Opening</th>
                                   <th className="px-4 py-3">Inbound</th>
+                                  <th className="px-4 py-3">Quality Loss</th>
+                                  <th className="px-4 py-3">Production Output</th>
                                   <th className="px-4 py-3">Consumed</th>
                                   <th className="px-4 py-3">Closing</th>
                                   <th className="px-4 py-3">Shortage</th>
@@ -582,6 +602,8 @@ export default function SimulationsPage() {
                                     <td className="px-4 py-2 font-mono">{row.date}</td>
                                     <td className="px-4 py-2">{row.openingStock}</td>
                                     <td className="px-4 py-2">{row.inbound}</td>
+                                    <td className="px-4 py-2">{row.qualityLoss}</td>
+                                    <td className="px-4 py-2">{row.moOutput}</td>
                                     <td className="px-4 py-2">{row.consumption}</td>
                                     <td className={`px-4 py-2 font-bold ${row.closingStock === 0 && row.isStockout ? 'text-red-500' : 'text-green-600'}`}>
                                       {row.closingStock}
@@ -730,7 +752,7 @@ export default function SimulationsPage() {
                         <Card>
                           <CardContent className="p-6">
                             <p className="text-sm text-muted-foreground">
-                              What-If downstream impact is not available from the current single-scenario simulation endpoint.
+                              What-If downstream impact is not available for this single-disruption result.
                             </p>
                           </CardContent>
                         </Card>

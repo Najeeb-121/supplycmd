@@ -159,8 +159,8 @@ export const KPI_META: KpiMeta[] = [
   },
   {
     id: "order_fulfillment_rate",
-    label: "Order Fulfillment Rate",
-    description: "Orders shipped complete and on time (OTIF)",
+    label: "Supplier On-Time Rate",
+    description: "Average observed supplier on-time delivery rate",
     unit: "%",
     format: "percent",
     goodDirection: "up",

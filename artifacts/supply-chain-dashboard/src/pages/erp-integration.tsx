@@ -368,7 +368,7 @@ export default function ErpIntegrationPage() {
             ERP Integration
           </h1>
           <p className="text-muted-foreground mt-1">
-            Connect your company's Odoo account, then pull vendors and products in. Every sync is
+            Connect your company's Odoo account, then pull supported supply-chain data into SupplyCMD. Every sync is
             triggered manually — nothing runs automatically in the background.
           </p>
         </div>
@@ -510,7 +510,7 @@ export default function ErpIntegrationPage() {
             <div className="border border-border rounded-lg p-4 flex flex-col justify-between space-y-4">
               <div>
                 <h3 className="font-semibold flex items-center gap-2"><Truck className="w-4 h-4 text-primary" /> Logistics</h3>
-                <p className="text-xs text-muted-foreground mt-1">Inbound and outbound orders</p>
+                <p className="text-xs text-muted-foreground mt-1">Stock movements and logistics activity</p>
               </div>
               <Button size="sm" onClick={handleSyncLogistics} disabled={!connection?.connected || syncLogistics.isPending || isSyncingAll} variant="secondary">
                 <RefreshCw className={`w-3 h-3 mr-2 ${syncLogistics.isPending ? "animate-spin" : ""}`} />

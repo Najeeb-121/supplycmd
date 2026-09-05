@@ -5,7 +5,7 @@ import {
   Package,
   ShoppingCart,
   Users,
-  DollarSign,
+  Banknote,
   Activity,
   ArrowRight,
   Clock
@@ -123,12 +123,11 @@ function KpiCard({ title, value, sub, icon: Icon, color }: { title: string; valu
   );
 }
 
-function formatCurrency(val: number, currency = "JOD") {
-  if (val >= 1000000) return `${currency} ${(val / 1000000).toFixed(2)}M`;
-  if (val >= 1000) return `${currency} ${(val / 1000).toFixed(1)}k`;
-  return `${currency} ${val.toLocaleString()}`;
+function formatCurrency(val: number) {
+  if (val >= 1000000) return `${(val / 1000000).toFixed(2)}M`;
+  if (val >= 1000) return `${(val / 1000).toFixed(1)}k`;
+  return val.toLocaleString();
 }
-
 function StatusBadge({ status }: { status: string }) {
   let color = "bg-secondary text-secondary-foreground";
   switch (status.toLowerCase()) {
@@ -202,7 +201,7 @@ export default function SalesDashboardPage() {
               ? "..."
               : formatCurrency(metrics?.confirmedOrderValue ?? 0)
           }
-          icon={DollarSign}
+          icon={Banknote}
           color="bg-blue-500/10 text-blue-500"
         />
 
@@ -326,8 +325,8 @@ export default function SalesDashboardPage() {
                       tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                       tickFormatter={(value) =>
                         value >= 1000
-                          ? `JOD ${(value / 1000).toFixed(1)}k`
-                          : `JOD ${value}`
+                          ? `${(value / 1000).toFixed(1)}k`
+                          : `${value}`
                       }
                       dx={-10}
                     />
@@ -335,7 +334,7 @@ export default function SalesDashboardPage() {
                       contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
                       itemStyle={{ color: 'hsl(var(--foreground))' }}
                       formatter={(value: number) => [
-                        `JOD ${value.toLocaleString()}`,
+                        value.toLocaleString(),
                         "Confirmed Order Value"
                       ]}
                       labelStyle={{ color: 'hsl(var(--muted-foreground))', marginBottom: '4px' }}

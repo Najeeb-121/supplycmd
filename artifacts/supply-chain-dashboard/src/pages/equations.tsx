@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
+import {
+  Card,
+  CardContent,
+  CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -45,12 +45,12 @@ const equations: Record<string, EquationDef[]> = {
       ),
       variables: [
         { symbol: "D", name: "Annual Demand", unit: "units" },
-        { symbol: "S", name: "Ordering Cost per order", unit: "$" },
-        { symbol: "H", name: "Holding Cost per unit per year", unit: "$" },
+        { symbol: "S", name: "Ordering Cost per order", unit: "currency/order" },
+        { symbol: "H", name: "Holding Cost per unit per year", unit: "currency/unit/year" },
       ],
       exampleSteps: (
         <div className="text-sm space-y-1 font-mono text-muted-foreground bg-muted/30 p-3 rounded">
-          <div>Given: D = 10,000, S = $50, H = $2</div>
+          <div>Given: D = 10,000, S = 50, H = 2</div>
           <div>EOQ = √(2 × 10,000 × 50 / 2)</div>
           <div>EOQ = √(1,000,000 / 2)</div>
           <div>EOQ = √500,000 = 707.11 units</div>
@@ -112,12 +112,12 @@ const equations: Record<string, EquationDef[]> = {
         </div>
       ),
       variables: [
-        { symbol: "COGS", name: "Cost of Goods Sold", unit: "$" },
-        { symbol: "Average Inventory", name: "(Beginning + Ending) / 2", unit: "$" },
+        { symbol: "COGS", name: "Cost of Goods Sold", unit: "currency" },
+        { symbol: "Average Inventory", name: "(Beginning + Ending) / 2", unit: "currency" },
       ],
       exampleSteps: (
         <div className="text-sm space-y-1 font-mono text-muted-foreground bg-muted/30 p-3 rounded">
-          <div>Given: COGS = $500k, Avg Inv = $100k</div>
+          <div>Given: COGS = 500k, Avg Inv = 100k</div>
           <div>ITR = 500,000 / 100,000</div>
           <div>ITR = 5.0 times</div>
         </div>
@@ -144,9 +144,9 @@ const equations: Record<string, EquationDef[]> = {
         </div>
       ),
       variables: [
-        { symbol: "A", name: "Availability (Run Time / Planned Time)", unit: "%" },
-        { symbol: "P", name: "Performance (Ideal Cycle Time × Total Count / Run Time)", unit: "%" },
-        { symbol: "Q", name: "Quality (Good Count / Total Count)", unit: "%" },
+        { symbol: "A", name: "Availability ((Actual Time - Downtime) / Planned Time)", unit: "%" },
+        { symbol: "P", name: "Performance (Actual Units / Planned Units)", unit: "%" },
+        { symbol: "Q", name: "Quality ((Actual Units - Defects) / Actual Units)", unit: "%" },
       ],
       exampleSteps: (
         <div className="text-sm space-y-1 font-mono text-muted-foreground bg-muted/30 p-3 rounded">
@@ -160,41 +160,41 @@ const equations: Record<string, EquationDef[]> = {
         { key: "p", label: "Performance (%)", defaultValue: 95, step: "0.1" },
         { key: "q", label: "Quality (%)", defaultValue: 99, step: "0.1" },
       ],
-      calculate: (v) => ((v.a/100) * (v.p/100) * (v.q/100)) * 100,
+      calculate: (v) => ((v.a / 100) * (v.p / 100) * (v.q / 100)) * 100,
       resultLabel: "OEE Score",
       formatResult: (v) => `${Number(v).toFixed(2)}%`
     },
     {
       id: "takt",
-      title: "Takt Time",
-      description: "The rate at which you need to complete a product to meet customer demand.",
+      title: "Planned Production Pace",
+      description: "SupplyCMD's planned production pace, calculated from planned production time and planned units.",
       formulaRender: (
         <div className="font-mono text-xl flex items-center gap-3 py-4 text-primary">
-          <span className="font-bold">Takt</span>
+          <span className="font-bold">Pace</span>
           <span>=</span>
           <span className="flex flex-col items-center">
-            <span className="border-b border-primary pb-1 px-2 mb-1">Available Prod. Time</span>
-            <span className="px-2">Customer Demand</span>
+            <span className="border-b border-primary pb-1 px-2 mb-1">Planned Production Time</span>
+            <span className="px-2">Planned Units</span>
           </span>
         </div>
       ),
       variables: [
-        { symbol: "Time", name: "Net available time per shift", unit: "minutes/seconds" },
-        { symbol: "Demand", name: "Customer demand per shift", unit: "units" },
+        { symbol: "Time", name: "Planned production time", unit: "minutes" },
+        { symbol: "Units", name: "Planned production units", unit: "units" },
       ],
       exampleSteps: (
         <div className="text-sm space-y-1 font-mono text-muted-foreground bg-muted/30 p-3 rounded">
-          <div>Given: Time = 420 mins, Demand = 840 units</div>
-          <div>Takt = (420 × 60 sec) / 840</div>
-          <div>Takt = 25,200 / 840 = 30 seconds/unit</div>
+          <div>Given: Planned Time = 420 mins, Planned Units = 840</div>
+          <div>Planned Pace = (420 × 60 sec) / 840</div>
+          <div>Planned Pace = 25,200 / 840 = 30 seconds/unit</div>
         </div>
       ),
       calcParams: [
-        { key: "time", label: "Available Time (mins)", defaultValue: 420 },
-        { key: "demand", label: "Demand (units)", defaultValue: 840 },
+        { key: "time", label: "Planned Time (mins)", defaultValue: 420 },
+        { key: "units", label: "Planned Units", defaultValue: 840 },
       ],
-      calculate: (v) => (v.time * 60) / (v.demand || 1),
-      resultLabel: "Takt Time",
+      calculate: (v) => (v.time * 60) / (v.units || 1),
+      resultLabel: "Planned Production Pace",
       formatResult: (v) => `${Number(v).toFixed(1)} seconds/unit`
     }
   ],
@@ -208,15 +208,15 @@ const equations: Record<string, EquationDef[]> = {
           <span className="font-bold">MAPE</span>
           <span>=</span>
           <span className="flex items-center gap-2">
-             <span className="flex flex-col items-center">
-                <span className="border-b border-primary pb-1 mb-1">1</span>
-                <span>n</span>
-             </span>
-             <span>∑</span>
-             <span className="flex flex-col items-center">
-                <span className="border-b border-primary pb-1 px-2 mb-1">| A - F |</span>
-                <span className="px-2">A</span>
-             </span>
+            <span className="flex flex-col items-center">
+              <span className="border-b border-primary pb-1 mb-1">1</span>
+              <span>n</span>
+            </span>
+            <span>∑</span>
+            <span className="flex flex-col items-center">
+              <span className="border-b border-primary pb-1 px-2 mb-1">| A - F |</span>
+              <span className="px-2">A</span>
+            </span>
           </span>
         </div>
       ),
@@ -244,8 +244,8 @@ const equations: Record<string, EquationDef[]> = {
   logistics: [
     {
       id: "fillrate",
-      title: "Fill Rate",
-      description: "The fraction of customer demand that is met through immediate stock availability.",
+      title: "Order Fill Rate (Reference)",
+      description: "Reference order-fill formula. SupplyCMD's Logistics dashboard currently displays supplier-reported fill rate when available.",
       formulaRender: (
         <div className="font-mono text-xl flex items-center gap-3 py-4 text-primary">
           <span className="font-bold">Fill Rate</span>
@@ -366,15 +366,15 @@ function EquationCard({ def }: { def: EquationDef }) {
               <div className="w-2 h-2 rounded-full bg-accent"></div>
               Live Calculator
             </h4>
-            
+
             <div className="space-y-3 flex-1">
               {def.calcParams.map(param => (
                 <div key={param.key} className="flex flex-col gap-1">
                   <Label className="text-xs text-muted-foreground font-mono">{param.label}</Label>
-                  <Input 
-                    type="number" 
-                    step={param.step || "1"} 
-                    value={vals[param.key]} 
+                  <Input
+                    type="number"
+                    step={param.step || "1"}
+                    value={vals[param.key]}
                     onChange={(e) => handleChange(param.key, e.target.value)}
                     className="h-8 font-mono"
                   />
@@ -415,7 +415,7 @@ export default function EquationsPage() {
           <TabsTrigger value="logistics" className="data-[state=active]:bg-card rounded-md">Logistics</TabsTrigger>
           <TabsTrigger value="lean" className="data-[state=active]:bg-card rounded-md">Lean Manufacturing</TabsTrigger>
         </TabsList>
-        
+
         {Object.entries(equations).map(([category, eqList]) => (
           <TabsContent key={category} value={category} className="mt-6 focus-visible:outline-none">
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

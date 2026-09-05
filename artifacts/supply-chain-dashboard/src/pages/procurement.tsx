@@ -1,23 +1,23 @@
 import { useMemo } from "react";
-import { 
-  useListOrders, 
-  useListSuppliers 
+import {
+  useListOrders,
+  useListSuppliers
 } from "@workspace/api-client-react";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
+import {
+  Card,
+  CardContent,
+  CardHeader,
   CardTitle,
   CardDescription
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -37,11 +37,15 @@ export default function ProcurementPage() {
 
   // Metrics calculation
   const metrics = useMemo(() => {
-    if (!orders || !suppliers) return { totalSpend: 0, pendingValue: 0, avgDelay: 0, activeSuppliers: 0 };
+    if (!orders || !suppliers) return { totalSpend: 0, pendingValue: 0, avgDelay: null, activeSuppliers: 0 };
 
     const totalSpend = orders.reduce((sum, o) => sum + (o.status === "delivered" ? o.totalValue : 0), 0);
-    const pendingValue = orders.reduce((sum, o) => sum + (['pending', 'confirmed'].includes(o.status) ? o.totalValue : 0), 0);
-    
+    const pendingValue = orders.reduce(
+      (sum, o) =>
+        sum + (["pending", "confirmed", "shipped"].includes(o.status) ? o.totalValue : 0),
+      0,
+    );
+
     let delaySum = 0;
     let delayCount = 0;
     orders.forEach(o => {
@@ -57,7 +61,7 @@ export default function ProcurementPage() {
     return {
       totalSpend,
       pendingValue,
-      avgDelay: delayCount > 0 ? (delaySum / delayCount).toFixed(1) : 0,
+      avgDelay: delayCount > 0 ? (delaySum / delayCount).toFixed(1) : null,
       activeSuppliers: suppliers.length
     };
   }, [orders, suppliers]);
@@ -66,14 +70,14 @@ export default function ProcurementPage() {
   const spendTrend = useMemo(() => {
     if (!orders) return [];
     const monthly = new Map<string, number>();
-    
+
     orders.forEach(o => {
       if (o.status === "delivered") {
         const month = format(parseISO(o.orderDate), "MMM yy");
         monthly.set(month, (monthly.get(month) || 0) + o.totalValue);
       }
     });
-    
+
     return Array.from(monthly.entries())
       .map(([month, spend]) => ({ month, spend }))
       .slice(-6); // Last 6 active months
@@ -96,22 +100,29 @@ export default function ProcurementPage() {
   // Supplier Performance
   const supplierPerformance = useMemo(() => {
     if (!suppliers) return [];
+
     return suppliers
+      .filter(
+        (s) =>
+          s.qualityScore != null &&
+          s.onTimeDeliveryRate != null,
+      )
       .slice(0, 5)
-      .map(s => ({
-        name: s.name.length > 15 ? s.name.substring(0, 15) + '...' : s.name,
+      .map((s) => ({
+        name: s.name.length > 15 ? `${s.name.substring(0, 15)}...` : s.name,
         quality: s.qualityScore,
-        otif: s.onTimeDeliveryRate
+        otif: s.onTimeDeliveryRate,
       }));
   }, [suppliers]);
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(val);
 
   if (ordersLoading || suppliersLoading) {
     return <div className="p-8 space-y-6 animate-pulse">
       <div className="h-10 w-64 bg-muted rounded"></div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {[1,2,3,4].map(i => <div key={i} className="h-32 bg-muted rounded-lg"></div>)}
+        {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-muted rounded-lg"></div>)}
       </div>
     </div>;
   }
@@ -148,7 +159,7 @@ export default function ProcurementPage() {
             <div className="text-3xl font-mono font-bold text-foreground">
               {formatCurrency(metrics.pendingValue)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Pending and confirmed</p>
+            <p className="text-xs text-muted-foreground mt-1">Pending, confirmed, and shipped</p>
           </CardContent>
         </Card>
 
@@ -159,7 +170,7 @@ export default function ProcurementPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-mono font-bold text-foreground">
-              {metrics.avgDelay}
+              {metrics.avgDelay ?? "N/A"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Days beyond expected delivery</p>
           </CardContent>
@@ -190,9 +201,20 @@ export default function ProcurementPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={spendTrend} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(value) => `$${value/1000}k`} />
-                  <Tooltip 
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                    dy={10}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={(value) => `${value / 1000}k`}
+                  />
+                  <Tooltip
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }}
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
                     formatter={(val: number) => formatCurrency(val)}
@@ -212,31 +234,31 @@ export default function ProcurementPage() {
             <CardDescription>Volume by current status</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center relative">
-             {orderStatus.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={orderStatus}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {orderStatus.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
-                    />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                  </PieChart>
-                </ResponsiveContainer>
-             ) : (
-                <div className="text-muted-foreground text-sm">No active orders</div>
-             )}
+            {orderStatus.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={orderStatus}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {orderStatus.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-muted-foreground text-sm">No active orders</div>
+            )}
           </CardContent>
         </Card>
 
@@ -246,14 +268,14 @@ export default function ProcurementPage() {
             <CardDescription>Quality Score vs On-Time Delivery</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px]">
-             {supplierPerformance.length > 0 ? (
+            {supplierPerformance.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={supplierPerformance} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} dy={10} />
                   <YAxis yAxisId="left" domain={[60, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
                   <YAxis yAxisId="right" orientation="right" domain={[60, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }}
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
                     formatter={(val: number) => `${val}%`}
@@ -263,9 +285,11 @@ export default function ProcurementPage() {
                   <Bar yAxisId="right" dataKey="otif" name="On-Time Rate" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} barSize={30} />
                 </BarChart>
               </ResponsiveContainer>
-             ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">No supplier data available</div>
-             )}
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                Verified quality and on-time delivery metrics are not available
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

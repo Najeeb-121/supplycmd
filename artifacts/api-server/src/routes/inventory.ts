@@ -61,6 +61,19 @@ const StrictInventoryPatch = UpdateInventoryItemBody
     { message: "Max Stock must be ≥ Min Stock", path: ["maxStock"] },
   );
 
+export function deriveOperationalStock(
+  currentStock: number,
+  reservedQuantity: number,
+) {
+  const rawAvailableQuantity = currentStock - reservedQuantity;
+
+  return {
+    rawAvailableQuantity,
+    availableQuantity: Math.max(rawAvailableQuantity, 0),
+    reservationShortage: Math.max(-rawAvailableQuantity, 0),
+  };
+}
+
 const router: IRouter = Router();
 
 // ── Planning calculations ─────────────────────────────────────────────────────
@@ -424,6 +437,11 @@ router.post("/inventory", async (req: Request, res: Response): Promise<void> => 
     holdingCostRateSource: planningSources.holdingCostRateSource,
   });
 
+  const operationalStock = deriveOperationalStock(
+    parsed.data.currentStock,
+    parsed.data.reservedQuantity ?? 0,
+  );
+
   const [item] = await db
     .insert(inventoryItemsTable)
     .values({
@@ -431,6 +449,7 @@ router.post("/inventory", async (req: Request, res: Response): Promise<void> => 
       companyId: req.user!.companyId,
       ...planningSources,
       ...metrics,
+      ...operationalStock,
     })
     .returning();
 
@@ -493,13 +512,20 @@ router.patch("/inventory/:id", async (req: Request, res: Response): Promise<void
       reorderPointSource: existing.reorderPointSource,
     };
 
+  const operationalStock = deriveOperationalStock(
+    merged.currentStock,
+    merged.reservedQuantity,
+  );
+
   const [updated] = await db
     .update(inventoryItemsTable)
     .set({
       ...parsed.data,
       ...planningSourceUpdates,
       ...metrics,
+      ...operationalStock,
     })
+
     .where(and(
       eq(inventoryItemsTable.id, params.data.id),
       eq(inventoryItemsTable.companyId, req.user!.companyId),
@@ -566,7 +592,18 @@ router.post("/inventory/:id/movements", async (req: Request, res: Response): Pro
         quantityAfter,
       }).returning();
 
-      await tx.update(inventoryItemsTable).set({ currentStock: quantityAfter }).where(eq(inventoryItemsTable.id, item.id));
+      const operationalStock = deriveOperationalStock(
+        quantityAfter,
+        item.reservedQuantity,
+      );
+
+      await tx
+        .update(inventoryItemsTable)
+        .set({
+          currentStock: quantityAfter,
+          ...operationalStock,
+        })
+        .where(eq(inventoryItemsTable.id, item.id));
 
       return inserted;
     });

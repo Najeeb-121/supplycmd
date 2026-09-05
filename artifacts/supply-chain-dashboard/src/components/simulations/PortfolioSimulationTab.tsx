@@ -174,7 +174,7 @@ export default function PortfolioSimulationTab() {
                   ? "Deterministic Mitigations Unavailable"
                   : availableCandidates.length > 0
                     ? "+ Add Deterministic Mitigation"
-                    : "No More Executable Mitigations"}
+                    : "No Executable Mitigations Available"}
             </Button>
 
             <div className="pt-4 border-t">
@@ -194,9 +194,23 @@ export default function PortfolioSimulationTab() {
       <div className="md:col-span-9 space-y-6">
         {!result && !isPending && !error && (
           <Card className="h-full flex items-center justify-center bg-muted/20 border-dashed">
-            <CardContent className="flex flex-col items-center py-20 text-muted-foreground">
-              <ListTodo className="w-12 h-12 mb-4 opacity-50" />
-              <p>Configure mitigations and run the portfolio simulation.</p>
+            <CardContent className="flex flex-col items-center py-20 text-center">
+              <ListTodo className="w-12 h-12 mb-4 text-muted-foreground/50" />
+
+              <h3 className="text-lg font-semibold text-foreground">
+                Build a mitigation portfolio against the current ERP baseline
+              </h3>
+
+              <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+                SupplyCMD surfaces feasible deterministic mitigation candidates from the
+                current decision context. Add one or more available actions, then run the
+                portfolio simulation to evaluate their combined operational and financial effect.
+              </p>
+
+              <p className="mt-4 text-xs text-muted-foreground">
+                If no executable mitigations are available, the current decision context does
+                not contain a supported feasible action for this portfolio.
+              </p>
             </CardContent>
           </Card>
         )}

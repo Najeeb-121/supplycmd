@@ -3,7 +3,7 @@ import { desc, eq, and, isNotNull, notInArray, sql } from "drizzle-orm";
 import { db, suppliersTable, inventoryItemsTable, odooSyncLogTable, odooConnectionsTable, ordersTable, stockMovementsTable, productionRunsTable, productionWorkOrdersTable, demandRecordsTable, salesOrdersTable, salesOrderLinesTable, bomsTable, bomLinesTable, purchaseOrderLinesTable, productSuppliersTable } from "@workspace/db";
 import { OdooClient, encryptSecret, decryptSecret, type OdooConfig } from "@workspace/integrations-odoo-server";
 import { StrictSupplierBody } from "./suppliers";
-import { StrictInventoryBody } from "./inventory";
+import { StrictInventoryBody, deriveOperationalStock } from "./inventory";
 import { validateBody } from "../lib/validate";
 import { z } from "zod";
 
@@ -1003,6 +1003,24 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
         errors.push(`${sku}: ${validated.error.issues.map((i) => i.message).join("; ")}`);
         continue;
       }
+
+      const [existingInventoryItem] = await db
+        .select({
+          reservedQuantity: inventoryItemsTable.reservedQuantity,
+        })
+        .from(inventoryItemsTable)
+        .where(and(
+          eq(inventoryItemsTable.companyId, companyId),
+          eq(inventoryItemsTable.odooId, odooId),
+        ));
+
+      const reservedQuantity = existingInventoryItem?.reservedQuantity ?? 0;
+
+      const operationalStock = deriveOperationalStock(
+        validated.data.currentStock,
+        reservedQuantity,
+      );
+
       try {
         await db
           .insert(inventoryItemsTable)
@@ -1011,6 +1029,8 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
             companyId,
             odooId,
             odooProductTemplateId,
+            reservedQuantity,
+            ...operationalStock,
           })
           .onConflictDoUpdate({
             target: [inventoryItemsTable.companyId, inventoryItemsTable.odooId],
@@ -1020,6 +1040,7 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
               currentStock: validated.data.currentStock,
               unitCost: validated.data.unitCost,
               category: validated.data.category,
+              ...operationalStock,
             },
           });
         synced++;

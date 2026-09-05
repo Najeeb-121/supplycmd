@@ -141,7 +141,7 @@ export default function ProductionPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Production Operations</h1>
-          <p className="text-muted-foreground mt-1">Real-time floor performance and OEE tracking.</p>
+          <p className="text-muted-foreground mt-1">Production run performance and OEE tracking from synchronized operational data.</p>
         </div>
         <Button onClick={() => setIsFormOpen(true)} className="font-semibold bg-accent text-accent-foreground hover:bg-accent/90">
           <Plus className="w-4 h-4 mr-2" />
@@ -288,7 +288,7 @@ export default function ProductionPage() {
                   "Unknown"
                 ) : (
                   <>
-                    {metrics.throughputPerHour.toFixed(0)}{" "}
+                    {metrics.throughputPerHour.toFixed(1)}{" "}
                     <span className="text-sm font-sans font-normal text-muted-foreground">
                       units/hr
                     </span>
@@ -297,7 +297,6 @@ export default function ProductionPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-mono font-bold">{(metrics?.throughputPerHour ?? 0).toFixed(0)} <span className="text-sm font-sans font-normal text-muted-foreground">units/hr</span></div>
               <p className="text-xs text-muted-foreground mt-1">Average production rate</p>
             </CardContent>
           </Card>

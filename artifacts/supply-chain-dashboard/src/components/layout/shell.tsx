@@ -18,22 +18,42 @@ import {
   ShoppingCart
 } from "lucide-react";
 
-const navItems = [
-  { path: "/", label: "Executive Dashboard", icon: LayoutDashboard },
-  { path: "/inventory", label: "Inventory", icon: Boxes },
-  { path: "/procurement", label: "Procurement", icon: ShoppingCart },
-  { path: "/production", label: "Production (Legacy)", icon: Activity },
-  { path: "/manufacturing", label: "BOMs & Production", icon: Activity },
-  { path: "/demand", label: "Demand Planning", icon: BarChart3 },
-  { path: "/logistics", label: "Logistics", icon: Truck },
-  { path: "/erp-integration", label: "ERP Integration", icon: Plug },
-  { path: "/operational-intelligence", label: "Ops Intelligence", icon: Brain },
-  { path: "/ai-decision-engine", label: "AI Decision Engine", icon: Cpu },
-  { path: "/executive-intelligence", label: "Executive Intelligence", icon: LineChart },
-  { path: "/sales", label: "Sales & Demand", icon: BarChart3 },
-  { path: "/simulations", label: "Simulation Engine", icon: PlayCircle },
-  { path: "/import", label: "ERP Import", icon: Upload },
-  { path: "/equations", label: "Equations Reference", icon: Calculator },
+const navSections = [
+  {
+    label: "Overview",
+    items: [
+      { path: "/", label: "Executive Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { path: "/inventory", label: "Inventory", icon: Boxes },
+      { path: "/procurement", label: "Procurement", icon: ShoppingCart },
+      { path: "/sales", label: "Sales & Demand", icon: BarChart3 },
+      { path: "/demand", label: "Demand Planning", icon: BarChart3 },
+      { path: "/production", label: "Production Performance", icon: Activity },
+      { path: "/manufacturing", label: "Manufacturing & BOMs", icon: Activity },
+      { path: "/logistics", label: "Logistics", icon: Truck },
+    ],
+  },
+  {
+    label: "Intelligence & Decisions",
+    items: [
+      { path: "/operational-intelligence", label: "Ops Intelligence", icon: Brain },
+      { path: "/simulations", label: "Simulation Engine", icon: PlayCircle },
+      { path: "/ai-decision-engine", label: "AI Decision Engine", icon: Cpu },
+      { path: "/executive-intelligence", label: "Executive Intelligence", icon: LineChart },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { path: "/erp-integration", label: "ERP Integration", icon: Plug },
+      { path: "/import", label: "ERP Import", icon: Upload },
+      { path: "/equations", label: "Equations Reference", icon: Calculator },
+    ],
+  },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -58,33 +78,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="font-bold tracking-tight">SupplyCmd</span>
           </div>
         </div>
-        
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          <div className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2 px-3">
-            Operations
-          </div>
-          {navItems.map((item) => {
-            const isActive = location === item.path;
-            const Icon = item.icon;
-            
-            return (
-              <Link 
-                key={item.path} 
-                href={item.path}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium",
-                  isActive 
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground" 
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {item.label}
-              </Link>
-            );
-          })}
+
+        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+          {navSections.map((section, sectionIndex) => (
+            <div
+              key={section.label}
+              className={sectionIndex === 0 ? "" : "mt-5"}
+            >
+              <div className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2 px-3">
+                {section.label}
+              </div>
+
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const isActive = location === item.path;
+                  const Icon = item.icon;
+
+                  return (
+                    <Link
+                      key={item.path}
+                      href={item.path}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium",
+                        isActive
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
-        
+
         <div className="p-4 border-t border-sidebar-border">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-bold text-sidebar-foreground shrink-0">

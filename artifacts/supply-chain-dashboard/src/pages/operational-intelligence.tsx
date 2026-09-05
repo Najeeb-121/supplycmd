@@ -111,7 +111,7 @@ function SyncPill({ isFetching }: { isFetching: boolean }) {
         <span className={cn("relative inline-flex h-2 w-2 rounded-full", isFetching ? "bg-amber-500" : "bg-emerald-500")} />
       </span>
       <Wifi className="w-3 h-3" />
-      <span className="font-medium">{isFetching ? "Fetching real-time data…" : `Data is live`}</span>
+      <span className="font-medium">{isFetching ? "Refreshing operational data…" : "Operational snapshot ready"}</span>
     </div>
   );
 }
@@ -539,14 +539,14 @@ export default function OperationalIntelligencePage() {
           <div className="flex items-center gap-2 mb-1">
             <Brain className="w-5 h-5 text-primary" />
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-              Live Operational Intelligence
+              Operational Intelligence
             </span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             Operations Dashboard
           </h1>
           <p className="text-muted-foreground mt-1">
-            {ops.kpis.length} KPIs currently supported by live ERP data
+            {ops.kpis.length} KPIs currently supported by ERP-backed operational data
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -590,7 +590,7 @@ export default function OperationalIntelligencePage() {
 
             <div className="hidden lg:flex flex-col items-end gap-1 shrink-0">
               <Badge variant="outline" className="text-xs font-mono">
-                Real-Time Connection
+                ERP-Backed Snapshot
               </Badge>
               <span className="text-[11px] text-muted-foreground">
                 Data derived directly from Odoo

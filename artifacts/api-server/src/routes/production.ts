@@ -36,6 +36,14 @@ router.get("/production/metrics/oee", async (req, res): Promise<void> => {
     .select()
     .from(productionRunsTable)
     .where(eq(productionRunsTable.companyId, req.user!.companyId));
+  const executedRuns = runs.filter(
+    (run) =>
+      run.moState !== "cancel" &&
+      (
+        run.actualUnits > 0 ||
+        (run.actualTimeMin !== null && run.actualTimeMin > 0)
+      ),
+  );
 
   const average = (values: number[]): number | null =>
     values.length > 0
@@ -56,7 +64,7 @@ router.get("/production/metrics/oee", async (req, res): Promise<void> => {
   const cycleValues: number[] = [];
   const throughputValues: number[] = [];
 
-  for (const run of runs) {
+  for (const run of executedRuns) {
     const availability =
       run.plannedTimeMin !== null &&
         run.plannedTimeMin > 0 &&

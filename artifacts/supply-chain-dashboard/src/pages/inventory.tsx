@@ -44,9 +44,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
-const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const fmtNum = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
-const formatCurrency = (v: number) => fmt.format(v);
+const fmtMoney = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCurrency = (v: number) => fmtMoney.format(v);
 const formatNum = (v: number | null | undefined) =>
   v == null ? "Unknown" : fmtNum.format(v);
 
@@ -1075,10 +1075,10 @@ export default function InventoryPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Pricing</p>
                 <div className="grid grid-cols-2 gap-3">
                   <FormField control={itemForm.control} name="unitCost" render={({ field }) => (
-                    <FormItem><FormLabel>Cost Price ($) *</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Cost Price *</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="sellingPrice" render={({ field }) => (
-                    <FormItem><FormLabel>Selling Price ($)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Selling Price</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
               </div>
@@ -1118,7 +1118,7 @@ export default function InventoryPage() {
                     <FormItem><FormLabel>Lead Time (Days)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="orderingCost" render={({ field }) => (
-                    <FormItem><FormLabel>Cost per Order ($)</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Cost per Order</FormLabel><FormControl><Input type="number" min="0" step="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={itemForm.control} name="holdingCostRate" render={({ field }) => (
                     <FormItem><FormLabel>Holding Cost Rate (0–1)</FormLabel><FormControl><Input type="number" min="0" step="0.01" max="1" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>

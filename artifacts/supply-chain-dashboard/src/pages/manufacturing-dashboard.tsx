@@ -128,13 +128,13 @@ export default function ManufacturingDashboardPage() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["manufacturing-kpis"] });
       qc.invalidateQueries({ queryKey: ["manufacturing-boms"] });
-      
+
       const summary = data.sync_summary;
       if (summary.status === "SUCCESS") {
         toast({ title: "Sync Complete", description: `Successfully synced ${data.sync_event.records_affected} BOMs.` });
       } else {
-        toast({ 
-          title: "Sync Finished with Errors", 
+        toast({
+          title: "Sync Finished with Errors",
           description: `Synced ${data.sync_event.records_affected} BOMs. Some records failed.`,
           variant: "destructive"
         });
@@ -145,7 +145,7 @@ export default function ManufacturingDashboardPage() {
     }
   });
 
-  const filteredBoms = boms.filter(b => 
+  const filteredBoms = boms.filter(b =>
     b.parentSku.toLowerCase().includes(search.toLowerCase()) ||
     b.bomType.toLowerCase().includes(search.toLowerCase())
   );
@@ -159,8 +159,8 @@ export default function ManufacturingDashboardPage() {
           <p className="text-muted-foreground mt-1">Bill of Materials & Production Specifications</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            onClick={() => syncMutation.mutate()} 
+          <Button
+            onClick={() => syncMutation.mutate()}
             disabled={syncMutation.isPending}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
@@ -244,8 +244,8 @@ export default function ManufacturingDashboardPage() {
                   </TableRow>
                 ) : (
                   filteredBoms.map((bom) => (
-                    <TableRow 
-                      key={bom.id} 
+                    <TableRow
+                      key={bom.id}
                       className="cursor-pointer hover:bg-muted/50 transition-colors"
                       onClick={() => setSelectedBom(bom)}
                     >
@@ -257,7 +257,7 @@ export default function ManufacturingDashboardPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={
-                          bom.bomType === 'phantom' 
+                          bom.bomType === 'phantom'
                             ? 'bg-purple-500/10 text-purple-700 border-purple-500/20'
                             : 'bg-blue-500/10 text-blue-700 border-blue-500/20'
                         }>
@@ -288,7 +288,7 @@ export default function ManufacturingDashboardPage() {
               {selectedBom?.parentSku}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="grid grid-cols-3 gap-4 mb-6 mt-2">
             <div className="bg-muted rounded-lg p-3">
               <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Base Qty</p>
@@ -308,7 +308,7 @@ export default function ManufacturingDashboardPage() {
             <Component className="w-4 h-4" />
             Component Lines
           </h3>
-          
+
           <div className="rounded-md border border-border overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/50">
@@ -329,7 +329,7 @@ export default function ManufacturingDashboardPage() {
                     <TableRow key={comp.id} className={comp.isDeleted ? "opacity-50" : ""}>
                       <TableCell className="font-medium">{comp.childSku}</TableCell>
                       <TableCell className="text-right">{comp.componentQty}</TableCell>
-                      <TableCell>{comp.uomName || "Units"}</TableCell>
+                      <TableCell>{comp.uomName || "N/A"}</TableCell>
                       <TableCell>
                         {comp.isDeleted ? (
                           <Badge variant="outline" className="bg-red-500/10 text-red-700 border-red-500/20">
