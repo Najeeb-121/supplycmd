@@ -6,6 +6,7 @@ import { StrictSupplierBody } from "./suppliers";
 import { StrictInventoryBody, deriveOperationalStock } from "./inventory";
 import { validateBody } from "../lib/validate";
 import { z } from "zod";
+import { requireRole } from "../middlewares/require-auth";
 
 const router: IRouter = Router();
 
@@ -350,123 +351,127 @@ const OdooConnectionInputSchema = z.object({
 });
 
 // ── PUT /integrations/odoo/connection ───────────────────────────────────────────
-router.put("/integrations/odoo/connection", async (req: Request, res: Response): Promise<void> => {
-  const parsed = validateBody(OdooConnectionInputSchema, req, res);
-  if (!parsed.ok) return;
+router.put(
+  "/integrations/odoo/connection",
+  requireRole("owner", "admin"),
+  async (req: Request, res: Response): Promise<void> => {
+    const parsed = validateBody(OdooConnectionInputSchema, req, res);
+    if (!parsed.ok) return;
 
-  const config: OdooConfig = { url: parsed.data.url.replace(/\/+$/, ""), db: parsed.data.db, username: parsed.data.username, apiKey: parsed.data.apiKey };
+    const config: OdooConfig = { url: parsed.data.url.replace(/\/+$/, ""), db: parsed.data.db, username: parsed.data.username, apiKey: parsed.data.apiKey };
 
-  try {
-    const client = new OdooClient(config);
-    await client.authenticate();
-  } catch (err) {
-    res.status(400).json({ connected: false, url: null, db: null, username: null, error: (err as Error).message });
-    return;
-  }
-
-  const companyId = req.user!.companyId;
-  const apiKeyEncrypted = encryptSecret(config.apiKey);
-
-  const [existingConnection] = await db
-    .select()
-    .from(odooConnectionsTable)
-    .where(eq(odooConnectionsTable.companyId, companyId));
-
-  const erpIdentityChanged =
-    existingConnection !== undefined &&
-    (
-      existingConnection.url.replace(/\/+$/, "") !== config.url ||
-      existingConnection.db !== config.db
-    );
-
-  await db.transaction(async (tx) => {
-    if (erpIdentityChanged) {
-      // These parent deletes cascade to their dependent ERP rows.
-      await tx.delete(salesOrdersTable).where(
-        and(
-          eq(salesOrdersTable.companyId, companyId),
-          isNotNull(salesOrdersTable.odooId),
-        ),
-      );
-
-      await tx.delete(ordersTable).where(
-        and(
-          eq(ordersTable.companyId, companyId),
-          isNotNull(ordersTable.odooId),
-        ),
-      );
-
-      await tx.delete(bomsTable).where(
-        and(
-          eq(bomsTable.companyId, companyId),
-          isNotNull(bomsTable.odooBomId),
-        ),
-      );
-
-      await tx.delete(stockMovementsTable).where(
-        and(
-          eq(stockMovementsTable.companyId, companyId),
-          isNotNull(stockMovementsTable.odooId),
-        ),
-      );
-
-      await tx.delete(productionRunsTable).where(
-        and(
-          eq(productionRunsTable.companyId, companyId),
-          isNotNull(productionRunsTable.odooId),
-        ),
-      );
-
-      await tx.delete(demandRecordsTable).where(
-        and(
-          eq(demandRecordsTable.companyId, companyId),
-          isNotNull(demandRecordsTable.odooId),
-        ),
-      );
-
-      await tx.delete(suppliersTable).where(
-        and(
-          eq(suppliersTable.companyId, companyId),
-          isNotNull(suppliersTable.odooId),
-        ),
-      );
-
-      await tx.delete(inventoryItemsTable).where(
-        and(
-          eq(inventoryItemsTable.companyId, companyId),
-          isNotNull(inventoryItemsTable.odooId),
-        ),
-      );
+    try {
+      const client = new OdooClient(config);
+      await client.authenticate();
+    } catch (err) {
+      res.status(400).json({ connected: false, url: null, db: null, username: null, error: (err as Error).message });
+      return;
     }
 
-    await tx
-      .insert(odooConnectionsTable)
-      .values({
-        companyId,
-        url: config.url,
-        db: config.db,
-        username: config.username,
-        apiKeyEncrypted,
-      })
-      .onConflictDoUpdate({
-        target: odooConnectionsTable.companyId,
-        set: {
+    const companyId = req.user!.companyId;
+    const apiKeyEncrypted = encryptSecret(config.apiKey);
+
+    const [existingConnection] = await db
+      .select()
+      .from(odooConnectionsTable)
+      .where(eq(odooConnectionsTable.companyId, companyId));
+
+    const erpIdentityChanged =
+      existingConnection !== undefined &&
+      (
+        existingConnection.url.replace(/\/+$/, "") !== config.url ||
+        existingConnection.db !== config.db
+      );
+
+    await db.transaction(async (tx) => {
+      if (erpIdentityChanged) {
+        // These parent deletes cascade to their dependent ERP rows.
+        await tx.delete(salesOrdersTable).where(
+          and(
+            eq(salesOrdersTable.companyId, companyId),
+            isNotNull(salesOrdersTable.odooId),
+          ),
+        );
+
+        await tx.delete(ordersTable).where(
+          and(
+            eq(ordersTable.companyId, companyId),
+            isNotNull(ordersTable.odooId),
+          ),
+        );
+
+        await tx.delete(bomsTable).where(
+          and(
+            eq(bomsTable.companyId, companyId),
+            isNotNull(bomsTable.odooBomId),
+          ),
+        );
+
+        await tx.delete(stockMovementsTable).where(
+          and(
+            eq(stockMovementsTable.companyId, companyId),
+            isNotNull(stockMovementsTable.odooId),
+          ),
+        );
+
+        await tx.delete(productionRunsTable).where(
+          and(
+            eq(productionRunsTable.companyId, companyId),
+            isNotNull(productionRunsTable.odooId),
+          ),
+        );
+
+        await tx.delete(demandRecordsTable).where(
+          and(
+            eq(demandRecordsTable.companyId, companyId),
+            isNotNull(demandRecordsTable.odooId),
+          ),
+        );
+
+        await tx.delete(suppliersTable).where(
+          and(
+            eq(suppliersTable.companyId, companyId),
+            isNotNull(suppliersTable.odooId),
+          ),
+        );
+
+        await tx.delete(inventoryItemsTable).where(
+          and(
+            eq(inventoryItemsTable.companyId, companyId),
+            isNotNull(inventoryItemsTable.odooId),
+          ),
+        );
+      }
+
+      await tx
+        .insert(odooConnectionsTable)
+        .values({
+          companyId,
           url: config.url,
           db: config.db,
           username: config.username,
           apiKeyEncrypted,
-        },
-      });
-  });
+        })
+        .onConflictDoUpdate({
+          target: odooConnectionsTable.companyId,
+          set: {
+            url: config.url,
+            db: config.db,
+            username: config.username,
+            apiKeyEncrypted,
+          },
+        });
+    });
 
-  res.json({
-    connected: true,
-    url: config.url,
-    db: config.db,
-    username: config.username,
-    error: null,
-  });
-});
+    res.json({
+      connected: true,
+      url: config.url,
+      db: config.db,
+      username: config.username,
+      error: null,
+    });
+  },
+);
 
 // ── POST /integrations/odoo/sync/suppliers ─────────────────────────────────────
 router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Response): Promise<void> => {

@@ -1,4 +1,5 @@
 import "express";
+import type { UserRole } from "./auth";
 
 declare global {
   namespace Express {
@@ -8,7 +9,7 @@ declare global {
         companyId: number;
         email: string;
         name: string;
-        role: string;
+        role: UserRole;
       };
     }
   }

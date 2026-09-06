@@ -2,6 +2,8 @@ import type { Request, Response, NextFunction } from "express";
 import { eq, and, gt } from "drizzle-orm";
 import { db, sessionsTable, usersTable } from "@workspace/db";
 import { SESSION_COOKIE_NAME, hashToken } from "../lib/auth";
+import { isUserRole } from "../types/auth";
+import type { UserRole } from "../types/auth";
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   // TEST-ONLY AUTHENTICATION PATH
@@ -10,6 +12,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     req.user = { id: 1, companyId, email: "e2e-test@pepsico.local", name: "E2E Test User", role: "owner" };
     return next();
   }
+
 
   const token = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
   if (!token) {
@@ -33,7 +36,26 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     res.status(401).json({ error: "Session expired or invalid" });
     return;
   }
+  if (!isUserRole(row.role)) {
+    res.status(403).json({ error: "Invalid user role" });
+    return;
+  }
 
   req.user = { id: row.userId, companyId: row.companyId, email: row.email, name: row.name, role: row.role };
   next();
+}
+export function requireRole(...allowedRoles: UserRole[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      res.status(403).json({ error: "Insufficient permissions" });
+      return;
+    }
+
+    next();
+  };
 }
