@@ -1,12 +1,17 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db, companiesTable, usersTable } from "@workspace/db";
+import {
+  db,
+  companiesTable,
+  companyInvitationsTable,
+  sessionsTable,
+  usersTable,
+} from "@workspace/db";
 import { SignupBody, LoginBody } from "@workspace/api-zod";
 import { validateBody } from "../lib/validate";
 import { requireAuth } from "../middlewares/require-auth";
 import { hashPassword, verifyPassword, createSession, cookieOptions, SESSION_COOKIE_NAME, hashToken } from "../lib/auth";
-import { sessionsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -14,6 +19,12 @@ const StrictSignupBody = SignupBody.extend({
   companyName: z.string().min(1, "Company name is required"),
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Enter a valid email"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+const AcceptInvitationBody = z.object({
+  token: z.string().min(1, "Invitation token is required"),
+  name: z.string().min(1, "Name is required"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
@@ -55,6 +66,117 @@ router.post("/auth/signup", async (req: Request, res: Response): Promise<void> =
     companyName: result.company.name,
   });
 });
+
+router.post(
+  "/auth/invitations/accept",
+  async (req: Request, res: Response): Promise<void> => {
+    const parsed = validateBody(AcceptInvitationBody, req, res);
+    if (!parsed.ok) return;
+
+    const tokenHash = hashToken(parsed.data.token);
+
+    const [invitation] = await db
+      .select({
+        id: companyInvitationsTable.id,
+        companyId: companyInvitationsTable.companyId,
+        email: companyInvitationsTable.email,
+        role: companyInvitationsTable.role,
+        expiresAt: companyInvitationsTable.expiresAt,
+        acceptedAt: companyInvitationsTable.acceptedAt,
+      })
+      .from(companyInvitationsTable)
+      .where(eq(companyInvitationsTable.tokenHash, tokenHash));
+
+    if (
+      !invitation ||
+      invitation.acceptedAt !== null ||
+      invitation.expiresAt <= new Date() ||
+      (invitation.role !== "admin" && invitation.role !== "member")
+    ) {
+      res.status(400).json({ error: "Invitation is invalid or expired" });
+      return;
+    }
+
+    const email = invitation.email.trim().toLowerCase();
+    const passwordHash = await hashPassword(parsed.data.password);
+
+    const result = await db.transaction(async (tx) => {
+      const existingUsers = await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(sql`lower(${usersTable.email}) = ${email}`);
+
+      if (existingUsers.length > 0) {
+        return { conflict: true as const };
+      }
+
+      const [acceptedInvitation] = await tx
+        .update(companyInvitationsTable)
+        .set({ acceptedAt: new Date() })
+        .where(
+          and(
+            eq(companyInvitationsTable.id, invitation.id),
+            isNull(companyInvitationsTable.acceptedAt),
+            gt(companyInvitationsTable.expiresAt, new Date()),
+          ),
+        )
+        .returning({ id: companyInvitationsTable.id });
+
+      if (!acceptedInvitation) {
+        return { invalid: true as const };
+      }
+
+      const [user] = await tx
+        .insert(usersTable)
+        .values({
+          companyId: invitation.companyId,
+          email,
+          passwordHash,
+          name: parsed.data.name,
+          role: invitation.role,
+        })
+        .returning();
+
+      const [company] = await tx
+        .select({
+          id: companiesTable.id,
+          name: companiesTable.name,
+        })
+        .from(companiesTable)
+        .where(eq(companiesTable.id, invitation.companyId));
+
+      if (!company) {
+        throw new Error("Invitation company not found");
+      }
+
+      return { user, company };
+    });
+
+    if ("conflict" in result) {
+      res.status(409).json({
+        error: "An account with this email already exists",
+      });
+      return;
+    }
+
+    if ("invalid" in result) {
+      res.status(400).json({ error: "Invitation is invalid or expired" });
+      return;
+    }
+
+    const { token, expiresAt } = await createSession(result.user.id);
+    res.cookie(SESSION_COOKIE_NAME, token, cookieOptions(expiresAt));
+
+    res.status(201).json({
+      id: result.user.id,
+      email: result.user.email,
+      name: result.user.name,
+      role: result.user.role,
+      companyId: result.company.id,
+      companyName: result.company.name,
+    });
+  },
+);
 
 router.post("/auth/login", async (req: Request, res: Response): Promise<void> => {
   const parsed = validateBody(LoginBody, req, res);

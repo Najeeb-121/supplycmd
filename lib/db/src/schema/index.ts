@@ -12,3 +12,4 @@ export * from "./odooConnections";
 export * from "./sales";
 export * from "./bom";
 export * from "./productionWorkOrders";
+export * from "./companyInvitations";

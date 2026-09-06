@@ -17,6 +17,10 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+export function createInvitationToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
 /** Creates a session row and returns the raw token to set in the cookie. */
 export async function createSession(userId: number): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("hex");

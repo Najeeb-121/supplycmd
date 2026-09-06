@@ -17,6 +17,7 @@ import integrationsRouter from "./integrations";
 import simulationRouter from "./simulation";
 import simulationPortfolioRouter from "./simulation-portfolio";
 import { requireAuth } from "../middlewares/require-auth";
+import companyInvitationsRouter from "./company-invitations";
 
 const router: IRouter = Router();
 
@@ -26,6 +27,7 @@ router.use(authRouter);
 
 // Everything below requires a logged-in user, scoped to their company
 router.use(requireAuth);
+router.use(companyInvitationsRouter);
 router.use(inventoryRouter);
 router.use(salesRouter);
 router.use(suppliersRouter);
