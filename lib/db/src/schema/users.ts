@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { companiesTable } from "./companies";
@@ -9,7 +9,8 @@ export const usersTable = pgTable("users", {
     .notNull()
     .references(() => companiesTable.id, { onDelete: "cascade" }),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  supabaseUserId: uuid("supabase_user_id").unique(),
+  passwordHash: text("password_hash"),
   name: text("name").notNull(),
   role: text("role").notNull().default("owner"), // "owner" | "admin" | "member" — stored, not yet enforced
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
