@@ -1,17 +1,18 @@
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSignup, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { signupSchema, type SignupFormValues } from "@/schemas/auth";
-import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
-  const [isSigningUp, setIsSigningUp] = useState(false);
-  const [confirmationSent, setConfirmationSent] = useState(false);
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const signupMutation = useSignup();
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -19,35 +20,21 @@ export default function SignupPage() {
     mode: "onChange",
   });
 
-  async function onSubmit(values: SignupFormValues) {
-    setIsSigningUp(true);
-
-    try {
-      const { error } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
-        options: {
-          data: {
-            companyName: values.companyName,
-            name: values.name,
-          },
-        },
-      });
-
-      if (error) {
-        form.setError("email", { message: error.message });
-        return;
-      }
-
-      setConfirmationSent(true);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to create account";
-
-      form.setError("email", { message });
-    } finally {
-      setIsSigningUp(false);
-    }
+  function onSubmit(values: SignupFormValues) {
+    signupMutation.mutate({ data: values }, {
+      onSuccess: (user) => {
+        queryClient.setQueryData(getGetCurrentUserQueryKey(), user);
+        setLocation("/");
+      },
+      onError: (e: any) => {
+        const apiErrors = e?.response?.data?.errors ?? e?.data?.errors;
+        if (apiErrors && typeof apiErrors === "object") {
+          Object.entries(apiErrors).forEach(([field, message]) => {
+            form.setError(field as any, { message: String(message) });
+          });
+        }
+      },
+    });
   }
 
   return (
@@ -110,14 +97,9 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={isSigningUp || confirmationSent || !form.formState.isValid}>
-                {isSigningUp ? "Creating..." : confirmationSent ? "Confirmation Email Sent" : "Create Workspace"}
+              <Button type="submit" className="w-full" disabled={signupMutation.isPending || !form.formState.isValid}>
+                {signupMutation.isPending ? "Creating..." : "Create Workspace"}
               </Button>
-              {confirmationSent && (
-                <p className="text-sm text-muted-foreground text-center">
-                  Check your email and confirm your account, then return here and log in.
-                </p>
-              )}
             </form>
           </Form>
           <p className="text-sm text-muted-foreground text-center mt-4">

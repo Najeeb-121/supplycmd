@@ -1,20 +1,18 @@
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { getCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { useLogin, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { loginSchema, type LoginFormValues } from "@/schemas/auth";
-import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const loginMutation = useLogin();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -22,95 +20,16 @@ export default function LoginPage() {
     mode: "onChange",
   });
 
-  async function onSubmit(values: LoginFormValues) {
-    setIsLoggingIn(true);
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: values.email,
-        password: values.password,
-      });
-
-      if (error) {
-        console.error("Supabase login error:", error);
-        form.setError("password", { message: error.message });
-        return;
-      }
-
-      let user;
-
-      try {
-        user = await getCurrentUser();
-      } catch (error) {
-        const apiError = error as {
-          status?: number;
-          data?: { error?: string };
-        };
-
-        const isUnlinkedSupabaseUser =
-          apiError.status === 401 &&
-          apiError.data?.error ===
-          "Supabase user is not linked to a SupplyCMD account";
-
-        if (!isUnlinkedSupabaseUser) {
-          throw error;
-        }
-
-        const accessToken = data.session?.access_token;
-        const companyName = data.user?.user_metadata?.companyName;
-        const name = data.user?.user_metadata?.name;
-
-        if (
-          !accessToken ||
-          typeof companyName !== "string" ||
-          !companyName.trim() ||
-          typeof name !== "string" ||
-          !name.trim()
-        ) {
-          throw new Error(
-            "Your signup profile is incomplete. Please create your account again."
-          );
-        }
-
-        const provisionResponse = await fetch(
-          "/api/auth/supabase/provision",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              companyName,
-              name,
-            }),
-          }
-        );
-
-        if (!provisionResponse.ok) {
-          const provisionError = await provisionResponse
-            .json()
-            .catch(() => null) as { error?: string } | null;
-
-          throw new Error(
-            provisionError?.error ?? "Unable to create SupplyCMD workspace"
-          );
-        }
-
-        user = await getCurrentUser();
-      }
-
-      queryClient.setQueryData(getGetCurrentUserQueryKey(), user);
-      setLocation("/");
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to sign in";
-
-      console.error("SupplyCMD login error:", error);
-      form.setError("password", { message });
-    } finally {
-      setIsLoggingIn(false);
-    }
+  function onSubmit(values: LoginFormValues) {
+    loginMutation.mutate({ data: values }, {
+      onSuccess: (user) => {
+        queryClient.setQueryData(getGetCurrentUserQueryKey(), user);
+        setLocation("/");
+      },
+      onError: () => {
+        form.setError("password", { message: "Invalid email or password" });
+      },
+    });
   }
 
   return (
@@ -151,8 +70,8 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={isLoggingIn || !form.formState.isValid}>
-                {isLoggingIn ? "Logging in..." : "Log in"}
+              <Button type="submit" className="w-full" disabled={loginMutation.isPending || !form.formState.isValid}>
+                {loginMutation.isPending ? "Logging in..." : "Log in"}
               </Button>
             </form>
           </Form>

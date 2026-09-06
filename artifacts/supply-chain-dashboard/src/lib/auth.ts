@@ -1,19 +1,21 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
-import { supabase } from "@/lib/supabase";
+import { useGetCurrentUser, useLogout as useLogoutMutation, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+
 export function useAuth() {
   const queryClient = useQueryClient();
   const { data: user, isLoading, isError } = useGetCurrentUser({
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
   });
+  const logoutMutation = useLogoutMutation();
 
-  async function logout() {
-    await supabase.auth.signOut();
-
-    queryClient.setQueryData(getGetCurrentUserQueryKey(), undefined);
-    queryClient.clear();
-
-    window.location.href = "/login";
+  function logout() {
+    logoutMutation.mutate(undefined, {
+      onSuccess: () => {
+        queryClient.setQueryData(getGetCurrentUserQueryKey(), undefined);
+        queryClient.invalidateQueries();
+        window.location.href = "/";
+      },
+    });
   }
 
   return {
