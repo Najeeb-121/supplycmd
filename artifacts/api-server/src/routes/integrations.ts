@@ -133,7 +133,7 @@ export function getOdooCleanupDecision(
     return "delete_missing";
   }
 
-  if (localRecordCount > 5) {
+  if (localRecordCount > 0) {
     return "preserve_suspicious_empty";
   }
 

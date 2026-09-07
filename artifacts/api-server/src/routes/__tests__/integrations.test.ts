@@ -26,14 +26,14 @@ describe("Integrations Sync Safety", () => {
     );
   });
 
-  it("blocks suspicious empty-result deletion when local records exceed five", () => {
-    expect(getOdooCleanupDecision(0, 0, 10)).toBe(
+  it("preserves existing records after a successful but empty Odoo fetch", () => {
+    expect(getOdooCleanupDecision(0, 0, 5)).toBe(
       "preserve_suspicious_empty",
     );
   });
 
-  it("allows an authoritative empty result to delete five or fewer records", () => {
-    expect(getOdooCleanupDecision(0, 0, 5)).toBe(
+  it("allows empty cleanup when there are no local records to delete", () => {
+    expect(getOdooCleanupDecision(0, 0, 0)).toBe(
       "delete_all",
     );
   });
