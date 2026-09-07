@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, companyInvitationsTable, usersTable } from "@workspace/db";
 import { validateBody } from "../lib/validate";
@@ -61,7 +61,10 @@ router.post(
           acceptedAt: null,
           createdByUserId: req.user!.id,
         })
-        .where(eq(companyInvitationsTable.id, existingInvitation.id));
+        .where(and(
+          eq(companyInvitationsTable.id, existingInvitation.id),
+          eq(companyInvitationsTable.companyId, companyId),
+        ));
     } else {
       await db.insert(companyInvitationsTable).values({
         companyId,
