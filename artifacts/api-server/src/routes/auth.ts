@@ -11,7 +11,15 @@ import {
 import { SignupBody, LoginBody } from "@workspace/api-zod";
 import { validateBody } from "../lib/validate";
 import { requireAuth } from "../middlewares/require-auth";
-import { hashPassword, verifyPassword, createSession, cookieOptions, SESSION_COOKIE_NAME, hashToken } from "../lib/auth";
+import {
+  hashPassword,
+  verifyPassword,
+  createSession,
+  cookieOptions,
+  SESSION_COOKIE_NAME,
+  hashToken,
+  normalizeEmail,
+} from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -31,8 +39,9 @@ const AcceptInvitationBody = z.object({
 router.post("/auth/signup", async (req: Request, res: Response): Promise<void> => {
   const parsed = validateBody(StrictSignupBody, req, res);
   if (!parsed.ok) return;
+  const email = normalizeEmail(parsed.data.email);
 
-  const existing = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, parsed.data.email));
+  const existing = await db.select({ id: usersTable.id }).from(usersTable).where(sql`lower(${usersTable.email}) = ${email}`);
   if (existing.length > 0) {
     res.status(400).json({ errors: { email: "An account with this email already exists" } });
     return;
@@ -46,7 +55,7 @@ router.post("/auth/signup", async (req: Request, res: Response): Promise<void> =
       .insert(usersTable)
       .values({
         companyId: company.id,
-        email: parsed.data.email,
+        email,
         passwordHash,
         name: parsed.data.name,
         role: "owner",
@@ -181,6 +190,7 @@ router.post(
 router.post("/auth/login", async (req: Request, res: Response): Promise<void> => {
   const parsed = validateBody(LoginBody, req, res);
   if (!parsed.ok) return;
+  const email = normalizeEmail(parsed.data.email);
 
   const [row] = await db
     .select({
@@ -194,7 +204,7 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
     })
     .from(usersTable)
     .innerJoin(companiesTable, eq(usersTable.companyId, companiesTable.id))
-    .where(eq(usersTable.email, parsed.data.email));
+    .where(sql`lower(${usersTable.email}) = ${email}`);
 
   if (!row || !(await verifyPassword(parsed.data.password, row.passwordHash))) {
     res.status(401).json({ error: "Invalid email or password" });

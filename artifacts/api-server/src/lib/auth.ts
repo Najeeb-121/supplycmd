@@ -21,6 +21,10 @@ export function createInvitationToken(): string {
   return randomBytes(32).toString("hex");
 }
 
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 /** Creates a session row and returns the raw token to set in the cookie. */
 export async function createSession(userId: number): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("hex");
