@@ -1357,95 +1357,106 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
       };
 
       try {
-        const [localOrder] = await db
-          .insert(ordersTable)
-          .values(candidate)
-          .onConflictDoUpdate({
-            target: [ordersTable.companyId, ordersTable.odooId],
-            set: {
-              totalValue: candidate.totalValue,
-              status: candidate.status,
-              expectedDelivery: candidate.expectedDelivery,
-            },
-          })
-          .returning({ id: ordersTable.id });
+        await db.transaction(async (tx) => {
+          const [localOrder] = await tx
+            .insert(ordersTable)
+            .values(candidate)
+            .onConflictDoUpdate({
+              target: [ordersTable.companyId, ordersTable.odooId],
+              set: {
+                totalValue: candidate.totalValue,
+                status: candidate.status,
+                expectedDelivery: candidate.expectedDelivery,
+              },
+            })
+            .returning({ id: ordersTable.id });
 
-        const odooLines = purchaseLinesByOrderId.get(odooId) ?? [];
+          const odooLines = purchaseLinesByOrderId.get(odooId) ?? [];
 
-        // The line table has no unique Odoo-ID constraint.
-        // Replace this PO's synchronized lines to keep repeated syncs idempotent.
-        await db
-          .delete(purchaseOrderLinesTable)
-          .where(
-            and(
-              eq(purchaseOrderLinesTable.companyId, companyId),
-              eq(purchaseOrderLinesTable.orderId, localOrder.id),
-            ),
-          );
-
-        for (const line of odooLines) {
-          const lineOdooId = parsePositiveOdooId(line.id);
-          const productOdooId = many2oneId(line.product_id);
-
-          if (lineOdooId === null || productOdooId === null) {
-            throw new Error("Purchase-order line has an invalid Odoo ID or product.");
-          }
-
-          const inventoryItem = inventoryByOdooId.get(productOdooId);
-
-          if (!inventoryItem) {
-            throw new Error(
-              `PO line #${lineOdooId}: Odoo product ${productOdooId} was not found in local inventory.`,
+          // The line table has no unique Odoo-ID constraint.
+          // Replace this PO's synchronized lines atomically so a failed
+          // replacement preserves the previously valid line set.
+          await tx
+            .delete(purchaseOrderLinesTable)
+            .where(
+              and(
+                eq(purchaseOrderLinesTable.companyId, companyId),
+                eq(purchaseOrderLinesTable.orderId, localOrder.id),
+              ),
             );
+
+          for (const line of odooLines) {
+            const lineOdooId = parsePositiveOdooId(line.id);
+            const productOdooId = many2oneId(line.product_id);
+
+            if (lineOdooId === null || productOdooId === null) {
+              throw new Error(
+                "Purchase-order line has an invalid Odoo ID or product.",
+              );
+            }
+
+            const inventoryItem = inventoryByOdooId.get(productOdooId);
+
+            if (!inventoryItem) {
+              throw new Error(
+                `PO line #${lineOdooId}: Odoo product ${productOdooId} was not found in local inventory.`,
+              );
+            }
+
+            const orderedQuantity = parseNonNegativeOdooNumber(line.product_qty);
+            const receivedQuantity = parseNonNegativeOdooNumber(line.qty_received);
+            const unitPrice = parseNonNegativeOdooNumber(line.price_unit);
+
+            if (
+              orderedQuantity === null ||
+              receivedQuantity === null ||
+              unitPrice === null
+            ) {
+              throw new Error(
+                `PO line #${lineOdooId}: Invalid quantity or price data.`,
+              );
+            }
+
+            const expectedDate =
+              typeof line.date_planned === "string" && line.date_planned.trim()
+                ? line.date_planned.split(" ")[0]
+                : datePlanned;
+
+            const currencyTuple =
+              Array.isArray(line.currency_id) ? line.currency_id : null;
+
+            const currency =
+              currencyTuple &&
+                typeof currencyTuple[1] === "string" &&
+                currencyTuple[1].trim()
+                ? currencyTuple[1].trim()
+                : null;
+
+            if (!currency) {
+              throw new Error(
+                `PO line #${lineOdooId}: Currency was not provided by Odoo.`,
+              );
+            }
+
+            await tx.insert(purchaseOrderLinesTable).values({
+              companyId,
+              orderId: localOrder.id,
+              inventoryItemId: inventoryItem.id,
+              supplierId: supplier.id,
+              odooId: lineOdooId,
+              orderedQuantity,
+              receivedQuantity,
+              remainingQuantity: Math.max(
+                orderedQuantity - receivedQuantity,
+                0,
+              ),
+              unitPrice,
+              currency,
+              status,
+              expectedDate,
+            });
           }
-
-          const orderedQuantity = parseNonNegativeOdooNumber(line.product_qty);
-          const receivedQuantity = parseNonNegativeOdooNumber(line.qty_received);
-          const unitPrice = parseNonNegativeOdooNumber(line.price_unit);
-
-          if (
-            orderedQuantity === null ||
-            receivedQuantity === null ||
-            unitPrice === null
-          ) {
-            throw new Error(
-              `PO line #${lineOdooId}: Invalid quantity or price data.`,
-            );
-          }
-
-          const expectedDate =
-            typeof line.date_planned === "string" && line.date_planned.trim()
-              ? line.date_planned.split(" ")[0]
-              : datePlanned;
-
-          const currencyTuple =
-            Array.isArray(line.currency_id) ? line.currency_id : null;
-
-          const currency =
-            currencyTuple &&
-              typeof currencyTuple[1] === "string" &&
-              currencyTuple[1].trim()
-              ? currencyTuple[1]
-              : "USD";
-
-          await db.insert(purchaseOrderLinesTable).values({
-            companyId,
-            orderId: localOrder.id,
-            inventoryItemId: inventoryItem.id,
-            supplierId: supplier.id,
-            odooId: lineOdooId,
-            orderedQuantity,
-            receivedQuantity,
-            remainingQuantity: Math.max(
-              orderedQuantity - receivedQuantity,
-              0,
-            ),
-            unitPrice,
-            currency,
-            status,
-            expectedDate,
-          });
-        }
+        });
 
         synced++;
       } catch (err) {
@@ -1504,7 +1515,7 @@ router.post("/integrations/odoo/sync/procurement", async (req: Request, res: Res
     ) {
       syncStatus = "suspicious_empty_result";
       errors.push(
-        `Suspicious empty result. Local record count (${localRecordCount}) > 5. Skipping auto-delete.`,
+        `Suspicious empty result. Local record count (${localRecordCount}) > 0. Skipping auto-delete.`,
       );
     }
 
