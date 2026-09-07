@@ -92,8 +92,17 @@ router.get("/simulation/graph", async (req: Request, res: Response): Promise<voi
       const configuredSuppliers = await db.select({
         name: suppliersTable.name
       }).from(productSuppliersTable)
-        .innerJoin(suppliersTable, eq(productSuppliersTable.supplierId, suppliersTable.id))
-        .where(inArray(productSuppliersTable.inventoryItemId, configuredItemIds));
+        .innerJoin(
+          suppliersTable,
+          and(
+            eq(productSuppliersTable.supplierId, suppliersTable.id),
+            eq(suppliersTable.companyId, req.user!.companyId),
+          ),
+        )
+        .where(and(
+          eq(productSuppliersTable.companyId, req.user!.companyId),
+          inArray(productSuppliersTable.inventoryItemId, configuredItemIds),
+        ));
       configuredSupplierNames = new Set(configuredSuppliers.map(s => s.name).filter(Boolean));
     }
 
@@ -615,7 +624,10 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       .from(salesOrderLinesTable)
       .innerJoin(
         salesOrdersTable,
-        eq(salesOrderLinesTable.orderId, salesOrdersTable.id)
+        and(
+          eq(salesOrderLinesTable.orderId, salesOrdersTable.id),
+          eq(salesOrdersTable.companyId, companyId),
+        ),
       )
       .where(and(
         eq(salesOrderLinesTable.companyId, companyId),
@@ -629,7 +641,10 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
       .from(salesOrderLinesTable)
       .innerJoin(
         salesOrdersTable,
-        eq(salesOrderLinesTable.orderId, salesOrdersTable.id)
+        and(
+          eq(salesOrderLinesTable.orderId, salesOrdersTable.id),
+          eq(salesOrdersTable.companyId, companyId),
+        ),
       )
       .where(eq(salesOrderLinesTable.companyId, companyId));
 
