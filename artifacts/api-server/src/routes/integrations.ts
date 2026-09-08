@@ -1015,16 +1015,20 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
       );
       const name = optionalOdooString(p.name);
       const sku = optionalOdooString(p.default_code);
+      const category = optionalOdooString(
+        Array.isArray(p.categ_id) ? p.categ_id[1] : null,
+      );
 
       if (
         odooId === null ||
         odooProductTemplateId === null ||
         name === null ||
-        sku === null
+        sku === null ||
+        category === null
       ) {
         failed++;
         errors.push(
-          "Product has an invalid Odoo ID, template ID, name, or SKU.",
+          "Product has an invalid Odoo ID, template ID, name, SKU, or category.",
         );
         continue;
       }
@@ -1032,10 +1036,7 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
       const candidate = {
         name,
         sku,
-        category:
-          optionalOdooString(
-            Array.isArray(p.categ_id) ? p.categ_id[1] : null,
-          ) ?? "Uncategorized",
+        category,
         currentStock: num(p.qty_available),
         unitCost: num(p.standard_price),
       };
@@ -1079,6 +1080,7 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
             set: {
               odooProductTemplateId,
               name: validated.data.name,
+              sku: validated.data.sku,
               currentStock: validated.data.currentStock,
               unitCost: validated.data.unitCost,
               category: validated.data.category,
