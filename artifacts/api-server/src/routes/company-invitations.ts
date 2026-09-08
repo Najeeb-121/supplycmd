@@ -15,6 +15,26 @@ const CreateInvitationBody = z.object({
   role: z.enum(["admin", "member"]),
 });
 
+router.get(
+  "/company/users",
+  requireRole("owner", "admin"),
+  async (req: Request, res: Response): Promise<void> => {
+    const companyId = req.user!.companyId;
+
+    const users = await db
+      .select({
+        id: usersTable.id,
+        name: usersTable.name,
+        email: usersTable.email,
+        role: usersTable.role,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.companyId, companyId));
+
+    res.json(users);
+  },
+);
+
 router.post(
   "/company/invitations",
   requireRole("owner", "admin"),

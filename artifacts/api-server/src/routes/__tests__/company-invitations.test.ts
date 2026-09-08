@@ -66,7 +66,10 @@ vi.mock("@workspace/db", () => ({
   usersTable: {
     __kind: "users",
     id: "users.id",
+    companyId: "users.company_id",
     email: "users.email",
+    name: "users.name",
+    role: "users.role",
   },
   companyInvitationsTable: {
     __kind: "companyInvitations",
@@ -105,6 +108,42 @@ describe("Company invitation behavior", () => {
     mockInvitationWhere.mockResolvedValue([]);
     mockInvitationInsertValues.mockResolvedValue([]);
     mockInvitationUpdateWhere.mockResolvedValue([]);
+  });
+
+  it("lists only users from the authenticated company", async () => {
+    mockUserWhere.mockResolvedValueOnce([
+      {
+        id: 11,
+        name: "Company A Owner",
+        email: "owner@example.com",
+        role: "owner",
+      },
+    ]);
+
+    const app = createTestApp(42);
+
+    const res = await request(app)
+      .get("/api/company/users")
+      .query({
+        companyId: 999,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      {
+        id: 11,
+        name: "Company A Owner",
+        email: "owner@example.com",
+        role: "owner",
+      },
+    ]);
+
+    expect(mockUserWhere).toHaveBeenCalledTimes(1);
+    expect(mockUserWhere).toHaveBeenCalledWith({
+      type: "eq",
+      column: "users.company_id",
+      value: 42,
+    });
   });
 
   it("rejects an email that already belongs to a user", async () => {
