@@ -3199,7 +3199,7 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
       );
 
     if (
-      allRows.length > 5 &&
+      allRows.length > 0 &&
       synced === 0 &&
       failed === 0
     ) {
