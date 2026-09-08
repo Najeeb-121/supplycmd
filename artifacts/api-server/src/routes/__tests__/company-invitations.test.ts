@@ -3,6 +3,23 @@ import express, { type Express } from "express";
 import request from "supertest";
 import { createHash } from "node:crypto";
 
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+
+  return {
+    ...actual,
+    eq: vi.fn((column: unknown, value: unknown) => ({
+      type: "eq",
+      column,
+      value,
+    })),
+    and: vi.fn((...conditions: unknown[]) => ({
+      type: "and",
+      conditions,
+    })),
+  };
+});
+
 const {
   mockUserWhere,
   mockInvitationWhere,
@@ -159,7 +176,7 @@ describe("Company invitation behavior", () => {
   it("rotates the token when resending an existing invitation", async () => {
     mockInvitationWhere.mockResolvedValueOnce([{ id: 7 }]);
 
-    const app = createTestApp();
+    const app = createTestApp(42);
 
     const res = await request(app)
       .post("/api/company/invitations")
@@ -186,5 +203,21 @@ describe("Company invitation behavior", () => {
     expect(updated.acceptedAt).toBeNull();
     expect(updated.role).toBe("admin");
     expect(updated.createdByUserId).toBe(11);
+    expect(mockInvitationUpdateWhere).toHaveBeenCalledTimes(1);
+    expect(mockInvitationUpdateWhere).toHaveBeenCalledWith({
+      type: "and",
+      conditions: [
+        {
+          type: "eq",
+          column: "company_invitations.id",
+          value: 7,
+        },
+        {
+          type: "eq",
+          column: "company_invitations.company_id",
+          value: 42,
+        },
+      ],
+    });
   });
 });
