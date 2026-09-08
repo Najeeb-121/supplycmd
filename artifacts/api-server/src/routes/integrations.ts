@@ -2319,22 +2319,12 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
       }
 
       try {
-        const [savedBom] = await db
-          .insert(bomsTable)
-          .values({
-            companyId,
-            odooBomId,
-            parentSkuId: parentItem.id,
-            parentSku: parentItem.sku,
-            parentBomQty,
-            bomType: optionalOdooString(odooBom.type),
-            isActive,
-            prioritySequence,
-            lastSyncedAt: new Date(),
-          })
-          .onConflictDoUpdate({
-            target: [bomsTable.companyId, bomsTable.odooBomId],
-            set: {
+        await db.transaction(async (tx) => {
+          const [savedBom] = await tx
+            .insert(bomsTable)
+            .values({
+              companyId,
+              odooBomId,
               parentSkuId: parentItem.id,
               parentSku: parentItem.sku,
               parentBomQty,
@@ -2342,82 +2332,108 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
               isActive,
               prioritySequence,
               lastSyncedAt: new Date(),
-            },
-          })
-          .returning();
-
-        if (!savedBom) {
-          failed++;
-          errors.push(`BOM #${odooBomId}: failed to save.`);
-          continue;
-        }
-
-        const odooLines = await client.searchRead<Record<string, unknown>>(
-          "mrp.bom.line",
-          [["bom_id", "=", odooBomId]],
-          ["id", "product_id", "product_qty", "uom_id"]
-        );
-
-        for (const odooLine of odooLines) {
-          const odooLineId = parsePositiveOdooId(odooLine.id);
-          const componentProductId = many2oneId(
-            odooLine.product_id,
-          );
-          const componentQty = parsePositiveOdooNumber(
-            odooLine.product_qty,
-          );
-          const uomName = optionalOdooString(
-            Array.isArray(odooLine.uom_id)
-              ? odooLine.uom_id[1]
-              : null,
-          );
-
-          if (
-            odooLineId === null ||
-            componentProductId === null ||
-            componentQty === null
-          ) {
-            failed++;
-            errors.push(
-              "BOM line has an invalid Odoo ID, component product, or quantity.",
-            );
-            continue;
-          }
-
-          const childItem = byProductId.get(componentProductId);
-
-          if (!childItem) {
-            failed++;
-            errors.push(
-              `BOM line #${odooLineId}: product.product #${componentProductId} is not mapped to a local inventory item.`
-            );
-            continue;
-          }
-
-          await db
-            .insert(bomLinesTable)
-            .values({
-              companyId,
-              odooLineId,
-              bomId: savedBom.id,
-              childSkuId: childItem.id,
-              childSku: childItem.sku,
-              componentQty,
-              uomName,
-              isDeleted: false,
             })
             .onConflictDoUpdate({
-              target: [bomLinesTable.companyId, bomLinesTable.odooLineId],
+              target: [bomsTable.companyId, bomsTable.odooBomId],
               set: {
+                parentSkuId: parentItem.id,
+                parentSku: parentItem.sku,
+                parentBomQty,
+                bomType: optionalOdooString(odooBom.type),
+                isActive,
+                prioritySequence,
+                lastSyncedAt: new Date(),
+              },
+            })
+            .returning();
+
+          if (!savedBom) {
+            throw new Error(`BOM #${odooBomId}: failed to save.`);
+          }
+
+          const odooLines = await client.searchRead<Record<string, unknown>>(
+            "mrp.bom.line",
+            [["bom_id", "=", odooBomId]],
+            ["id", "product_id", "product_qty", "uom_id"]
+          );
+
+          const fetchedBomLineIds = odooLines
+            .map((line) => parsePositiveOdooId(line.id))
+            .filter((id): id is number => id !== null);
+
+          for (const odooLine of odooLines) {
+            const odooLineId = parsePositiveOdooId(odooLine.id);
+            const componentProductId = many2oneId(
+              odooLine.product_id,
+            );
+            const componentQty = parsePositiveOdooNumber(
+              odooLine.product_qty,
+            );
+            const uomName = optionalOdooString(
+              Array.isArray(odooLine.uom_id)
+                ? odooLine.uom_id[1]
+                : null,
+            );
+
+            if (
+              odooLineId === null ||
+              componentProductId === null ||
+              componentQty === null
+            ) {
+              throw new Error(
+                "BOM line has an invalid Odoo ID, component product, or quantity.",
+              );
+            }
+
+            const childItem = byProductId.get(componentProductId);
+
+            if (!childItem) {
+              throw new Error(
+                `BOM line #${odooLineId}: product.product #${componentProductId} is not mapped to a local inventory item.`,
+              );
+            }
+
+            await tx
+              .insert(bomLinesTable)
+              .values({
+                companyId,
+                odooLineId,
                 bomId: savedBom.id,
                 childSkuId: childItem.id,
                 childSku: childItem.sku,
                 componentQty,
                 uomName,
                 isDeleted: false,
-              },
-            });
-        }
+              })
+              .onConflictDoUpdate({
+                target: [bomLinesTable.companyId, bomLinesTable.odooLineId],
+                set: {
+                  bomId: savedBom.id,
+                  childSkuId: childItem.id,
+                  childSku: childItem.sku,
+                  componentQty,
+                  uomName,
+                  isDeleted: false,
+                },
+              });
+          }
+
+          if (fetchedBomLineIds.length > 0) {
+            await tx
+              .update(bomLinesTable)
+              .set({ isDeleted: true })
+              .where(
+                and(
+                  eq(bomLinesTable.companyId, companyId),
+                  eq(bomLinesTable.bomId, savedBom.id),
+                  notInArray(
+                    bomLinesTable.odooLineId,
+                    fetchedBomLineIds,
+                  ),
+                ),
+              );
+          }
+        });
 
         synced++;
       } catch (err) {
@@ -2426,8 +2442,62 @@ router.post("/integrations/odoo/sync/boms", async (req: Request, res: Response):
       }
     }
 
-    const syncStatus =
+    let syncStatus =
       failed === 0 ? "success" : synced > 0 ? "partial" : "error";
+
+    const fetchedBomIds = odooBoms
+      .map((bom) => parsePositiveOdooId(bom.id))
+      .filter((id): id is number => id !== null);
+
+    let localBomCount = 0;
+
+    if (fetchedBomIds.length === 0 && failed === 0) {
+      const localBoms = await db
+        .select({ id: bomsTable.id })
+        .from(bomsTable)
+        .where(
+          and(
+            eq(bomsTable.companyId, companyId),
+            isNotNull(bomsTable.odooBomId),
+          ),
+        );
+
+      localBomCount = localBoms.length;
+    }
+
+    const bomCleanupDecision = getOdooCleanupDecision(
+      fetchedBomIds.length,
+      failed,
+      localBomCount,
+    );
+
+    if (bomCleanupDecision === "delete_missing") {
+      await db
+        .delete(bomsTable)
+        .where(
+          and(
+            eq(bomsTable.companyId, companyId),
+            isNotNull(bomsTable.odooBomId),
+            notInArray(bomsTable.odooBomId, fetchedBomIds),
+          ),
+        );
+    } else if (bomCleanupDecision === "delete_all") {
+      await db
+        .delete(bomsTable)
+        .where(
+          and(
+            eq(bomsTable.companyId, companyId),
+            isNotNull(bomsTable.odooBomId),
+          ),
+        );
+    } else if (
+      bomCleanupDecision === "preserve_suspicious_empty"
+    ) {
+      syncStatus = "suspicious_empty_result";
+      errors.push(
+        `Suspicious empty BOM result. Local record count (${localBomCount}) > 0. Skipping BOM auto-delete.`,
+      );
+    }
 
     await db.insert(odooSyncLogTable).values({
       companyId,
