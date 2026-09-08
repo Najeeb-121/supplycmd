@@ -16,9 +16,11 @@ const {
   const mockSearchRead = vi.fn();
 
   const mockMovementOnConflictDoUpdate = vi.fn();
-  const mockMovementValues = vi.fn(() => ({
-    onConflictDoUpdate: mockMovementOnConflictDoUpdate,
-  }));
+  const mockMovementValues = vi.fn(
+    (_values: Record<string, unknown>) => ({
+      onConflictDoUpdate: mockMovementOnConflictDoUpdate,
+    }),
+  );
 
   const mockMovementDeleteWhere = vi.fn();
   const mockSyncLogValues = vi.fn();

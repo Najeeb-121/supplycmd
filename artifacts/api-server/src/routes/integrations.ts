@@ -2003,100 +2003,102 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
       }
 
       try {
-        const [productionRun] = await db.insert(productionRunsTable).values({
-          companyId,
-          odooId,
-          productOdooId: odooProductId,
-          productName,
-          runDate,
-          plannedUnits,
-          actualUnits,
-          plannedTimeMin,
-          actualTimeMin,
-          defects: null,
-          downtimeMin: null,
-          bomId,
-          dateDeadline,
-          moState,
-        }).onConflictDoUpdate({
-          target: [productionRunsTable.companyId, productionRunsTable.odooId],
-          set: {
+        await db.transaction(async (tx) => {
+          const [productionRun] = await tx.insert(productionRunsTable).values({
+            companyId,
+            odooId,
             productOdooId: odooProductId,
             productName,
+            runDate,
             plannedUnits,
             actualUnits,
-            actualTimeMin,
             plannedTimeMin,
+            actualTimeMin,
             defects: null,
             downtimeMin: null,
-            runDate,
             bomId,
             dateDeadline,
             moState,
-          }
-        }).returning({
-          id: productionRunsTable.id,
-        });
-
-        if (!productionRun) {
-          throw new Error(`MO #${odooId}: Failed to resolve local production run.`);
-        }
-
-        const productionWorkOrders =
-          workOrdersByProductionId.get(odooId) ?? [];
-
-        for (const workOrder of productionWorkOrders) {
-          const workOrderId = parsePositiveOdooId(workOrder.id);
-          const workcenterId = many2oneId(
-            workOrder.workcenter_id,
-          );
-
-          if (workOrderId === null || workcenterId === null) {
-            throw new Error(
-              `MO #${odooId}: Invalid work order or work center.`,
-            );
-          }
-
-          const state =
-            typeof workOrder.state === "string" &&
-              workOrder.state.trim()
-              ? workOrder.state
-              : null;
-
-          const plannedTimeMin =
-            parsePositiveOdooNumber(
-              workOrder.duration_expected,
-            );
-
-          const actualTimeMin =
-            workOrder.state === "done"
-              ? parseNonNegativeOdooNumber(
-                workOrder.duration,
-              )
-              : null;
-
-          await db.insert(productionWorkOrdersTable).values({
-            companyId,
-            productionRunId: productionRun.id,
-            odooWorkOrderId: workOrderId,
-            workcenterId,
-            state,
-            plannedTimeMin,
-            actualTimeMin,
           }).onConflictDoUpdate({
-            target: [
-              productionWorkOrdersTable.companyId,
-              productionWorkOrdersTable.odooWorkOrderId,
-            ],
+            target: [productionRunsTable.companyId, productionRunsTable.odooId],
             set: {
+              productOdooId: odooProductId,
+              productName,
+              plannedUnits,
+              actualUnits,
+              actualTimeMin,
+              plannedTimeMin,
+              defects: null,
+              downtimeMin: null,
+              runDate,
+              bomId,
+              dateDeadline,
+              moState,
+            }
+          }).returning({
+            id: productionRunsTable.id,
+          });
+
+          if (!productionRun) {
+            throw new Error(`MO #${odooId}: Failed to resolve local production run.`);
+          }
+
+          const productionWorkOrders =
+            workOrdersByProductionId.get(odooId) ?? [];
+
+          for (const workOrder of productionWorkOrders) {
+            const workOrderId = parsePositiveOdooId(workOrder.id);
+            const workcenterId = many2oneId(
+              workOrder.workcenter_id,
+            );
+
+            if (workOrderId === null || workcenterId === null) {
+              throw new Error(
+                `MO #${odooId}: Invalid work order or work center.`,
+              );
+            }
+
+            const state =
+              typeof workOrder.state === "string" &&
+                workOrder.state.trim()
+                ? workOrder.state
+                : null;
+
+            const plannedTimeMin =
+              parsePositiveOdooNumber(
+                workOrder.duration_expected,
+              );
+
+            const actualTimeMin =
+              workOrder.state === "done"
+                ? parseNonNegativeOdooNumber(
+                  workOrder.duration,
+                )
+                : null;
+
+            await tx.insert(productionWorkOrdersTable).values({
+              companyId,
               productionRunId: productionRun.id,
+              odooWorkOrderId: workOrderId,
               workcenterId,
               state,
               plannedTimeMin,
               actualTimeMin,
-            },
-          });
-        }
+            }).onConflictDoUpdate({
+              target: [
+                productionWorkOrdersTable.companyId,
+                productionWorkOrdersTable.odooWorkOrderId,
+              ],
+              set: {
+                productionRunId: productionRun.id,
+                workcenterId,
+                state,
+                plannedTimeMin,
+                actualTimeMin,
+              },
+            });
+          }
+        });
 
         synced++;
       } catch (err) { failed++; errors.push(`MO #${odooId}: ${(err as Error).message}`); }
@@ -2212,7 +2214,7 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
     ) {
       syncStatus = "suspicious_empty_result";
       errors.push(
-        `Suspicious empty work-order result. Local record count (${localWorkOrderCount}) > 5. Skipping work-order auto-delete.`,
+        `Suspicious empty work-order result. Local record count (${localWorkOrderCount}) > 0. Skipping work-order auto-delete.`,
       );
     }
 
