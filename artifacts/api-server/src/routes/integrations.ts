@@ -2680,41 +2680,12 @@ router.post(
         const orderLines = linesByOrderOdooId.get(odooId) ?? [];
 
         try {
-          const [localOrder] = await db
-            .insert(salesOrdersTable)
-            .values({
-              companyId,
-              odooId,
-              orderNumber,
-              customerId: customerOdooId,
-              customerName,
-              untaxedAmount: amountUntaxed,
-              taxAmount,
-              totalAmount,
-              currency,
-              status,
-              state: status,
-              source: "ODOO",
-              orderDate,
-              expectedDate: commitmentDate,
-              commitmentDate,
-              commitmentDateRaw:
-                typeof order.commitment_date === "string"
-                  ? order.commitment_date
-                  : null,
-              effectiveDeliveryDate,
-              effectiveDeliveryDateSource,
-              dataConfidence: commitmentDate ? "HIGH" : "LOW",
-              itemCount: orderLines.length,
-              syncedAt: new Date(),
-              updatedAt: new Date(),
-            })
-            .onConflictDoUpdate({
-              target: [
-                salesOrdersTable.companyId,
-                salesOrdersTable.odooId,
-              ],
-              set: {
+          await db.transaction(async (tx) => {
+            const [localOrder] = await tx
+              .insert(salesOrdersTable)
+              .values({
+                companyId,
+                odooId,
                 orderNumber,
                 customerId: customerOdooId,
                 customerName,
@@ -2738,101 +2709,104 @@ router.post(
                 itemCount: orderLines.length,
                 syncedAt: new Date(),
                 updatedAt: new Date(),
-              },
-            })
-            .returning({ id: salesOrdersTable.id });
-
-          for (const line of orderLines) {
-            const lineOdooId = parsePositiveOdooId(line.id);
-            const productOdooId = many2oneId(line.product_id);
-
-            if (lineOdooId === null || productOdooId === null) {
-              throw new Error(
-                `SO #${odooId}: Sales line has an invalid ID or product.`,
-              );
-            }
-
-            const inventoryItem = inventoryByOdooId.get(productOdooId);
-
-            if (!inventoryItem) {
-              throw new Error(
-                `SO line #${lineOdooId}: Odoo product ${productOdooId} was not found in local inventory.`,
-              );
-            }
-
-            const orderedQuantity = parseNonNegativeOdooNumber(
-              line.product_uom_qty,
-            );
-
-            const deliveredQuantity = parseNonNegativeOdooNumber(
-              line.qty_delivered,
-            );
-
-            const invoicedQuantity = parseNonNegativeOdooNumber(
-              line.qty_invoiced,
-            );
-
-            const unitPrice = parseNonNegativeOdooNumber(line.price_unit);
-            const discount = parseNonNegativeOdooNumber(line.discount);
-            const subtotal = parseNonNegativeOdooNumber(
-              line.price_subtotal,
-            );
-
-            const lineStatus = optionalOdooString(line.state);
-
-            if (
-              orderedQuantity === null ||
-              deliveredQuantity === null ||
-              invoicedQuantity === null ||
-              lineStatus === null
-            ) {
-              throw new Error(
-                `SO line #${lineOdooId}: Invalid quantity or state data.`,
-              );
-            }
-
-            const lineCurrency =
-              Array.isArray(line.currency_id) &&
-                typeof line.currency_id[1] === "string"
-                ? line.currency_id[1]
-                : currency;
-
-            await db
-              .insert(salesOrderLinesTable)
-              .values({
-                companyId,
-                odooId: lineOdooId,
-                orderId: localOrder.id,
-                inventoryItemId: inventoryItem.id,
-                odooProductId: productOdooId,
-                productName: inventoryItem.name,
-                sku: inventoryItem.sku,
-                description: optionalOdooString(line.name),
-                orderedQuantity,
-                deliveredQuantity,
-                invoicedQuantity,
-                remainingQuantity: Math.max(
-                  orderedQuantity - deliveredQuantity,
-                  0,
-                ),
-                unitPrice,
-                discount,
-                subtotal,
-                currency: lineCurrency,
-                expectedDate: commitmentDate,
-                effectiveDeliveryDate,
-                effectiveDeliveryDateSource,
-                dataConfidence: commitmentDate ? "HIGH" : "LOW",
-                status: lineStatus,
-                syncedAt: new Date(),
-                updatedAt: new Date(),
               })
               .onConflictDoUpdate({
                 target: [
-                  salesOrderLinesTable.companyId,
-                  salesOrderLinesTable.odooId,
+                  salesOrdersTable.companyId,
+                  salesOrdersTable.odooId,
                 ],
                 set: {
+                  orderNumber,
+                  customerId: customerOdooId,
+                  customerName,
+                  untaxedAmount: amountUntaxed,
+                  taxAmount,
+                  totalAmount,
+                  currency,
+                  status,
+                  state: status,
+                  source: "ODOO",
+                  orderDate,
+                  expectedDate: commitmentDate,
+                  commitmentDate,
+                  commitmentDateRaw:
+                    typeof order.commitment_date === "string"
+                      ? order.commitment_date
+                      : null,
+                  effectiveDeliveryDate,
+                  effectiveDeliveryDateSource,
+                  dataConfidence: commitmentDate ? "HIGH" : "LOW",
+                  itemCount: orderLines.length,
+                  syncedAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              })
+              .returning({ id: salesOrdersTable.id });
+
+            const fetchedSalesLineIds = orderLines
+              .map((line) => parsePositiveOdooId(line.id))
+              .filter((id): id is number => id !== null);
+
+            for (const line of orderLines) {
+              const lineOdooId = parsePositiveOdooId(line.id);
+              const productOdooId = many2oneId(line.product_id);
+
+              if (lineOdooId === null || productOdooId === null) {
+                throw new Error(
+                  `SO #${odooId}: Sales line has an invalid ID or product.`,
+                );
+              }
+
+              const inventoryItem = inventoryByOdooId.get(productOdooId);
+
+              if (!inventoryItem) {
+                throw new Error(
+                  `SO line #${lineOdooId}: Odoo product ${productOdooId} was not found in local inventory.`,
+                );
+              }
+
+              const orderedQuantity = parseNonNegativeOdooNumber(
+                line.product_uom_qty,
+              );
+
+              const deliveredQuantity = parseNonNegativeOdooNumber(
+                line.qty_delivered,
+              );
+
+              const invoicedQuantity = parseNonNegativeOdooNumber(
+                line.qty_invoiced,
+              );
+
+              const unitPrice = parseNonNegativeOdooNumber(line.price_unit);
+              const discount = parseNonNegativeOdooNumber(line.discount);
+              const subtotal = parseNonNegativeOdooNumber(
+                line.price_subtotal,
+              );
+
+              const lineStatus = optionalOdooString(line.state);
+
+              if (
+                orderedQuantity === null ||
+                deliveredQuantity === null ||
+                invoicedQuantity === null ||
+                lineStatus === null
+              ) {
+                throw new Error(
+                  `SO line #${lineOdooId}: Invalid quantity or state data.`,
+                );
+              }
+
+              const lineCurrency =
+                Array.isArray(line.currency_id) &&
+                  typeof line.currency_id[1] === "string"
+                  ? line.currency_id[1]
+                  : currency;
+
+              await tx
+                .insert(salesOrderLinesTable)
+                .values({
+                  companyId,
+                  odooId: lineOdooId,
                   orderId: localOrder.id,
                   inventoryItemId: inventoryItem.id,
                   odooProductId: productOdooId,
@@ -2857,9 +2831,56 @@ router.post(
                   status: lineStatus,
                   syncedAt: new Date(),
                   updatedAt: new Date(),
-                },
-              });
-          }
+                })
+                .onConflictDoUpdate({
+                  target: [
+                    salesOrderLinesTable.companyId,
+                    salesOrderLinesTable.odooId,
+                  ],
+                  set: {
+                    orderId: localOrder.id,
+                    inventoryItemId: inventoryItem.id,
+                    odooProductId: productOdooId,
+                    productName: inventoryItem.name,
+                    sku: inventoryItem.sku,
+                    description: optionalOdooString(line.name),
+                    orderedQuantity,
+                    deliveredQuantity,
+                    invoicedQuantity,
+                    remainingQuantity: Math.max(
+                      orderedQuantity - deliveredQuantity,
+                      0,
+                    ),
+                    unitPrice,
+                    discount,
+                    subtotal,
+                    currency: lineCurrency,
+                    expectedDate: commitmentDate,
+                    effectiveDeliveryDate,
+                    effectiveDeliveryDateSource,
+                    dataConfidence: commitmentDate ? "HIGH" : "LOW",
+                    status: lineStatus,
+                    syncedAt: new Date(),
+                    updatedAt: new Date(),
+                  },
+                });
+            }
+
+            if (fetchedSalesLineIds.length > 0) {
+              await tx
+                .delete(salesOrderLinesTable)
+                .where(
+                  and(
+                    eq(salesOrderLinesTable.companyId, companyId),
+                    eq(salesOrderLinesTable.orderId, localOrder.id),
+                    notInArray(
+                      salesOrderLinesTable.odooId,
+                      fetchedSalesLineIds,
+                    ),
+                  ),
+                );
+            }
+          });
 
           synced++;
         } catch (err) {
@@ -2871,8 +2892,58 @@ router.post(
         }
       }
 
-      const syncStatus =
+      let syncStatus =
         failed === 0 ? "success" : synced > 0 ? "partial" : "error";
+
+      let localSalesOrderCount = 0;
+
+      if (orderOdooIds.length === 0 && failed === 0) {
+        const localSalesOrders = await db
+          .select({ id: salesOrdersTable.id })
+          .from(salesOrdersTable)
+          .where(
+            and(
+              eq(salesOrdersTable.companyId, companyId),
+              isNotNull(salesOrdersTable.odooId),
+            ),
+          );
+
+        localSalesOrderCount = localSalesOrders.length;
+      }
+
+      const salesCleanupDecision = getOdooCleanupDecision(
+        orderOdooIds.length,
+        failed,
+        localSalesOrderCount,
+      );
+
+      if (salesCleanupDecision === "delete_missing") {
+        await db
+          .delete(salesOrdersTable)
+          .where(
+            and(
+              eq(salesOrdersTable.companyId, companyId),
+              isNotNull(salesOrdersTable.odooId),
+              notInArray(salesOrdersTable.odooId, orderOdooIds),
+            ),
+          );
+      } else if (salesCleanupDecision === "delete_all") {
+        await db
+          .delete(salesOrdersTable)
+          .where(
+            and(
+              eq(salesOrdersTable.companyId, companyId),
+              isNotNull(salesOrdersTable.odooId),
+            ),
+          );
+      } else if (
+        salesCleanupDecision === "preserve_suspicious_empty"
+      ) {
+        syncStatus = "suspicious_empty_result";
+        errors.push(
+          `Suspicious empty sales-order result. Local record count (${localSalesOrderCount}) > 0. Skipping sales-order auto-delete.`,
+        );
+      }
 
       await db.insert(odooSyncLogTable).values({
         companyId,
