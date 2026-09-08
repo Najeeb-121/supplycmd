@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { desc, eq, and, isNotNull, notInArray, sql } from "drizzle-orm";
+import { desc, eq, and, isNotNull, inArray, notInArray, sql } from "drizzle-orm";
 import { db, suppliersTable, inventoryItemsTable, odooSyncLogTable, odooConnectionsTable, ordersTable, stockMovementsTable, productionRunsTable, productionWorkOrdersTable, demandRecordsTable, salesOrdersTable, salesOrderLinesTable, bomsTable, bomLinesTable, purchaseOrderLinesTable, productSuppliersTable } from "@workspace/db";
 import { OdooClient, encryptSecret, decryptSecret, type OdooConfig } from "@workspace/integrations-odoo-server";
 import { StrictSupplierBody } from "./suppliers";
@@ -747,13 +747,17 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
       };
 
       const relationshipByKey = new Map<string, SupplierInfoCandidate>();
+      let supplierInfoMappingIncomplete = false;
 
       for (const row of supplierInfoRows) {
         const supplierOdooId = many2oneId(row.partner_id);
         const productOdooId = many2oneId(row.product_id);
         const templateOdooId = many2oneId(row.product_tmpl_id);
 
-        if (supplierOdooId === null) continue;
+        if (supplierOdooId === null) {
+          supplierInfoMappingIncomplete = true;
+          continue;
+        }
 
         const supplier = supplierByOdooId.get(supplierOdooId);
 
@@ -765,7 +769,10 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
             ? inventoryByOdooTemplateId.get(templateOdooId)
             : undefined);
 
-        if (!supplier || !inventoryItem) continue;
+        if (!supplier || !inventoryItem) {
+          supplierInfoMappingIncomplete = true;
+          continue;
+        }
 
         const supplierUnitCost = parseNonNegativeOdooNumber(row.price);
         const minimumOrderQuantity = parseNonNegativeOdooNumber(row.min_qty);
@@ -877,9 +884,39 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
             },
           });
       }
+
+      if (!supplierInfoMappingIncomplete) {
+        const currentRelationshipKeys = new Set(relationshipByKey.keys());
+
+        const staleOdooRelationshipIds = existingProductSuppliers
+          .filter(
+            (relationship) =>
+              relationship.source.toLowerCase() === "odoo" &&
+              relationship.sourceEntity === "product.supplierinfo" &&
+              !currentRelationshipKeys.has(
+                `${relationship.inventoryItemId}:${relationship.supplierId}`,
+              ),
+          )
+          .map((relationship) => relationship.id);
+
+        if (staleOdooRelationshipIds.length > 0) {
+          await db
+            .delete(productSuppliersTable)
+            .where(
+              and(
+                eq(productSuppliersTable.companyId, companyId),
+                inArray(
+                  productSuppliersTable.id,
+                  staleOdooRelationshipIds,
+                ),
+              ),
+            );
+        }
+      }
     }
 
-    let syncStatus = failed === 0 ? "success" : synced > 0 ? "partial" : "error";
+    let syncStatus =
+      failed === 0 ? "success" : synced > 0 ? "partial" : "error";
 
     // Cleanup phase: remove local records that no longer exist in Odoo
     const fetchedIds = Array.from(
@@ -922,7 +959,7 @@ router.post("/integrations/odoo/sync/suppliers", async (req: Request, res: Respo
     ) {
       syncStatus = "suspicious_empty_result";
       errors.push(
-        `Suspicious empty result. Local record count (${existingSupplierIds.size}) > 5. Skipping auto-delete.`,
+        `Suspicious empty result. Local record count (${existingSupplierIds.size}) > 0. Skipping auto-delete.`,
       );
     }
 
@@ -1105,7 +1142,7 @@ router.post("/integrations/odoo/sync/inventory", async (req: Request, res: Respo
     ) {
       syncStatus = "suspicious_empty_result";
       errors.push(
-        `Suspicious empty result. Local record count (${localRecordCount}) > 5. Skipping auto-delete.`,
+        `Suspicious empty result. Local record count (${localRecordCount}) > 0. Skipping auto-delete.`,
       );
     }
 
@@ -1744,7 +1781,7 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
     ) {
       syncStatus = "suspicious_empty_result";
       errors.push(
-        `Suspicious empty result. Local record count (${localRecordCount}) > 5. Skipping auto-delete.`,
+        `Suspicious empty result. Local record count (${localRecordCount}) > 0. Skipping auto-delete.`,
       );
     }
 
@@ -2068,7 +2105,7 @@ router.post("/integrations/odoo/sync/production", async (req: Request, res: Resp
     ) {
       syncStatus = "suspicious_empty_result";
       errors.push(
-        `Suspicious empty result. Local record count (${localRecordCount}) > 5. Skipping auto-delete.`,
+        `Suspicious empty result. Local record count (${localRecordCount}) > 0. Skipping auto-delete.`,
       );
     }
     const fetchedWorkOrderIdList =
@@ -2980,7 +3017,7 @@ router.post("/integrations/odoo/sync/planning", async (req: Request, res: Respon
     ) {
       syncStatus = "suspicious_empty_result";
       errors.push(
-        `Suspicious empty result. Local record count (${allRows.length}) > 5. Existing planning history was preserved.`,
+        `Suspicious empty result. Local record count (${allRows.length}) > 0. Existing planning history was preserved.`,
       );
     }
 
