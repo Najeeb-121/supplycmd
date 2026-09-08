@@ -74,6 +74,32 @@ export const GetCurrentUserResponse = zod.object({
 
 
 /**
+ * @summary List users for the authenticated company
+ */
+export const ListCompanyUsersResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.string()
+})
+export const ListCompanyUsersResponse = zod.array(ListCompanyUsersResponseItem)
+
+
+/**
+ * @summary List invitations for the authenticated company
+ */
+export const ListCompanyInvitationsResponseItem = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "role": zod.string(),
+  "expiresAt": zod.coerce.date(),
+  "acceptedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCompanyInvitationsResponse = zod.array(ListCompanyInvitationsResponseItem)
+
+
+/**
  * @summary List all inventory items
  */
 export const ListInventoryQueryParams = zod.object({

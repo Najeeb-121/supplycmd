@@ -100,6 +100,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthUser"
+  # --- Company Administration ---
+  /company/users:
+    get:
+      operationId: listCompanyUsers
+      tags: [auth]
+      summary: List users for the authenticated company
+      responses:
+        "200":
+          description: Company users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CompanyUser"
+
+  /company/invitations:
+    get:
+      operationId: listCompanyInvitations
+      tags: [auth]
+      summary: List invitations for the authenticated company
+      responses:
+        "200":
+          description: Company invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CompanyInvitation"
 
   # --- Inventory ---
   /inventory:
@@ -769,6 +799,26 @@ components:
         role:        { type: string }
         companyId:   { type: number }
         companyName: { type: string }
+
+    CompanyUser:
+      type: object
+      required: [id, name, email, role]
+      properties:
+        id:    { type: number }
+        name:  { type: string }
+        email: { type: string }
+        role:  { type: string }
+
+    CompanyInvitation:
+      type: object
+      required: [id, email, role, expiresAt, acceptedAt, createdAt]
+      properties:
+        id:         { type: number }
+        email:      { type: string }
+        role:       { type: string }
+        expiresAt:  { type: string, format: date-time }
+        acceptedAt: { type: string, format: date-time, nullable: true }
+        createdAt:  { type: string, format: date-time }
 
     # --- Inventory ---
     InventoryRelationship:

@@ -30,6 +30,22 @@ export interface AuthUser {
   companyName: string;
 }
 
+export interface CompanyUser {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface CompanyInvitation {
+  id: number;
+  email: string;
+  role: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
+}
+
 export type InventoryRelationshipRelationshipSource = typeof InventoryRelationshipRelationshipSource[keyof typeof InventoryRelationshipRelationshipSource];
 
 

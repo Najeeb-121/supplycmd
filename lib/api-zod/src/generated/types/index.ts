@@ -8,6 +8,8 @@
 
 export * from './authUser';
 export * from './categoryBreakdown';
+export * from './companyInvitation';
+export * from './companyUser';
 export * from './dashboardSummary';
 export * from './demandRecord';
 export * from './demandRecordInput';

@@ -1,4 +1,8 @@
 import { Building2, ShieldCheck, UserCog, Users } from "lucide-react";
+import {
+  useListCompanyInvitations,
+  useListCompanyUsers,
+} from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,6 +15,17 @@ import {
 
 export default function CompanyAdminPage() {
   const { user } = useAuth();
+  const {
+    data: companyUsers = [],
+    isLoading: usersLoading,
+    isError: usersError,
+  } = useListCompanyUsers();
+
+  const {
+    data: companyInvitations = [],
+    isLoading: invitationsLoading,
+    isError: invitationsError,
+  } = useListCompanyInvitations();
 
   if (!user) {
     return null;
@@ -78,22 +93,112 @@ export default function CompanyAdminPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Users & Invitations
+            Company Users
           </CardTitle>
           <CardDescription>
-            Company user management will be connected to the tenant-scoped
-            administration API in the next step.
+            Users who currently belong to {user.companyName}.
           </CardDescription>
         </CardHeader>
 
         <CardContent>
-          {canManageUsers ? (
-            <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-              User list and invitation controls will appear here.
-            </div>
+          {usersLoading ? (
+            <p className="text-sm text-muted-foreground">Loading users...</p>
+          ) : usersError ? (
+            <p className="text-sm text-destructive">
+              Unable to load company users.
+            </p>
+          ) : companyUsers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No company users found.
+            </p>
           ) : (
-            <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-              Only company owners and administrators can manage users.
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead className="border-b bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Name</th>
+                    <th className="px-4 py-3 text-left font-medium">Email</th>
+                    <th className="px-4 py-3 text-left font-medium">Role</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {companyUsers.map((companyUser) => (
+                    <tr key={companyUser.id} className="border-b last:border-b-0">
+                      <td className="px-4 py-3">{companyUser.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {companyUser.email}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="secondary" className="capitalize">
+                          {companyUser.role}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Invitations</CardTitle>
+          <CardDescription>
+            Invitations created for {user.companyName}.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          {invitationsLoading ? (
+            <p className="text-sm text-muted-foreground">
+              Loading invitations...
+            </p>
+          ) : invitationsError ? (
+            <p className="text-sm text-destructive">
+              Unable to load company invitations.
+            </p>
+          ) : companyInvitations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No invitations found.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead className="border-b bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Email</th>
+                    <th className="px-4 py-3 text-left font-medium">Role</th>
+                    <th className="px-4 py-3 text-left font-medium">Status</th>
+                    <th className="px-4 py-3 text-left font-medium">Expires</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {companyInvitations.map((invitation) => {
+                    const status = invitation.acceptedAt
+                      ? "Accepted"
+                      : new Date(invitation.expiresAt).getTime() < Date.now()
+                        ? "Expired"
+                        : "Pending";
+
+                    return (
+                      <tr key={invitation.id} className="border-b last:border-b-0">
+                        <td className="px-4 py-3">{invitation.email}</td>
+                        <td className="px-4 py-3">
+                          <Badge variant="secondary" className="capitalize">
+                            {invitation.role}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">{status}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {new Date(invitation.expiresAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>

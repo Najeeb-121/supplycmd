@@ -21,6 +21,8 @@ import type {
 
 import type {
   AuthUser,
+  CompanyInvitation,
+  CompanyUser,
   DashboardSummary,
   DemandRecord,
   DemandRecordInput,
@@ -440,6 +442,160 @@ export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUs
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetCurrentUserQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListCompanyUsersUrl = () => {
+
+
+
+
+  return `/api/company/users`
+}
+
+/**
+ * @summary List users for the authenticated company
+ */
+export const listCompanyUsers = async ( options?: Parameters<typeof customFetch>[1]): Promise<CompanyUser[]> => {
+
+  return customFetch<CompanyUser[]>(getListCompanyUsersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCompanyUsersQueryKey = () => {
+    return [
+    `/api/company/users`
+    ] as const;
+    }
+
+
+export const getListCompanyUsersQueryOptions = <TData = Awaited<ReturnType<typeof listCompanyUsers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanyUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCompanyUsersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCompanyUsers>>> = ({ signal }) => listCompanyUsers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCompanyUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCompanyUsersQueryResult = NonNullable<Awaited<ReturnType<typeof listCompanyUsers>>>
+export type ListCompanyUsersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List users for the authenticated company
+ */
+
+export function useListCompanyUsers<TData = Awaited<ReturnType<typeof listCompanyUsers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanyUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCompanyUsersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListCompanyInvitationsUrl = () => {
+
+
+
+
+  return `/api/company/invitations`
+}
+
+/**
+ * @summary List invitations for the authenticated company
+ */
+export const listCompanyInvitations = async ( options?: Parameters<typeof customFetch>[1]): Promise<CompanyInvitation[]> => {
+
+  return customFetch<CompanyInvitation[]>(getListCompanyInvitationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCompanyInvitationsQueryKey = () => {
+    return [
+    `/api/company/invitations`
+    ] as const;
+    }
+
+
+export const getListCompanyInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof listCompanyInvitations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanyInvitations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCompanyInvitationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCompanyInvitations>>> = ({ signal }) => listCompanyInvitations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCompanyInvitations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCompanyInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof listCompanyInvitations>>>
+export type ListCompanyInvitationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List invitations for the authenticated company
+ */
+
+export function useListCompanyInvitations<TData = Awaited<ReturnType<typeof listCompanyInvitations>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanyInvitations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCompanyInvitationsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
