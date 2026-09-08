@@ -23,10 +23,14 @@ import AiDecisionEnginePage from './pages/ai-decision-engine';
 import ExecutiveIntelligencePage from './pages/executive-intelligence';
 import SalesDashboardPage from './pages/sales-dashboard';
 import ManufacturingDashboardPage from './pages/manufacturing-dashboard';
+import CompanyAdminPage from './pages/company-admin';
 
 const queryClient = new QueryClient();
 
 function AuthedApp() {
+  const { user } = useAuth();
+  const canManageCompany = user?.role === "owner" || user?.role === "admin";
+
   return (
     <AppShell>
       <Switch>
@@ -43,6 +47,9 @@ function AuthedApp() {
         <Route path="/equations" component={EquationsPage} />
         <Route path="/import" component={ImportPage} />
         <Route path="/erp-integration" component={ErpIntegrationPage} />
+        <Route path="/company-admin">
+          {canManageCompany ? <CompanyAdminPage /> : <Redirect to="/" />}
+        </Route>
         <Route path="/operational-intelligence" component={OperationalIntelligencePage} />
         <Route path="/executive-intelligence" component={ExecutiveIntelligencePage} />
         <Route component={NotFound} />

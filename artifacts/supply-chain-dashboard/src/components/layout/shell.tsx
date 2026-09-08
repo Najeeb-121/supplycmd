@@ -15,7 +15,8 @@ import {
   LineChart,
   PlayCircle,
   LogOut,
-  ShoppingCart
+  ShoppingCart,
+  Building2
 } from "lucide-react";
 
 const navSections = [
@@ -50,6 +51,7 @@ const navSections = [
     label: "System",
     items: [
       { path: "/erp-integration", label: "ERP Integration", icon: Plug },
+      { path: "/company-admin", label: "Company Administration", icon: Building2, adminOnly: true },
       { path: "/import", label: "ERP Import", icon: Upload },
       { path: "/equations", label: "Equations Reference", icon: Calculator },
     ],
@@ -93,6 +95,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {section.items.map((item) => {
                   const isActive = location === item.path;
                   const Icon = item.icon;
+                  if (item.adminOnly && user?.role !== "owner" && user?.role !== "admin") {
+                    return null;
+                  }
 
                   return (
                     <Link
