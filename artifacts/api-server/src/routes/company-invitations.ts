@@ -35,6 +35,28 @@ router.get(
   },
 );
 
+router.get(
+  "/company/invitations",
+  requireRole("owner", "admin"),
+  async (req: Request, res: Response): Promise<void> => {
+    const companyId = req.user!.companyId;
+
+    const invitations = await db
+      .select({
+        id: companyInvitationsTable.id,
+        email: companyInvitationsTable.email,
+        role: companyInvitationsTable.role,
+        expiresAt: companyInvitationsTable.expiresAt,
+        acceptedAt: companyInvitationsTable.acceptedAt,
+        createdAt: companyInvitationsTable.createdAt,
+      })
+      .from(companyInvitationsTable)
+      .where(eq(companyInvitationsTable.companyId, companyId));
+
+    res.json(invitations);
+  },
+);
+
 router.post(
   "/company/invitations",
   requireRole("owner", "admin"),

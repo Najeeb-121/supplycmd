@@ -76,6 +76,10 @@ vi.mock("@workspace/db", () => ({
     id: "company_invitations.id",
     companyId: "company_invitations.company_id",
     email: "company_invitations.email",
+    role: "company_invitations.role",
+    expiresAt: "company_invitations.expires_at",
+    acceptedAt: "company_invitations.accepted_at",
+    createdAt: "company_invitations.created_at",
   },
 }));
 
@@ -142,6 +146,48 @@ describe("Company invitation behavior", () => {
     expect(mockUserWhere).toHaveBeenCalledWith({
       type: "eq",
       column: "users.company_id",
+      value: 42,
+    });
+  });
+
+  it("lists only invitations from the authenticated company without exposing token hashes", async () => {
+    mockInvitationWhere.mockResolvedValueOnce([
+      {
+        id: 7,
+        email: "invitee@example.com",
+        role: "member",
+        expiresAt: new Date("2026-09-15T12:00:00.000Z"),
+        acceptedAt: null,
+        createdAt: new Date("2026-09-08T12:00:00.000Z"),
+      },
+    ]);
+
+    const app = createTestApp(42);
+
+    const res = await request(app)
+      .get("/api/company/invitations")
+      .query({
+        companyId: 999,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      {
+        id: 7,
+        email: "invitee@example.com",
+        role: "member",
+        expiresAt: "2026-09-15T12:00:00.000Z",
+        acceptedAt: null,
+        createdAt: "2026-09-08T12:00:00.000Z",
+      },
+    ]);
+
+    expect(res.body[0]).not.toHaveProperty("tokenHash");
+
+    expect(mockInvitationWhere).toHaveBeenCalledTimes(1);
+    expect(mockInvitationWhere).toHaveBeenCalledWith({
+      type: "eq",
+      column: "company_invitations.company_id",
       value: 42,
     });
   });
