@@ -171,6 +171,36 @@ export function parseOdooStockMovementQuantities(
   };
 }
 
+export function applyOdooStockMovementDirection(
+  quantities: OdooStockMovementQuantities,
+  pickingTypeCode: unknown,
+): OdooStockMovementQuantities | null {
+  const absoluteQuantity = Math.abs(quantities.quantityChanged);
+
+  switch (pickingTypeCode) {
+    case "incoming":
+      return {
+        ...quantities,
+        quantityChanged: absoluteQuantity,
+      };
+
+    case "outgoing":
+      return {
+        ...quantities,
+        quantityChanged: -absoluteQuantity,
+      };
+
+    case "internal":
+      return {
+        ...quantities,
+        quantityChanged: 0,
+      };
+
+    default:
+      return null;
+  }
+}
+
 export function parseOdooDateTime(value: unknown): Date | null {
   if (typeof value !== "string") {
     return null;
@@ -1613,7 +1643,7 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
         "date",
         "picking_type_id",
         "origin_returned_move_id",
-        "product_uom_qty",
+        "quantity",
         "reference",
       ],
 
@@ -1677,11 +1707,11 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
       if (!inventoryItemId) {
         failed++; errors.push(`Move #${odooId}: Product not synced.`); continue;
       }
-      const quantities = parseOdooStockMovementQuantities(
-        m.product_uom_qty,
+      const rawQuantities = parseOdooStockMovementQuantities(
+        m.quantity,
       );
 
-      if (!quantities) {
+      if (!rawQuantities) {
         failed++;
         errors.push(`Move #${odooId}: Missing or invalid moved quantity.`);
         continue;
@@ -1699,6 +1729,18 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
         pickingTypeId === null
           ? null
           : pickingTypeCodeById.get(pickingTypeId) ?? null;
+      const quantities = applyOdooStockMovementDirection(
+        rawQuantities,
+        pickingTypeCode,
+      );
+
+      if (!quantities) {
+        failed++;
+        errors.push(
+          `Move #${odooId}: Missing or unsupported stock movement direction.`,
+        );
+        continue;
+      }
 
       const movementType = mapOdooStockMovementType(
         pickingTypeCode,
@@ -1727,6 +1769,7 @@ router.post("/integrations/odoo/sync/logistics", async (req: Request, res: Respo
             movedAt,
             user: null,
             movementType,
+            action: "completed",
             referenceNumber,
             ...quantities,
           },

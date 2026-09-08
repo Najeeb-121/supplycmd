@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  applyOdooStockMovementDirection,
   getOdooCleanupDecision,
   mapOdooPurchaseState,
   mapOdooStockMovementType,
@@ -92,6 +93,46 @@ describe("Odoo integration parsing", () => {
       quantityChanged: 125.5,
       quantityAfter: null,
     });
+  });
+
+  it("applies verified Odoo stock movement direction to quantity deltas", () => {
+    const quantities = {
+      quantityBefore: null,
+      quantityChanged: 125,
+      quantityAfter: null,
+    };
+
+    expect(
+      applyOdooStockMovementDirection(quantities, "incoming"),
+    ).toEqual({
+      quantityBefore: null,
+      quantityChanged: 125,
+      quantityAfter: null,
+    });
+
+    expect(
+      applyOdooStockMovementDirection(quantities, "outgoing"),
+    ).toEqual({
+      quantityBefore: null,
+      quantityChanged: -125,
+      quantityAfter: null,
+    });
+
+    expect(
+      applyOdooStockMovementDirection(quantities, "internal"),
+    ).toEqual({
+      quantityBefore: null,
+      quantityChanged: 0,
+      quantityAfter: null,
+    });
+
+    expect(
+      applyOdooStockMovementDirection(quantities, "unsupported"),
+    ).toBeNull();
+
+    expect(
+      applyOdooStockMovementDirection(quantities, null),
+    ).toBeNull();
   });
 
   it("rejects missing and invalid stock movement quantities", () => {
