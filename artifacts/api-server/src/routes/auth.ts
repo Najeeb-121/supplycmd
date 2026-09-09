@@ -10,7 +10,9 @@ import {
 } from "@workspace/db";
 import { SignupBody, LoginBody } from "@workspace/api-zod";
 import { validateBody } from "../lib/validate";
+import { logAuditEvent } from "../lib/audit";
 import { requireAuth } from "../middlewares/require-auth";
+import { isUserRole } from "../types/auth";
 import {
   hashPassword,
   verifyPassword,
@@ -66,6 +68,21 @@ router.post("/auth/signup", async (req: Request, res: Response): Promise<void> =
 
   const { token, expiresAt } = await createSession(result.user.id);
   res.cookie(SESSION_COOKIE_NAME, token, cookieOptions(expiresAt));
+
+  logAuditEvent(req, {
+    action: "auth.signup.succeeded",
+    outcome: "success",
+    actor: {
+      userId: result.user.id,
+      companyId: result.company.id,
+      role: "owner",
+    },
+    targetType: "user",
+    targetId: result.user.id,
+    targetEmail: result.user.email,
+    targetRole: "owner",
+  });
+
   res.status(201).json({
     id: result.user.id,
     email: result.user.email,
@@ -176,6 +193,20 @@ router.post(
     const { token, expiresAt } = await createSession(result.user.id);
     res.cookie(SESSION_COOKIE_NAME, token, cookieOptions(expiresAt));
 
+    logAuditEvent(req, {
+      action: "auth.invitation.accepted",
+      outcome: "success",
+      actor: {
+        userId: result.user.id,
+        companyId: result.company.id,
+        role: invitation.role,
+      },
+      targetType: "company_invitation",
+      targetId: invitation.id,
+      targetEmail: email,
+      targetRole: invitation.role,
+    });
+
     res.status(201).json({
       id: result.user.id,
       email: result.user.email,
@@ -211,8 +242,29 @@ router.post("/auth/login", async (req: Request, res: Response): Promise<void> =>
     return;
   }
 
+  const role = row.role;
+  if (!isUserRole(role)) {
+    res.status(403).json({ error: "Invalid user role" });
+    return;
+  }
+
   const { token, expiresAt } = await createSession(row.id);
   res.cookie(SESSION_COOKIE_NAME, token, cookieOptions(expiresAt));
+
+  logAuditEvent(req, {
+    action: "auth.login.succeeded",
+    outcome: "success",
+    actor: {
+      userId: row.id,
+      companyId: row.companyId,
+      role,
+    },
+    targetType: "user",
+    targetId: row.id,
+    targetEmail: row.email,
+    targetRole: role,
+  });
+
   res.json({
     id: row.id,
     email: row.email,

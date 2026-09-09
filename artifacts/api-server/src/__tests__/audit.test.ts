@@ -78,4 +78,46 @@ describe("logAuditEvent", () => {
       "Audit event",
     );
   });
+
+  it("uses an explicit trusted actor when the request has no authenticated user", () => {
+    const info = vi.fn();
+
+    const req = {
+      log: {
+        info,
+      },
+    } as unknown as Request;
+
+    logAuditEvent(req, {
+      action: "auth.login.succeeded",
+      outcome: "success",
+      actor: {
+        userId: 21,
+        companyId: 84,
+        role: "admin",
+      },
+      targetType: "user",
+      targetId: 21,
+      targetEmail: "admin@example.com",
+      targetRole: "admin",
+    });
+
+    expect(info).toHaveBeenCalledWith(
+      {
+        audit: {
+          action: "auth.login.succeeded",
+          outcome: "success",
+          companyId: 84,
+          actorUserId: 21,
+          actorRole: "admin",
+          targetType: "user",
+          targetId: 21,
+          targetEmail: "admin@example.com",
+          targetRole: "admin",
+        },
+      },
+      "Audit event",
+    );
+  });
+
 });
