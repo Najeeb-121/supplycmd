@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db, companyInvitationsTable, usersTable } from "@workspace/db";
 import { validateBody } from "../lib/validate";
 import { createInvitationToken, hashToken } from "../lib/auth";
+import { logAuditEvent } from "../lib/audit";
 import { requireRole } from "../middlewares/require-auth";
 
 const router: IRouter = Router();
@@ -73,6 +74,14 @@ router.post(
       .where(sql`lower(${usersTable.email}) = ${email}`);
 
     if (existingUsers.length > 0) {
+      logAuditEvent(req, {
+        action: "company.invitation.create",
+        outcome: "denied",
+        targetType: "company_invitation",
+        targetEmail: email,
+        targetRole: parsed.data.role,
+      });
+
       res.status(409).json({
         error: "An account with this email already exists",
       });
@@ -107,6 +116,15 @@ router.post(
           eq(companyInvitationsTable.id, existingInvitation.id),
           eq(companyInvitationsTable.companyId, companyId),
         ));
+
+      logAuditEvent(req, {
+        action: "company.invitation.resent",
+        outcome: "success",
+        targetType: "company_invitation",
+        targetId: existingInvitation.id,
+        targetEmail: email,
+        targetRole: parsed.data.role,
+      });
     } else {
       await db.insert(companyInvitationsTable).values({
         companyId,
@@ -115,6 +133,14 @@ router.post(
         tokenHash: hashToken(token),
         expiresAt,
         createdByUserId: req.user!.id,
+      });
+
+      logAuditEvent(req, {
+        action: "company.invitation.created",
+        outcome: "success",
+        targetType: "company_invitation",
+        targetEmail: email,
+        targetRole: parsed.data.role,
       });
     }
 
