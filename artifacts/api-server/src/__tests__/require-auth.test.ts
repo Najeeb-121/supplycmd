@@ -24,6 +24,12 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+const mockLogAuditEvent = vi.hoisted(() => vi.fn());
+
+vi.mock("../lib/audit", () => ({
+  logAuditEvent: mockLogAuditEvent,
+}));
+
 vi.mock("@workspace/db", () => ({
   db: {
     select: mocks.mockSelect,
@@ -102,6 +108,14 @@ describe("requireAuth", () => {
     expect(status).toHaveBeenCalledWith(403);
     expect(json).toHaveBeenCalledWith({ error: "Insufficient permissions" });
     expect(next).not.toHaveBeenCalled();
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(req, {
+      action: "authorization.role.denied",
+      outcome: "denied",
+      targetType: "user",
+      targetId: 2,
+      targetEmail: "member@example.com",
+      targetRole: "member",
+    });
   });
 
   it("rejects when no authenticated user is present", () => {
@@ -123,6 +137,10 @@ describe("requireAuth", () => {
     expect(status).toHaveBeenCalledWith(401);
     expect(json).toHaveBeenCalledWith({ error: "Not authenticated" });
     expect(next).not.toHaveBeenCalled();
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(req, {
+      action: "authorization.user.missing",
+      outcome: "denied",
+    });
   });
 
   it("rejects an authenticated session when the stored user role is invalid", async () => {
@@ -160,5 +178,75 @@ describe("requireAuth", () => {
     expect(json).toHaveBeenCalledWith({ error: "Invalid user role" });
     expect(next).not.toHaveBeenCalled();
     expect(req.user).toBeUndefined();
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(req, {
+      action: "auth.role.invalid",
+      outcome: "denied",
+      targetType: "user",
+      targetId: 7,
+      targetEmail: "invalid-role@example.com",
+    });
   });
+
+  it("audits when no session token is present", async () => {
+    const req = {
+      cookies: {},
+      headers: {},
+    } as unknown as Request;
+
+    const status = vi.fn();
+    const json = vi.fn();
+    status.mockReturnValue({ json });
+
+    const res = {
+      status,
+    } as unknown as Response;
+
+    const next = vi.fn() as NextFunction;
+
+    await requireAuth(req, res, next);
+
+    expect(status).toHaveBeenCalledWith(401);
+    expect(json).toHaveBeenCalledWith({ error: "Not authenticated" });
+    expect(next).not.toHaveBeenCalled();
+
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(req, {
+      action: "auth.session.missing",
+      outcome: "denied",
+    });
+  });
+
+  it("audits when the session is expired or invalid", async () => {
+    mocks.mockWhere.mockResolvedValueOnce([]);
+
+    const req = {
+      cookies: {
+        supplycmd_session: "raw-token",
+      },
+      headers: {},
+    } as unknown as Request;
+
+    const status = vi.fn();
+    const json = vi.fn();
+    status.mockReturnValue({ json });
+
+    const res = {
+      status,
+    } as unknown as Response;
+
+    const next = vi.fn() as NextFunction;
+
+    await requireAuth(req, res, next);
+
+    expect(status).toHaveBeenCalledWith(401);
+    expect(json).toHaveBeenCalledWith({
+      error: "Session expired or invalid",
+    });
+    expect(next).not.toHaveBeenCalled();
+
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(req, {
+      action: "auth.session.invalid",
+      outcome: "denied",
+    });
+  });
+
 });
