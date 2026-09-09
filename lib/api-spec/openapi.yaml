@@ -130,7 +130,23 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/CompanyInvitation"
-
+    post:
+      operationId: createCompanyInvitation
+      tags: [auth]
+      summary: Create or resend an invitation for the authenticated company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCompanyInvitationInput"
+      responses:
+        "201":
+          description: Invitation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyInvitationCreationResult"
   # --- Inventory ---
   /inventory:
     get:
@@ -819,6 +835,26 @@ components:
         expiresAt:  { type: string, format: date-time }
         acceptedAt: { type: string, format: date-time, nullable: true }
         createdAt:  { type: string, format: date-time }
+
+    CreateCompanyInvitationInput:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string }
+        role:
+          type: string
+          enum: [admin, member]
+
+    CompanyInvitationCreationResult:
+      type: object
+      required: [email, role, token, expiresAt]
+      properties:
+        email: { type: string }
+        role:
+          type: string
+          enum: [admin, member]
+        token:     { type: string }
+        expiresAt: { type: string, format: date-time }
 
     # --- Inventory ---
     InventoryRelationship:

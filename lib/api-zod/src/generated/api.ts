@@ -100,6 +100,22 @@ export const ListCompanyInvitationsResponse = zod.array(ListCompanyInvitationsRe
 
 
 /**
+ * @summary Create or resend an invitation for the authenticated company
+ */
+export const CreateCompanyInvitationBody = zod.object({
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member'])
+})
+
+export const CreateCompanyInvitationResponse = zod.object({
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']),
+  "token": zod.string(),
+  "expiresAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List all inventory items
  */
 export const ListInventoryQueryParams = zod.object({

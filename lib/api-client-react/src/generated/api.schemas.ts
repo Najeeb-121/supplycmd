@@ -46,6 +46,34 @@ export interface CompanyInvitation {
   createdAt: string;
 }
 
+export type CreateCompanyInvitationInputRole = typeof CreateCompanyInvitationInputRole[keyof typeof CreateCompanyInvitationInputRole];
+
+
+export const CreateCompanyInvitationInputRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface CreateCompanyInvitationInput {
+  email: string;
+  role: CreateCompanyInvitationInputRole;
+}
+
+export type CompanyInvitationCreationResultRole = typeof CompanyInvitationCreationResultRole[keyof typeof CompanyInvitationCreationResultRole];
+
+
+export const CompanyInvitationCreationResultRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface CompanyInvitationCreationResult {
+  email: string;
+  role: CompanyInvitationCreationResultRole;
+  token: string;
+  expiresAt: string;
+}
+
 export type InventoryRelationshipRelationshipSource = typeof InventoryRelationshipRelationshipSource[keyof typeof InventoryRelationshipRelationshipSource];
 
 

@@ -1,5 +1,9 @@
 import { Building2, ShieldCheck, UserCog, Users } from "lucide-react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  getListCompanyInvitationsQueryKey,
+  useCreateCompanyInvitation,
   useListCompanyInvitations,
   useListCompanyUsers,
 } from "@workspace/api-client-react";
@@ -12,9 +16,26 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function CompanyAdminPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const createInvitation = useCreateCompanyInvitation();
+
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
+  const [createdInvitationToken, setCreatedInvitationToken] = useState<string | null>(
+    null,
+  );
   const {
     data: companyUsers = [],
     isLoading: usersLoading,
@@ -137,6 +158,98 @@ export default function CompanyAdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Invite User</CardTitle>
+          <CardDescription>
+            Invite an administrator or member to {user.companyName}.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <form
+            className="grid gap-4 md:grid-cols-[1fr_180px_auto]"
+            onSubmit={(event) => {
+              event.preventDefault();
+
+              const email = inviteEmail.trim();
+              if (!email) return;
+
+              setCreatedInvitationToken(null);
+
+              createInvitation.mutate(
+                {
+                  data: {
+                    email,
+                    role: inviteRole,
+                  },
+                },
+                {
+                  onSuccess: (result) => {
+                    setInviteEmail("");
+                    setCreatedInvitationToken(result.token);
+
+                    void queryClient.invalidateQueries({
+                      queryKey: getListCompanyInvitationsQueryKey(),
+                    });
+                  },
+                },
+              );
+            }}
+          >
+            <Input
+              type="email"
+              placeholder="user@example.com"
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              required
+            />
+
+            <Select
+              value={inviteRole}
+              onValueChange={(value) =>
+                setInviteRole(value as "admin" | "member")
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="admin">Administrator</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button
+              type="submit"
+              disabled={!inviteEmail.trim() || createInvitation.isPending}
+            >
+              {createInvitation.isPending ? "Sending..." : "Create Invitation"}
+            </Button>
+          </form>
+
+          {createInvitation.isError && (
+            <p className="text-sm text-destructive">
+              Unable to create the invitation. The email may already belong to an
+              existing SupplyCMD account.
+            </p>
+          )}
+
+          {createdInvitationToken && (
+            <div className="rounded-md border bg-muted/40 p-4">
+              <p className="text-sm font-medium">Invitation token</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Copy this token now. SupplyCMD only returns the raw token when an
+                invitation is created or resent.
+              </p>
+              <code className="mt-3 block break-all rounded bg-background p-3 text-xs">
+                {createdInvitationToken}
+              </code>
             </div>
           )}
         </CardContent>

@@ -22,7 +22,9 @@ import type {
 import type {
   AuthUser,
   CompanyInvitation,
+  CompanyInvitationCreationResult,
   CompanyUser,
+  CreateCompanyInvitationInput,
   DashboardSummary,
   DemandRecord,
   DemandRecordInput,
@@ -607,6 +609,77 @@ export function useListCompanyInvitations<TData = Awaited<ReturnType<typeof list
 
 
 
+
+export const getCreateCompanyInvitationUrl = () => {
+
+
+
+
+  return `/api/company/invitations`
+}
+
+/**
+ * @summary Create or resend an invitation for the authenticated company
+ */
+export const createCompanyInvitation = async (createCompanyInvitationInput: CreateCompanyInvitationInput, options?: Parameters<typeof customFetch>[1]): Promise<CompanyInvitationCreationResult> => {
+
+  return customFetch<CompanyInvitationCreationResult>(getCreateCompanyInvitationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createCompanyInvitationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCompanyInvitationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCompanyInvitation>>, TError,{data: BodyType<CreateCompanyInvitationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCompanyInvitation>>, TError,{data: BodyType<CreateCompanyInvitationInput>}, TContext> => {
+
+const mutationKey = ['createCompanyInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCompanyInvitation>>, {data: BodyType<CreateCompanyInvitationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCompanyInvitation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCompanyInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof createCompanyInvitation>>>
+    export type CreateCompanyInvitationMutationBody = BodyType<CreateCompanyInvitationInput>
+    export type CreateCompanyInvitationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create or resend an invitation for the authenticated company
+ */
+export const useCreateCompanyInvitation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCompanyInvitation>>, TError,{data: BodyType<CreateCompanyInvitationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCompanyInvitation>>,
+        TError,
+        {data: BodyType<CreateCompanyInvitationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCompanyInvitationMutationOptions(options));
+    }
 
 export const getListInventoryUrl = (params?: ListInventoryParams,) => {
   const normalizedParams = new URLSearchParams();
