@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type ErrorRequestHandler, type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
@@ -32,5 +32,27 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use("/api", router);
+
+export const unhandledErrorHandler: ErrorRequestHandler = (err, req, res, next) => {
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+
+  req.log.error(
+    {
+      err,
+      companyId: req.user?.companyId ?? null,
+      userId: req.user?.id ?? null,
+    },
+    "Unhandled request error",
+  );
+
+  res.status(500).json({
+    error: "Internal server error",
+  });
+};
+
+app.use(unhandledErrorHandler);
 
 export default app;
