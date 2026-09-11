@@ -134,7 +134,25 @@ pnpm --dir artifacts/supply-chain-dashboard test
 
 
 
-\---
+### Backend-only local startup
+
+Run from the repository root.
+
+Build after backend or shared-library source changes, dependency changes, branch changes, or when dist/index.mjs is missing:
+
+pnpm --dir artifacts/api-server build
+
+Start the built backend in development mode while loading the ignored root .env:
+
+$env:NODE_ENV = "development"
+
+node --env-file=.env --enable-source-maps artifacts/api-server/dist/index.mjs
+
+Do not print or commit .env.
+
+The package dev script does not load the root .env automatically.
+
+---
 
 
 
