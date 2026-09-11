@@ -1,7 +1,12 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
-import { db, productionRunsTable } from "@workspace/db";
+import { eq, and, asc, inArray } from "drizzle-orm";
+import {
+  db,
+  inventoryItemsTable,
+  productionRunsTable,
+  productionWorkOrdersTable,
+} from "@workspace/db";
 import {
   CreateProductionRunBody,
   UpdateProductionRunBody,
@@ -31,6 +36,90 @@ router.get("/production", async (req, res): Promise<void> => {
   res.json(runs);
 });
 
+router.get("/production/workcenters", async (req, res): Promise<void> => {
+  const companyId = req.user!.companyId;
+
+  const productId = Number(req.query.productId);
+
+  if (!Number.isInteger(productId) || productId <= 0) {
+    res.status(400).json({ error: "Valid productId is required" });
+    return;
+  }
+
+  const [product] = await db
+    .select({
+      id: inventoryItemsTable.id,
+      odooId: inventoryItemsTable.odooId,
+    })
+    .from(inventoryItemsTable)
+    .where(
+      and(
+        eq(inventoryItemsTable.id, productId),
+        eq(inventoryItemsTable.companyId, companyId),
+      ),
+    );
+
+  if (!product) {
+    res.status(404).json({ error: "Product not found" });
+    return;
+  }
+
+  if (product.odooId == null) {
+    res.json([]);
+    return;
+  }
+
+  const productionRuns = await db
+    .select({
+      id: productionRunsTable.id,
+      runDate: productionRunsTable.runDate,
+      dateDeadline: productionRunsTable.dateDeadline,
+      bomId: productionRunsTable.bomId,
+      moState: productionRunsTable.moState,
+    })
+    .from(productionRunsTable)
+    .where(
+      and(
+        eq(productionRunsTable.companyId, companyId),
+        eq(productionRunsTable.productOdooId, product.odooId),
+      ),
+    );
+
+  const eligibleRunIds = productionRuns
+    .filter(
+      (run) =>
+        run.moState === "confirmed" &&
+        run.bomId != null &&
+        Boolean(run.runDate ?? run.dateDeadline),
+    )
+    .map((run) => run.id);
+
+  if (eligibleRunIds.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const rows = await db
+    .select({
+      id: productionWorkOrdersTable.workcenterId,
+    })
+    .from(productionWorkOrdersTable)
+    .where(
+      and(
+        eq(productionWorkOrdersTable.companyId, companyId),
+        inArray(productionWorkOrdersTable.productionRunId, eligibleRunIds),
+      ),
+    )
+    .groupBy(productionWorkOrdersTable.workcenterId)
+    .orderBy(asc(productionWorkOrdersTable.workcenterId));
+
+  res.json(
+    rows.map((row) => ({
+      id: row.id,
+      label: `Work Center ${row.id}`,
+    })),
+  );
+});
 router.get("/production/metrics/oee", async (req, res): Promise<void> => {
   const runs = await db
     .select()

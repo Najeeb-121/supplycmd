@@ -59,9 +59,29 @@ const SCENARIOS = [
     label: "Single Source Failure",
   },
   {
+    id: "SUPPLIER_PRICE_SHOCK",
+    category: "Supply Risks",
+    label: "Supplier Price Shock",
+  },
+  {
     id: "DEMAND_SURGE",
     category: "Demand Risks",
     label: "Demand Surge",
+  },
+  {
+    id: "DEMAND_COLLAPSE",
+    category: "Demand Risks",
+    label: "Demand Collapse",
+  },
+  {
+    id: "SEASONALITY_SHOCK",
+    category: "Demand Risks",
+    label: "Seasonality Shock",
+  },
+  {
+    id: "PRODUCTION_LINE_FAILURE",
+    category: "Production Risks",
+    label: "Production Line Failure",
   },
 ];
 
@@ -78,7 +98,12 @@ export default function SimulationsPage() {
   const [delayDays, setDelayDays] = useState("7");
   const [surgePct, setSurgePct] = useState("50");
   const [failurePct, setFailurePct] = useState("10");
-
+  const [shockPct, setShockPct] = useState("10");
+  const [collapsePct, setCollapsePct] = useState("25");
+  const [peakMultiplier, setPeakMultiplier] = useState("1.25");
+  const [troughMultiplier, setTroughMultiplier] = useState("0.75");
+  const [lineId, setLineId] = useState("");
+  const [downtimeDays, setDowntimeDays] = useState("1");
   const { data: suppliers } = useQuery({
     queryKey: ["erp-suppliers"],
     queryFn: async () => {
@@ -95,6 +120,24 @@ export default function SimulationsPage() {
       if (!res.ok) throw new Error("Failed to load products");
       return res.json();
     }
+  });
+
+  const { data: workcenters } = useQuery({
+    queryKey: ["production-workcenters", productId],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/production/workcenters?productId=${encodeURIComponent(productId)}`
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to load production work centers");
+      }
+
+      return res.json();
+    },
+    enabled:
+      scenarioType === "PRODUCTION_LINE_FAILURE" &&
+      productId !== "",
   });
 
   const { data: relationships } = useQuery({
@@ -130,6 +173,7 @@ export default function SimulationsPage() {
   const currentRelationship = relationships?.find((r: any) =>
     String(r.supplierId) === supplierId && String(r.productId) === productId
   );
+  const availableWorkcenters = workcenters ?? [];
 
   const [result, setResult] = useState<{ result: SimulationResult, narration: string } | null>(null);
 
@@ -147,9 +191,9 @@ export default function SimulationsPage() {
             parameters: {
               productId: parseInt(productId),
 
-              ...(category === "Supply Risks" && {
-                supplierId: parseInt(supplierId),
-              }),
+              ...(scenarioType.startsWith("SUPPLIER_") || scenarioType === "SINGLE_SOURCE_FAILURE"
+                ? { supplierId: parseInt(supplierId) }
+                : {}),
 
               ...(scenarioType === "SUPPLIER_DELAY" && {
                 delayDays: parseInt(delayDays),
@@ -161,6 +205,23 @@ export default function SimulationsPage() {
 
               ...(scenarioType === "SUPPLIER_QUALITY_FAILURE" && {
                 failurePct: parseInt(failurePct),
+              }),
+              ...(scenarioType === "SUPPLIER_PRICE_SHOCK" && {
+                shockPct: parseFloat(shockPct),
+              }),
+
+              ...(scenarioType === "DEMAND_COLLAPSE" && {
+                collapsePct: parseFloat(collapsePct),
+              }),
+
+              ...(scenarioType === "SEASONALITY_SHOCK" && {
+                peakMultiplier: parseFloat(peakMultiplier),
+                troughMultiplier: parseFloat(troughMultiplier),
+              }),
+
+              ...(scenarioType === "PRODUCTION_LINE_FAILURE" && {
+                lineId: parseInt(lineId),
+                downtimeDays: parseInt(downtimeDays),
               }),
             }
           }
@@ -234,6 +295,7 @@ export default function SimulationsPage() {
                         setCategory(value);
                         setSupplierId("");
                         setProductId("");
+                        setLineId("");
 
                         const firstScenario = SCENARIOS.find(
                           (scenario) => scenario.category === value
@@ -246,7 +308,7 @@ export default function SimulationsPage() {
                       <SelectContent>
                         <SelectItem value="Supply Risks">Supply Risks</SelectItem>
                         <SelectItem value="Demand Risks">Demand Risks</SelectItem>
-
+                        <SelectItem value="Production Risks">Production Risks</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -282,7 +344,13 @@ export default function SimulationsPage() {
 
                   <div className="space-y-2">
                     <Label>{category === "Supply Risks" ? "4. Target Product" : "3. Target Product"}</Label>
-                    <Select value={productId} onValueChange={setProductId}>
+                    <Select
+                      value={productId}
+                      onValueChange={(value) => {
+                        setProductId(value);
+                        setLineId("");
+                      }}
+                    >
                       <SelectTrigger aria-label="Target Product"><SelectValue placeholder="Select product..." /></SelectTrigger>
                       <SelectContent>
                         {filteredProducts.map((p: any) => (
@@ -349,6 +417,98 @@ export default function SimulationsPage() {
                     </div>
                   )}
 
+                  {scenarioType === "SUPPLIER_PRICE_SHOCK" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="shock-percent">Price Shock %</Label>
+                      <Input
+                        id="shock-percent"
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={shockPct}
+                        onChange={e => setShockPct(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  {scenarioType === "DEMAND_COLLAPSE" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="collapse-percent">Demand Collapse %</Label>
+                      <Input
+                        id="collapse-percent"
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={collapsePct}
+                        onChange={e => setCollapsePct(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  {scenarioType === "SEASONALITY_SHOCK" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="peak-multiplier">Peak Multiplier</Label>
+                        <Input
+                          id="peak-multiplier"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={peakMultiplier}
+                          onChange={e => setPeakMultiplier(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="trough-multiplier">Trough Multiplier</Label>
+                        <Input
+                          id="trough-multiplier"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={troughMultiplier}
+                          onChange={e => setTroughMultiplier(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {scenarioType === "PRODUCTION_LINE_FAILURE" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Production Line</Label>
+                        <Select value={lineId} onValueChange={setLineId}>
+                          <SelectTrigger aria-label="Production Line">
+                            <SelectValue placeholder="Select production line..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableWorkcenters.map((workcenter: any) => (
+                              <SelectItem
+                                key={workcenter.id}
+                                value={String(workcenter.id)}
+                              >
+                                {workcenter.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="downtime-days">Downtime Days</Label>
+                        <Input
+                          id="downtime-days"
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={downtimeDays}
+                          onChange={e => setDowntimeDays(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+
+
                   <div className="pt-4 border-t">
                     <Button
                       className="w-full"
@@ -357,10 +517,24 @@ export default function SimulationsPage() {
                         runSimulation.isPending ||
                         !scenarioType ||
                         !productId ||
-                        (category === "Supply Risks" && !supplierId) ||
+                        (
+                          (scenarioType.startsWith("SUPPLIER_") ||
+                            scenarioType === "SINGLE_SOURCE_FAILURE") &&
+                          !supplierId
+                        ) ||
                         (scenarioType === "SUPPLIER_DELAY" && delayDays === "") ||
                         (scenarioType === "DEMAND_SURGE" && surgePct === "") ||
-                        (scenarioType === "SUPPLIER_QUALITY_FAILURE" && failurePct === "")
+                        (scenarioType === "SUPPLIER_QUALITY_FAILURE" && failurePct === "") ||
+                        (scenarioType === "SUPPLIER_PRICE_SHOCK" && shockPct === "") ||
+                        (scenarioType === "DEMAND_COLLAPSE" && collapsePct === "") ||
+                        (
+                          scenarioType === "SEASONALITY_SHOCK" &&
+                          (peakMultiplier === "" || troughMultiplier === "")
+                        ) ||
+                        (
+                          scenarioType === "PRODUCTION_LINE_FAILURE" &&
+                          (lineId === "" || downtimeDays === "")
+                        )
                       }
                     >
                       {runSimulation.isPending ? "Running Loop..." : "Run Simulation"}
