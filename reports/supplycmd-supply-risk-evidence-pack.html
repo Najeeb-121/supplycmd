@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SupplyCMD Supply-Risk Historical Evidence Pack</title>
+<style>
+@page { size: A4; margin: 18mm 16mm 18mm; }
+* { box-sizing: border-box; }
+body { font-family: "Segoe UI", Arial, sans-serif; color:#171717; font-size:10.2pt; line-height:1.42; margin:0; }
+h1 { font-size:24pt; margin:0 0 18px; letter-spacing:-.4px; }
+h2 { font-size:17pt; margin:24px 0 10px; border-bottom:1px solid #999; padding-bottom:5px; }
+h3 { font-size:12.5pt; margin:18px 0 7px; }
+p { margin:6px 0 10px; }
+table { width:100%; border-collapse:collapse; margin:9px 0 16px; font-size:8.6pt; }
+th,td { border:1px solid #aaa; padding:6px 7px; vertical-align:top; }
+th { background:#e8ecef; text-align:left; }
+tr:nth-child(even) td { background:#f7f7f7; }
+.title-page { min-height:245mm; display:flex; flex-direction:column; justify-content:center; }
+.subtitle { font-size:14pt; color:#444; max-width:145mm; }
+.meta { margin-top:30px; color:#555; }
+.callout { border-left:4px solid #333; padding:8px 12px; background:#f3f3f3; margin:12px 0; }
+.warning { border-left-color:#9b5b00; background:#fff5e6; }
+.good { border-left-color:#26734d; background:#edf7f1; }
+.page { break-before:page; }
+.keep { break-inside:avoid; }
+code,pre { font-family:Consolas, monospace; }
+pre { background:#f3f3f3; border:1px solid #bbb; padding:9px; white-space:pre-wrap; font-size:8.7pt; }
+.small { font-size:8.5pt; color:#444; }
+.status { font-weight:700; }
+ol.sources li { margin:0 0 8px; }
+a { color:#174f78; text-decoration:none; }
+</style>
+</head>
+<body>
+<section class="title-page">
+  <h1>SupplyCMD Supply-Risk Historical Evidence Pack</h1>
+  <p class="subtitle">Official-source assumptions for supplier delay, supplier quality failure, single-source failure, and supplier price shock, with the Odoo 19 data required for a defensible retrospective demonstration.</p>
+  <div class="meta">
+    <p><b>Purpose:</b> investor and partner demonstration</p>
+    <p><b>Evidence retrieval date:</b> 11 September 2026</p>
+    <p><b>Method:</b> ERP truth first; deterministic calculations second; AI explanation last</p>
+  </div>
+</section>
+
+<section class="page">
+<h2>Executive conclusion</h2>
+<p>This evidence pack supplies four official historical precedents. It does not invent confidential ERP facts. Public authorities and company filings can establish a disruption, its dates, an affected commodity, or a recall scope; they cannot establish the inventory, vendor contract, bill of materials, purchase orders, or approved alternatives of the SupplyCMD tenant.</p>
+<div class="callout good"><b>Correct demonstration:</b> load a genuine, timestamped Odoo baseline; map the official event to a tenant-owned product and supplier; run a supported SupplyCMD scenario without changing Odoo; retain the structured inputs and deterministic result.</div>
+<div class="callout warning"><b>Prohibited claim:</b> these public records alone do not prove the financial or stockout impact on the Pepsico acceptance company. That consequence must be calculated from its verified Odoo baseline.</div>
+
+<table>
+<tr><th>SupplyCMD scenario</th><th>Historical precedent</th><th>Evidence-derived input</th><th>Readiness</th></tr>
+<tr><td>SUPPLIER_DELAY</td><td>Ever Given / Suez Canal, March 2021</td><td><b>delayDays = 6</b>, conditionally mapped to a shipment whose route depended on the canal</td><td class="status">Executable after ERP mapping</td></tr>
+<tr><td>SUPPLIER_QUALITY_FAILURE</td><td>ProSource Produce onion recall, 2021</td><td><b>failurePct = 100</b> only for tenant inventory proven to fall inside the recalled provenance/date scope</td><td class="status">Executable after lot/provenance mapping</td></tr>
+<tr><td>SINGLE_SOURCE_FAILURE</td><td>Renesas Naka factory / Toyota disruption, 2011</td><td>No numeric parameter; selected Odoo product must have one verified active supplier</td><td class="status">Conditional; exclusivity must come from Odoo</td></tr>
+<tr><td>SUPPLIER_PRICE_SHOCK</td><td>World Bank global aluminium price, Jan 2021–Mar 2022</td><td><b>shockPct = 74.5716%</b> as a market-price stress, not a supplier-contract fact</td><td class="status">Executable as an external market assumption</td></tr>
+</table>
+
+<h3>Interpretation rules</h3>
+<ul>
+<li>Each scenario is independent and starts from the same frozen baseline.</li>
+<li>Do not add impacts across scenarios unless SupplyCMD later supports and validates compound scenarios.</li>
+<li>Market price is not vendor price; recalled scope is not observed contamination rate; facility disruption is not proof of supplier exclusivity.</li>
+<li>Unsupported values remain null, UNKNOWN, N/A, or explicitly unsupported.</li>
+</ul>
+</section>
+
+<section class="page">
+<h2>ERP baseline required from Odoo 19</h2>
+<p>The following fields must be obtained from the authenticated tenant. No company identifier supplied by a browser may replace <code>req.user!.companyId</code>.</p>
+<table>
+<tr><th>Entity</th><th>Minimum fields</th><th>Validation</th></tr>
+<tr><td>Company</td><td>Company ID, base currency, timezone, baseline timestamp</td><td>Tenant-owned and immutable for the test</td></tr>
+<tr><td>Product</td><td>SupplyCMD ID, Odoo template and variant IDs, SKU, name, type, active state, base and purchase UoM</td><td>Template/variant mapping verified</td></tr>
+<tr><td>Supplier relationship</td><td>Supplier ID, product ID, vendor product code, price, currency, UoM, minimum quantity, effective date, supported lead time</td><td>Active and genuinely linked</td></tr>
+<tr><td>Inventory</td><td>On-hand, available, reserved, quarantined, warehouse/location, lot, expiry, timestamp</td><td>No double counting; compatible UoM</td></tr>
+<tr><td>Purchase orders</td><td>State, supplier, product, ordered/received/remaining quantities, price, currency, order and confirmed-delivery dates</td><td>Exclude cancelled; include pending only if existing business rules permit</td></tr>
+<tr><td>Demand</td><td>Confirmed sales orders or supported demand series, product, unit quantity, requested date</td><td>Do not substitute sales value for units</td></tr>
+<tr><td>BoM</td><td>Finished product, component, quantity, UoM, version/effective date</td><td>Affected material must be a real dependency</td></tr>
+<tr><td>Production</td><td>Work centre, routing, work orders, calendar and supported rate/cycle-time fields</td><td>No invented capacity</td></tr>
+</table>
+
+<h3>Evidence record required beside Odoo</h3>
+<pre>evidenceId, scenarioType, eventName, publisher, sourceTitle,
+sourceUrl, publicationDate, eventStartDate, eventEndDate,
+informationCutoffDate, geography, affectedSupplier, affectedFacility,
+affectedMaterial, observedValue, unit, exactOrApproximate,
+calculationMethod, retrievalDate, mappingRationale, limitations,
+reviewer, reviewStatus</pre>
+<p>The evidence record is an external assumption with provenance. It must not silently overwrite Odoo truth.</p>
+</section>
+
+<section class="page">
+<h2>Supply Risk 1 — Supplier delay</h2>
+<h3>Historical evidence: Ever Given and the Suez Canal</h3>
+<table>
+<tr><th>Data point</th><th>Verified value</th><th>Authority</th></tr>
+<tr><td>Grounding date</td><td>23 March 2021</td><td>International Maritime Organization</td></tr>
+<tr><td>Successful refloating</td><td>29 March 2021</td><td>Suez Canal Authority, indexed in the IMO Maritime Knowledge Centre</td></tr>
+<tr><td>Canal navigation status</td><td>Navigation resumed in both directions and the canal operated around the clock</td><td>Suez Canal Authority, 31 March 2021</td></tr>
+<tr><td>Official characterization of recovery duration</td><td>Recovery achieved “within 6 days”</td><td>Suez Canal Authority, 30 May 2021</td></tr>
+</table>
+
+<h3>SupplyCMD parameter</h3>
+<pre>scenarioType = SUPPLIER_DELAY
+productId    = [tenant-owned Odoo-mapped product]
+supplierId   = [tenant-owned supplier whose actual route used Suez]
+delayDays    = 6</pre>
+<p><b>Mapping condition:</b> six days is defensible only when the selected shipment or supplier lane depended on the Suez transit during the closure. It is not a universal six-day delay for every supplier. Queue clearance, origin/destination and downstream congestion could change an individual shipment’s realized delay.</p>
+
+<h3>Required real Odoo records</h3>
+<ul>
+<li>Supplier country and documented transport route or shipment record.</li>
+<li>Material/product and its genuine supplier relationship.</li>
+<li>Inventory at the information-cutoff date.</li>
+<li>Confirmed purchase orders and delivery dates.</li>
+<li>BoMs connecting the delayed component to finished products.</li>
+<li>Supported demand during the six-day shift.</li>
+</ul>
+
+<h3>Analysis expected from SupplyCMD</h3>
+<p>Shift the affected confirmed receipt by six days, then recalculate the deterministic consequence supported by the engine: inventory availability, exposed downstream products, and structured shortage/stockout consequences. Do not assume lost sales or financial loss unless the existing formulas and data support them.</p>
+<p class="small">Sources: S1–S4.</p>
+</section>
+
+<section class="page">
+<h2>Supply Risk 2 — Supplier quality failure</h2>
+<h3>Historical evidence: 2021 onion recall</h3>
+<p>FDA traceback identified ProSource Produce LLC and Keeler Family Farms as suppliers of potentially contaminated whole fresh onions imported from Chihuahua, Mexico. ProSource recalled red, yellow and white onions imported from 1 July through 31 August 2021. FDA listed downstream companies that processed or repackaged the onions.</p>
+<table>
+<tr><th>Data point</th><th>Verified value</th><th>Authority</th></tr>
+<tr><td>Named supplier</td><td>ProSource Produce LLC (also known as ProSource Inc.)</td><td>FDA</td></tr>
+<tr><td>Material</td><td>Whole fresh red, white and yellow onions from Chihuahua, Mexico</td><td>FDA/CDC</td></tr>
+<tr><td>ProSource import-date scope</td><td>1 July–31 August 2021</td><td>FDA final investigation page</td></tr>
+<tr><td>Final reported outbreak outcome</td><td>1,040 illnesses; 260 hospitalizations; 0 deaths</td><td>FDA/CDC</td></tr>
+<tr><td>Operational direction</td><td>Do not eat, sell or serve recalled product</td><td>CDC</td></tr>
+</table>
+
+<h3>SupplyCMD parameter</h3>
+<pre>scenarioType = SUPPLIER_QUALITY_FAILURE
+productId    = [tenant product proven to be within recalled scope]
+supplierId   = [tenant supplier mapped to ProSource or applicable source]
+failurePct   = 100</pre>
+<div class="callout warning"><b>Meaning of 100%:</b> this is a conservative operational unusability assumption for the specifically recalled inventory, because authorities directed that it not be sold or served. It is not a claim that laboratory testing found 100% of onions contaminated.</div>
+<p>If the Odoo lot cannot be connected to the named supplier, origin and date window, this scenario must be rejected. For a beverage-sector demonstration, replace this event with an officially documented recall involving a genuine beverage ingredient supplier in the participating company’s Odoo data.</p>
+
+<h3>Required real Odoo records</h3>
+<ul>
+<li>Supplier identity and product relationship.</li>
+<li>Incoming lot/batch, origin, receipt date and quantity.</li>
+<li>Remaining available and quarantined quantities.</li>
+<li>BoMs and downstream products consuming the material.</li>
+<li>Alternative approved suppliers only if genuinely recorded.</li>
+</ul>
+<p class="small">Sources: S5–S8.</p>
+</section>
+
+<section class="page">
+<h2>Supply Risk 3 — Single-source failure</h2>
+<h3>Historical evidence: Renesas Naka factory and Toyota, 2011</h3>
+<p>The Great East Japan Earthquake forced five Renesas wafer fabs and three assembly/test sites to suspend production. Renesas identified Naka as one of its worst-affected factories and stated that it produced just under 20% of its MCUs and SoC solutions and just under 10% of its analog and power devices. Finished and work-in-process inventory was expected to cover about 70% of Naka customer orders due by the end of May, leaving 30% to be addressed through production shifts and other measures.</p>
+<table>
+<tr><th>Data point</th><th>Verified value</th><th>Authority</th></tr>
+<tr><td>Initial suspended Renesas sites</td><td>5 wafer fabs and 3 assembly/test sites</td><td>Renesas, 28 March 2011</td></tr>
+<tr><td>Naka share of Renesas output</td><td>Just under 20% of MCUs/SoCs; just under 10% of analog/power devices</td><td>Renesas</td></tr>
+<tr><td>May-order coverage expectation</td><td>Approximately 70%; remaining 30% required other measures</td><td>Renesas</td></tr>
+<tr><td>Naka 200 mm restart</td><td>1 June 2011</td><td>Renesas</td></tr>
+<tr><td>Naka 300 mm restart</td><td>6 June 2011</td><td>Renesas</td></tr>
+<tr><td>Renesas pre-earthquake output recovery</td><td>Middle of September 2011, combining Naka and substitute production</td><td>Renesas Annual Report 2011</td></tr>
+<tr><td>Toyota production loss through June</td><td>Approximately 800,000 units</td><td>Toyota Annual Report 2011</td></tr>
+<tr><td>Toyota recovery</td><td>Near planned levels by July; full levels forecast for September</td><td>Toyota official results, 30 August 2011</td></tr>
+</table>
+
+<h3>SupplyCMD parameter</h3>
+<pre>scenarioType = SINGLE_SOURCE_FAILURE
+productId    = [tenant-owned product with one verified active supplier]
+supplierId   = [that verified supplier]</pre>
+<div class="callout warning"><b>Material limitation:</b> the official records establish a severe bottleneck and facility outage, but do not prove that a specific Toyota part was contractually single-sourced from Renesas. Supplier exclusivity must be established by the tenant’s Odoo supplier-product records. Do not enter Renesas as a beverage supplier or claim the Toyota loss as SupplyCMD’s predicted result.</div>
+
+<h3>Required real Odoo records</h3>
+<ul>
+<li>A product with exactly one verified active and qualified supplier.</li>
+<li>No hidden or inactive alternative that remains operationally approved.</li>
+<li>Inventory, confirmed inbound, BoM dependencies and supported demand.</li>
+<li>Any alternative comparison must use real vendor records, currencies, UoMs and effective dates.</li>
+</ul>
+<p class="small">Sources: S9–S14.</p>
+</section>
+
+<section class="page">
+<h2>Supply Risk 4 — Supplier price shock</h2>
+<h3>Historical evidence: global aluminium price</h3>
+<p>The World Bank’s Pink Sheet series, reproduced by the Federal Reserve Bank of St. Louis, reports the global aluminium price as a monthly average in US dollars per metric tonne.</p>
+<table>
+<tr><th>Month</th><th>USD/metric tonne</th><th>USD/kg</th></tr>
+<tr><td>January 2021</td><td>2,003.9755</td><td>2.0039755</td></tr>
+<tr><td>March 2021</td><td>2,190.4826087</td><td>2.1904826</td></tr>
+<tr><td>June 2021</td><td>2,446.6454545</td><td>2.4466455</td></tr>
+<tr><td>September 2021</td><td>2,834.5568182</td><td>2.8345568</td></tr>
+<tr><td>December 2021</td><td>2,695.5314286</td><td>2.6955314</td></tr>
+<tr><td>March 2022</td><td>3,498.3730435</td><td>3.4983730</td></tr>
+</table>
+
+<h3>Verified calculations</h3>
+<pre>Increase per tonne = 3,498.373043478261 − 2,003.9755
+                   = 1,494.397543478261 USD/tonne
+
+Shock percentage   = 1,494.397543478261 ÷ 2,003.9755 × 100
+                   = 74.5716473818298%
+
+March 2022 USD/kg  = 3,498.373043478261 ÷ 1,000
+                   = 3.498373043478261 USD/kg</pre>
+<p>For presentation-only conversion using 0.709 JOD/USD, March 2022 equals approximately 2.48034649 JOD/kg. The Central Bank of Jordan publishes a USD range in fils; a report must identify the chosen rate and date rather than calling a rounded 0.71 conversion exact.</p>
+
+<h3>SupplyCMD parameter</h3>
+<pre>scenarioType = SUPPLIER_PRICE_SHOCK
+productId    = [tenant aluminium product]
+supplierId   = [tenant supplier for that product]
+shockPct     = 74.5716473818298</pre>
+<div class="callout warning"><b>Market proxy:</b> this parameter reproduces the World Bank market movement. It does not prove an identical increase in a supplier contract. Hedging, regional premiums, fabrication, freight, currency and contract dates may produce a different vendor-specific change.</div>
+
+<h3>Required real Odoo records</h3>
+<ul>
+<li>Actual aluminium packaging/material product and supplier relationship.</li>
+<li>Vendor price, original currency, purchase UoM and effective date.</li>
+<li>BoM usage per finished-good unit.</li>
+<li>Supported procurement or production quantity.</li>
+<li>Odoo currency rate or a separately cited conversion policy.</li>
+</ul>
+<p class="small">Sources: S15–S18.</p>
+</section>
+
+<section class="page">
+<h2>Execution and acceptance protocol</h2>
+<h3>Pre-run gates</h3>
+<ol>
+<li>Freeze and identify the Odoo baseline and application commit.</li>
+<li>Verify tenant ownership for every product, supplier and production record.</li>
+<li>Verify product variant/template, currency and UoM mappings.</li>
+<li>Verify the external event applies to the selected supplier/product relationship.</li>
+<li>Reject missing, impossible, unsupported or non-finite parameters.</li>
+<li>Record all unsupported facts before execution.</li>
+</ol>
+
+<h3>Run design</h3>
+<p>Run four independent simulations against the same baseline. A scenario may read ERP truth but must not mutate Odoo. Repeat each run and compare the structured response byte-for-byte where timestamps or generated IDs do not legitimately vary.</p>
+
+<h3>Acceptance matrix</h3>
+<table>
+<tr><th>Dimension</th><th>Pass condition</th></tr>
+<tr><td>Evidence</td><td>Official source, dated event, explicit magnitude, preserved URL and retrieval date</td></tr>
+<tr><td>Mapping</td><td>Tenant-owned ERP entity and verified supplier/product or route relationship</td></tr>
+<tr><td>Calculation</td><td>Independently reproducible from displayed baseline and parameter</td></tr>
+<tr><td>Repeatability</td><td>Same baseline and assumption yield the same deterministic result</td></tr>
+<tr><td>Safety</td><td>No Odoo mutation and no cross-company exposure</td></tr>
+<tr><td>Unsupported data</td><td>Unknowns remain explicit; narration adds no new numbers</td></tr>
+</table>
+
+<h3>Result classification</h3>
+<ul>
+<li><b>Validated:</b> evidence, mapping and calculation all pass.</li>
+<li><b>Validated with limitations:</b> result is valid under an explicitly bounded market or quarantine assumption.</li>
+<li><b>Inconclusive:</b> public evidence or ERP mapping is insufficient.</li>
+<li><b>Rejected:</b> scenario parameter or mapping is unsupported.</li>
+<li><b>Failed:</b> deterministic result cannot be reproduced or tenant safety fails.</li>
+</ul>
+</section>
+
+<section class="page">
+<h2>Recommended report presentation</h2>
+<p>The investor-facing result should show a four-column evidence chain rather than a single dramatic number.</p>
+<table>
+<tr><th>ERP baseline</th><th>External assumption</th><th>Deterministic result</th><th>Unsupported information</th></tr>
+<tr><td>Odoo record IDs, quantities, prices, currency, BoMs and timestamp</td><td>Official event, parameter, source and decision-date cutoff</td><td>SupplyCMD structured response and independent recalculation</td><td>Missing contracts, route evidence, capacity, loss attribution or alternatives</td></tr>
+</table>
+
+<h3>Recommended headline</h3>
+<div class="callout"><b>SupplyCMD converts verified external disruptions into tenant-safe, deterministic consequences using the manufacturer’s own Odoo baseline—and shows where every material number came from.</b></div>
+
+<h3>Do not claim</h3>
+<ul>
+<li>That SupplyCMD would have “solved” a historical crisis.</li>
+<li>That the Toyota loss is a predicted loss for a beverage manufacturer.</li>
+<li>That every recalled unit was laboratory-confirmed contaminated.</li>
+<li>That LME/World Bank market movement equals a vendor invoice increase.</li>
+<li>That every shipment through Suez was delayed by exactly six days.</li>
+</ul>
+
+<h3>Data still required from the manufacturer</h3>
+<p>No public source can truthfully fill these values: current inventory, reservations, confirmed inbound supply, vendor quotation, contractual lead time, approved alternatives, product-level demand, BoM consumption, routing, work-centre capacity and company-specific financial exposure. The PDF is therefore a complete external-evidence pack and ERP data specification—not a fabricated Odoo dataset.</p>
+</section>
+
+<section class="page">
+<h2>Sources</h2>
+<ol class="sources">
+<li id="s1"><b>S1.</b> International Maritime Organization. “<a href="https://www.imo.org/en/MediaCentre/SecretaryGeneral/Pages/MV-Ever-Given-incident.aspx">MV Ever Given incident — 23 March 2021</a>.” Statements dated 26 March and 1 April 2021.</li>
+<li><b>S2.</b> Suez Canal Authority. “<a href="https://www.suezcanal.gov.eg/English/MediaCenter/News/Pages/31-3-2021.aspx">Navigation in the Suez Canal is back in both directions</a>.” 31 March 2021.</li>
+<li><b>S3.</b> Suez Canal Authority. “<a href="https://www.suezcanal.gov.eg/Arabic/MediaCenter/News/Pages/30-5-2021.aspx">Press conference regarding the Ever Given</a>.” 30 May 2021. Arabic official record stating the rescue was accomplished within six days.</li>
+<li><b>S4.</b> IMO Maritime Knowledge Centre. “<a href="https://wwwcdn.imo.org/localresources/en/KnowledgeCentre/Documents/CAB%20292%20March%202021.pdf">Current Awareness Bulletin, March 2021</a>.” Includes the SCA 29 March successful-refloating notice.</li>
+<li><b>S5.</b> U.S. Food and Drug Administration. “<a href="https://www.fda.gov/safety/major-product-recalls/2021-recalls-food-products-associated-onions-prosource-produce-llc-and-keeler-family-farms-due">2021 Recalls of Food Products Associated with Onions from ProSource Produce LLC and Keeler Family Farms</a>.”</li>
+<li><b>S6.</b> U.S. Food and Drug Administration. “<a href="https://www.fda.gov/food/outbreaks-foodborne-illness/outbreak-investigation-salmonella-oranienburg-whole-fresh-onions-october-2021">Outbreak Investigation of Salmonella Oranienburg: Whole, Fresh Onions</a>.” Final case and recall scope.</li>
+<li><b>S7.</b> U.S. Centers for Disease Control and Prevention. “<a href="https://archive.cdc.gov/www_cdc_gov/salmonella/oranienburg-09-21/index.html">2021 Salmonella Outbreak Linked to Onions</a>.” Posted 2 February 2022.</li>
+<li><b>S8.</b> CDC Online Newsroom. “<a href="https://archive.cdc.gov/www_cdc_gov/media/releases/2021/s1020-food-safety-salmonella.html">Whole onions identified as the source of large ongoing Salmonella outbreak</a>.” 20 October 2021.</li>
+<li><b>S9.</b> Renesas Electronics. “<a href="https://www.renesas.com/en/about/newsroom/impact-march-11-tohoku-district-pacific-offshore-earthquake-renesas-electronics-operations-and-its">Impact of the March 11 Tohoku District Pacific Offshore Earthquake on Renesas Electronics Operations</a>.” 28 March 2011.</li>
+<li><b>S10.</b> Renesas Electronics. “<a href="https://www.renesas.com/ja/about/newsroom/update-2-renesas-electronics-announces-schedule-resumption-operation-naka-factory-0">Update 2: Schedule for resumption of operation at Naka Factory</a>.” 11 May 2011.</li>
+<li><b>S11.</b> Renesas Electronics. “<a href="https://www.renesas.com/en/document/rep/annual-report-2011">Annual Report 2011</a>.” Naka recovery and disaster-loss disclosures.</li>
+<li><b>S12.</b> Toyota Motor Corporation. “<a href="https://www.toyota-global.com/pages/contents/investors/ir_library/annual/pdf/2011/ar11_e.pdf">Annual Report 2011</a>.” Earthquake impact, production loss and recovery.</li>
+<li><b>S13.</b> Toyota Motor Corporation. “<a href="https://global.toyota/en/detail/221725">TMC Announces Results for July 2011</a>.” 30 August 2011.</li>
+<li><b>S14.</b> Toyota Motor Corporation. “<a href="https://www.toyota-global.com/company/history_of_toyota/75years/text/leaping_forward_as_a_global_corporation/chapter5/section5/item1_a.html">The Great East Japan Earthquake</a>.” Toyota 75-Year History.</li>
+<li><b>S15.</b> World Bank. “<a href="https://thedocs.worldbank.org/en/doc/74e8be41ceb20fa0da750cda2f6b9e4e-0050012026/world-bank-commodities-price-data-the-pink-sheet">World Bank Commodities Price Data (The Pink Sheet)</a>.” Historical monthly workbook.</li>
+<li><b>S16.</b> Federal Reserve Bank of St. Louis. “<a href="https://fred.stlouisfed.org/data/PALUMUSDM">Global Price of Aluminum (PALUMUSDM)</a>.” World Bank monthly series, USD per metric tonne.</li>
+<li><b>S17.</b> U.S. International Trade Commission. “<a href="https://www.usitc.gov/research_and_analysis/tradeshifts/2021/special_topic">The 2021 Commodity Price Surge: Causes and Impacts on Trade Flows</a>.” Uses World Bank aluminium data.</li>
+<li><b>S18.</b> Central Bank of Jordan. “<a href="https://www.cbj.gov.jo/en/Pages/foreignexchangerates">Foreign Exchange Rates</a>.” Official dated rates in fils.</li>
+</ol>
+
+<h3>Evidence-quality note</h3>
+<p>Official sources sometimes report approximate values, evolving case counts or forecasts. This report preserves those qualifiers. The chosen SupplyCMD parameters are not universal truths: each becomes valid only after the specified Odoo mapping and decision-date checks pass.</p>
+</section>
+</body>
+</html>
