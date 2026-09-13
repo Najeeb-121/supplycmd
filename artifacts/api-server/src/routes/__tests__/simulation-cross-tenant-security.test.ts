@@ -28,6 +28,9 @@ const {
   const mockSelect = vi.fn(() => ({
     from: vi.fn(() => ({
       where: mockSelectWhere,
+      innerJoin: vi.fn(() => ({
+        where: mockSelectWhere,
+      })),
     })),
   }));
 
@@ -92,6 +95,56 @@ function createTestApp(companyId: number): Express {
 describe("Simulation cross-tenant security", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("rejects SINGLE_SOURCE_FAILURE when the product has multiple active suppliers", async () => {
+    mockSelectWhere
+      .mockResolvedValueOnce([
+        {
+          id: 1367,
+          companyId: 1,
+          odooId: 17,
+          name: "Aluminium Coil 5182-H19",
+          sku: "AL-COIL-5182",
+          currentStock: 500,
+          reservedQuantity: 450,
+          availableQuantity: 50,
+          unitCost: 2.35,
+          sellingPrice: null,
+          safetyStock: null,
+          reorderPoint: null,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: 1 }])
+      .mockResolvedValueOnce([
+        { supplierId: 388 },
+        { supplierId: 390 },
+      ]);
+
+    const app = createTestApp(1);
+
+    const res = await request(app)
+      .post("/api/simulation/run")
+      .send({
+        scenario: {
+          id: "multi-source-rejection",
+          type: "SINGLE_SOURCE_FAILURE",
+          title: "Single Source Failure",
+          description:
+            "Must reject a product that has more than one active supplier",
+          parameters: {
+            productId: 1367,
+            supplierId: 388,
+          },
+        },
+      });
+
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({
+      error: "SINGLE_SOURCE_NOT_ELIGIBLE",
+      message:
+        "SINGLE_SOURCE_FAILURE requires exactly one active supplier linked to this product for the current company.",
+    });
   });
 
   it("returns 404 when Company A tries to simulate Company B product", async () => {

@@ -579,6 +579,38 @@ router.post("/simulation/run", async (req: Request, res: Response): Promise<void
         });
         return;
       }
+      if (scenario.type === "SINGLE_SOURCE_FAILURE") {
+        const activeSupplierLinks = await db
+          .select({ supplierId: productSuppliersTable.supplierId })
+          .from(productSuppliersTable)
+          .innerJoin(
+            suppliersTable,
+            and(
+              eq(suppliersTable.id, productSuppliersTable.supplierId),
+              eq(suppliersTable.companyId, companyId)
+            )
+          )
+          .where(
+            and(
+              eq(productSuppliersTable.companyId, companyId),
+              eq(productSuppliersTable.inventoryItemId, productId),
+              eq(suppliersTable.active, true)
+            )
+          );
+
+        const activeSupplierIds = new Set(
+          activeSupplierLinks.map(link => link.supplierId)
+        );
+
+        if (activeSupplierIds.size !== 1 || !activeSupplierIds.has(supplierId)) {
+          res.status(422).json({
+            error: "SINGLE_SOURCE_NOT_ELIGIBLE",
+            message:
+              "SINGLE_SOURCE_FAILURE requires exactly one active supplier linked to this product for the current company.",
+          });
+          return;
+        }
+      }
     }
 
     const poLines = await db
